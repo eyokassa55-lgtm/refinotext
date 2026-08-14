@@ -4,7 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import localFont from "next/font/local";
 
-import { isClerkEnabled } from "@/lib/auth-config";
+import { getAppUrl } from "@/lib/app-url";
+import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
@@ -27,7 +28,7 @@ const caveat = localFont({
   display: "swap",
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const appUrl = getAppUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
@@ -68,7 +69,10 @@ export default function RootLayout({
         className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} antialiased min-h-screen`}
       >
         {isClerkEnabled ? (
-          <ClerkProvider appearance={clerkAppearance}>
+          <ClerkProvider
+            appearance={clerkAppearance}
+            publishableKey={clerkPublishableKey}
+          >
             {children}
           </ClerkProvider>
         ) : (

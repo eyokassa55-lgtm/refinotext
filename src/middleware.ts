@@ -1,10 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+
+import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 const isWebhookRoute = createRouteMatcher(["/api/webhooks(.*)"]);
 
-export default clerkMiddleware(async (auth, req) => {
+const clerkHandler = clerkMiddleware(async (auth, req) => {
   if (isWebhookRoute(req)) return;
 
   if (isProtectedRoute(req)) {
@@ -16,6 +18,14 @@ export default clerkMiddleware(async (auth, req) => {
     }
   }
 });
+
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  if (!isClerkEnabled || !clerkPublishableKey.startsWith("pk_")) {
+    return NextResponse.next();
+  }
+
+  return clerkHandler(req, event);
+}
 
 export const config = {
   matcher: [

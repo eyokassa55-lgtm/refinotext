@@ -1,3 +1,5 @@
+import { getAppUrl } from "@/lib/app-url";
+
 function cleanEnv(value: string | undefined): string | undefined {
   const cleaned = value?.trim().replace(/^["']|["']$/g, "");
   return cleaned ? cleaned : undefined;
@@ -16,7 +18,9 @@ function requireEnv(key: string): string {
 }
 
 export const env = {
-  appUrl: getEnv("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000",
+  get appUrl() {
+    return getAppUrl();
+  },
 
   clerk: {
     publishableKey: getEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
