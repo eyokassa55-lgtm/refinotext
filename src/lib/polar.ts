@@ -13,7 +13,7 @@ export type PolarServer = "sandbox" | "production";
 const clients = new Map<PolarServer, Polar>();
 
 function readAccessToken(): string | undefined {
-  const value = process.env.POLAR_ACCESS_TOKEN?.trim();
+  const value = process.env.POLAR_ACCESS_TOKEN?.trim().replace(/^["']|["']$/g, "");
   if (!value || value === "placeholder") return undefined;
   return value;
 }

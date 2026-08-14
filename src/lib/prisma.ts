@@ -12,7 +12,10 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL?.trim();
+  const connectionString = process.env.DATABASE_URL?.trim().replace(
+    /^["']|["']$/g,
+    "",
+  );
 
   if (!connectionString || connectionString.includes("user:password@localhost")) {
     throw new Error(

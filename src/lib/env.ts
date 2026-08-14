@@ -1,9 +1,14 @@
+function cleanEnv(value: string | undefined): string | undefined {
+  const cleaned = value?.trim().replace(/^["']|["']$/g, "");
+  return cleaned ? cleaned : undefined;
+}
+
 function getEnv(key: string): string | undefined {
-  return process.env[key];
+  return cleanEnv(process.env[key]);
 }
 
 function requireEnv(key: string): string {
-  const value = process.env[key];
+  const value = getEnv(key);
   if (!value) {
     throw new Error(`Missing required environment variable: ${key}`);
   }
@@ -25,25 +30,23 @@ export const env = {
   },
 
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
-    model: process.env.GEMINI_MODEL ?? "gemini-3.6-flash",
+    apiKey: getEnv("GEMINI_API_KEY"),
+    model: getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
   },
 
   polar: {
     get accessToken() {
-      const value = process.env.POLAR_ACCESS_TOKEN?.trim();
+      const value = getEnv("POLAR_ACCESS_TOKEN");
       if (!value || value === "placeholder") return undefined;
       return value;
     },
     get webhookSecret() {
-      const value = process.env.POLAR_WEBHOOK_SECRET?.trim();
+      const value = getEnv("POLAR_WEBHOOK_SECRET");
       if (!value || value === "placeholder") return undefined;
       return value;
     },
     get server() {
-      return process.env.POLAR_SERVER === "production"
-        ? "production"
-        : "sandbox";
+      return getEnv("POLAR_SERVER") === "production" ? "production" : "sandbox";
     },
   },
 } as const;
