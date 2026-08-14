@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+:root {
+  --background: #e8f5ef;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-dark: #0f1110;
+  --border: #c8ddd4;
+  --muted: #4a5c55;
+  --primary: #0d5c45;
+  --primary-hover: #0a4a38;
+  --primary-foreground: #ffffff;
+  --accent: #1a8f6a;
+  --accent-light: #d4f0e4;
+  --mint: #e8f5ef;
+  --mint-dark: #d4ebe0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-dark: var(--card-dark);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-mint: var(--mint);
+  --color-mint-dark: var(--mint-dark);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-caveat);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+@keyframes scan-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+@keyframes float-wand {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes fade-tooltip {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  20%,
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progress-ring {
+  from {
+    stroke-dashoffset: 88;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
+.animate-scan-pulse {
+  animation: scan-pulse 2s ease-in-out infinite;
+}
+
+.animate-float-wand {
+  animation: float-wand 2.5s ease-in-out infinite;
+}
+
+.animate-fade-tooltip {
+  animation: fade-tooltip 4s ease-in-out infinite;
+}
+
+.intensity-slider {
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--primary) 0%,
+    var(--primary) var(--intensity, 75%),
+    #d7e4de var(--intensity, 75%),
+    #d7e4de 100%
+  );
+  outline: none;
+}
+
+.intensity-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--primary);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+
+.intensity-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--primary);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+}
+
+.intensity-slider-sm {
+  height: 4px;
+}
+
+.intensity-slider-sm::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+.intensity-slider-sm::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+.testimonials-stage {
+  perspective: 1400px;
+  transform-style: preserve-3d;
+}
+
+.testimonial-card {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+@keyframes glow-opacity {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Static border + a cheap opacity-only pulsing glow layer (GPU-composited). */
+.pricing-card-glow {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--primary) 60%, transparent),
+    0 0 22px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.pricing-card-glow::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 34px 4px color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: glow-opacity 3s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pricing-card-glow::after,
+  .animate-scan-pulse,
+  .animate-float-wand,
+  .animate-fade-tooltip {
+    animation: none;
+  }
+}

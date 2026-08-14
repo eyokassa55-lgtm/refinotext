@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  PRO
+  ULTRA
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+  PAST_DUE
+}
+
+enum CreditTransactionType {
+  GRANT
+  DEDUCTION
+  REFUND
+}
+
+model User {
+  id              String   @id @default(cuid())
+  clerkUserId     String   @unique
+  email           String
+  name            String?
+  polarCustomerId String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  creditBalance      CreditBalance?
+  subscription       Subscription?
+  creditTransactions CreditTransaction[]
+  humanizations      Humanization[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model ProcessedWebhook {
+  id        String   @id
+  source    String
+  eventType String
+  createdAt DateTime @default(now())
+
+  @@index([source, createdAt])
+  @@map("processed_webhooks")
+}
+
+model CreditBalance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  /// Remaining credits. 1 word = 1 credit. Never negative.
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_balances")
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  userId              String             @unique
+  polarCustomerId     String?
+  polarSubscriptionId String?            @unique
+  polarProductId      String?
+  interval            String?
+  cancelAtPeriodEnd   Boolean            @default(false)
+  plan                PlanTier           @default(FREE)
+  status              SubscriptionStatus @default(ACTIVE)
+  monthlyCredits      Int
+  maxWordsPerRequest  Int
+  currentPeriodStart  DateTime           @default(now())
+  currentPeriodEnd    DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([polarCustomerId])
+  @@index([polarProductId])
+  @@index([plan, status])
+  @@map("subscriptions")
+}
+
+model CreditTransaction {
+  id           String                @id @default(cuid())
+  userId       String
+  type         CreditTransactionType
+  /// Always a positive credit count; `type` gives the direction.
+  amount       Int
+  balanceAfter Int
+  wordCount    Int?
+  /// Idempotency key, namespaced per user by the server.
+  requestId    String
+  description  String?
+  createdAt    DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, type])
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
+}
+
+model Humanization {
+  id             String   @id @default(cuid())
+  userId         String
+  requestId      String   @unique
+  inputWordCount Int
+  creditsCharged Int
+  tone           String?
+  readability    String?
+  intensity      Int?
+  inputText      String
+  outputText     String
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("humanizations")
+}
