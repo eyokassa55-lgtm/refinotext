@@ -2,8 +2,8 @@ import "server-only";
 
 import { ApiError, GoogleGenAI } from "@google/genai/node";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const FALLBACK_MODELS = ["gemini-2.0-flash"];
+const DEFAULT_MODEL = "gemini-3.6-flash";
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 3;
 
