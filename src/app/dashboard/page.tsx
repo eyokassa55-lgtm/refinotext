@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
@@ -8,8 +9,9 @@ import { getCreditBalance } from "@/lib/credits";
 import { prisma } from "@/lib/prisma";
 import { ensureCurrentUser } from "@/lib/users";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Credits",
+  robots: { index: false, follow: false },
 };
 
 export const dynamic = "force-dynamic";

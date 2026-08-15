@@ -3,9 +3,13 @@ import { LandingFooter } from "@/components/landing/landing-footer";
 import { Navbar } from "@/components/landing/navbar";
 import { PricingSection } from "@/components/landing/pricing-section";
 
-export const metadata = {
-  title: "Pricing",
-};
+import { PAGE_SEO, pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  PAGE_SEO.pricing.path,
+  PAGE_SEO.pricing.title,
+  PAGE_SEO.pricing.description,
+);
 
 export default function PricingPage() {
   return (

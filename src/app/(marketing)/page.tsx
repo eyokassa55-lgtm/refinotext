@@ -8,10 +8,20 @@ import { LandingFooter } from "@/components/landing/landing-footer";
 import { Navbar } from "@/components/landing/navbar";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { JsonLd } from "@/components/seo/json-ld";
+import { buildHomeJsonLd, PAGE_SEO, pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  PAGE_SEO.home.path,
+  PAGE_SEO.home.title,
+  PAGE_SEO.home.description,
+  { absoluteTitle: true },
+);
 
 export default function HomePage() {
   return (
     <>
+      <JsonLd data={buildHomeJsonLd()} />
       <AnnouncementBar />
       <Navbar />
       <main>

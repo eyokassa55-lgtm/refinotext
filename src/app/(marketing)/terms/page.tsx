@@ -4,9 +4,13 @@ import { Navbar } from "@/components/landing/navbar";
 import { LegalDocument } from "@/components/legal/legal-document";
 import { LEGAL_PAGES } from "@/lib/legal-content";
 
-export const metadata = {
-  title: "Terms of Service",
-};
+import { PAGE_SEO, pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  PAGE_SEO.terms.path,
+  PAGE_SEO.terms.title,
+  PAGE_SEO.terms.description,
+);
 
 export default function TermsPage() {
   return (

@@ -8,6 +8,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+import { SEO_TITLE } from "@/lib/seo";
 
 import "./globals.css";
 
@@ -33,28 +34,41 @@ const appUrl = getAppUrl();
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: `${APP_NAME} — AI Writing Humanizer`,
+    default: SEO_TITLE,
     template: `%s | ${APP_NAME}`,
   },
   description: APP_DESCRIPTION,
-  alternates: {
-    canonical: "/",
-  },
+  applicationName: APP_NAME,
+  authors: [{ name: APP_NAME, url: appUrl }],
+  creator: APP_NAME,
+  publisher: APP_NAME,
+  category: "writing",
+  keywords: [
+    "AI humanizer",
+    "AI writing humanizer",
+    "humanize AI text",
+    "undetectable AI writing",
+    "ChatGPT humanizer",
+  ],
   openGraph: {
     type: "website",
-    url: "/",
+    locale: "en_US",
     siteName: APP_NAME,
-    title: `${APP_NAME} — AI Writing Humanizer`,
+    title: SEO_TITLE,
     description: APP_DESCRIPTION,
   },
   twitter: {
-    card: "summary",
-    title: `${APP_NAME} — AI Writing Humanizer`,
+    card: "summary_large_image",
+    title: SEO_TITLE,
     description: APP_DESCRIPTION,
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 
@@ -78,25 +92,6 @@ export default function RootLayout({
         ) : (
           children
         )}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "SoftwareApplication",
-              name: APP_NAME,
-              applicationCategory: "BusinessApplication",
-              operatingSystem: "Web",
-              description: APP_DESCRIPTION,
-              url: appUrl,
-              offers: {
-                "@type": "Offer",
-                price: "0",
-                priceCurrency: "USD",
-              },
-            }),
-          }}
-        />
       </body>
     </html>
   );

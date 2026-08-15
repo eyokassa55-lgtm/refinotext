@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { SignIn } from "@clerk/nextjs";
 
+import type { Metadata } from "next";
+
 import { isClerkEnabled } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { ROUTES } from "@/lib/constants";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Sign In",
+  robots: { index: false, follow: false },
 };
 
 export default function SignInPage() {

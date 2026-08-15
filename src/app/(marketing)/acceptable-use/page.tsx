@@ -4,9 +4,13 @@ import { Navbar } from "@/components/landing/navbar";
 import { LegalDocument } from "@/components/legal/legal-document";
 import { LEGAL_PAGES } from "@/lib/legal-content";
 
-export const metadata = {
-  title: "Acceptable Use Policy",
-};
+import { PAGE_SEO, pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata(
+  PAGE_SEO.acceptableUse.path,
+  PAGE_SEO.acceptableUse.title,
+  PAGE_SEO.acceptableUse.description,
+);
 
 export default function AcceptableUsePage() {
   return (
