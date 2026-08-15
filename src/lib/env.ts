@@ -35,7 +35,7 @@ export const env = {
 
   gemini: {
     apiKey: getEnv("GEMINI_API_KEY"),
-    model: getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
+    model: getEnv("GEMINI_MODEL") ?? "gemini-2.5-flash",
   },
 
   polar: {

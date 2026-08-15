@@ -2,8 +2,8 @@ import "server-only";
 
 import { ApiError, GoogleGenAI } from "@google/genai/node";
 
-const DEFAULT_MODEL = "gemini-3.6-flash";
-const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const DEFAULT_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODELS = ["gemini-2.0-flash"];
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 3;
 
@@ -20,7 +20,7 @@ export class GeminiError extends Error {
 }
 
 function getApiKey(): string {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const apiKey = process.env.GEMINI_API_KEY?.trim().replace(/^["']|["']$/g, "");
   if (!apiKey) {
     throw new GeminiError(
       "The writing service is not configured.",
@@ -31,7 +31,7 @@ function getApiKey(): string {
 }
 
 export function getGeminiModel(): string {
-  const model = process.env.GEMINI_MODEL?.trim();
+  const model = process.env.GEMINI_MODEL?.trim().replace(/^["']|["']$/g, "");
   return model || DEFAULT_MODEL;
 }
 
