@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
-import { APP_NAME, ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
+import { APP_NAME, PUBLIC_PAGES, ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { NAV_LINKS } from "@/lib/landing-data";
 
 export function LandingFooter() {
@@ -39,14 +39,22 @@ export function LandingFooter() {
               Product
             </h3>
             <ul className="mt-4 space-y-2.5">
+              <li>
+                <Link
+                  href={ROUTES.home}
+                  className="text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                >
+                  Home
+                </Link>
+              </li>
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
-                  <a
+                  <Link
                     href={link.href}
                     className="text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
                   >
                     {link.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -129,6 +137,17 @@ export function LandingFooter() {
           <p className="text-sm text-muted">
             &copy; {currentYear} {APP_NAME}. All rights reserved.
           </p>
+          <nav aria-label="Sitemap" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            {PUBLIC_PAGES.map((page) => (
+              <Link
+                key={page.href}
+                href={page.href}
+                className="text-xs text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+              >
+                {page.label}
+              </Link>
+            ))}
+          </nav>
         </div>
       </Container>
     </footer>

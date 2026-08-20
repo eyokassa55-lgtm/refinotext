@@ -16,3 +16,13 @@ export const ROUTES = {
   terms: "/terms",
   acceptableUse: "/acceptable-use",
 } as const;
+
+/** All public sitemap pages — keep these linked from header/footer. */
+export const PUBLIC_PAGES = [
+  { label: "Home", href: ROUTES.home },
+  { label: "Pricing", href: ROUTES.pricing },
+  { label: "Contact", href: ROUTES.contact },
+  { label: "Privacy Policy", href: ROUTES.privacy },
+  { label: "Terms of Service", href: ROUTES.terms },
+  { label: "Acceptable Use", href: ROUTES.acceptableUse },
+] as const;
