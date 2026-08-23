@@ -69,8 +69,8 @@ export function HeroSection() {
                 Start humanizing
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Button>
-              <Button href={ROUTES.signIn} variant="ghost" size="lg">
-                Sign in
+              <Button href={ROUTES.pricing} variant="ghost" size="lg">
+                View plans
               </Button>
             </div>
 

@@ -36,7 +36,7 @@ export function LandingFooter() {
 
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">
-              Product
+              Explore
             </h3>
             <ul className="mt-4 space-y-2.5">
               <li>
@@ -45,6 +45,14 @@ export function LandingFooter() {
                   className="text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
                 >
                   Home
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={ROUTES.humanizer}
+                  className="text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                >
+                  Open editor
                 </Link>
               </li>
               {NAV_LINKS.map((link) => (

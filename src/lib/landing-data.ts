@@ -1,10 +1,9 @@
+import { ROUTES } from "@/lib/constants";
+
 export const NAV_LINKS = [
-  { label: "Humanizer", href: "/#humanizer" },
-  { label: "Features", href: "/#features" },
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "Reviews", href: "/#reviews" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "FAQ", href: "/#faq" },
+  { label: "Pricing", href: ROUTES.pricing },
+  { label: "FAQ", href: ROUTES.faq },
+  { label: "Contact", href: ROUTES.contact },
 ] as const;
 
 export const HERO_FEATURES = [

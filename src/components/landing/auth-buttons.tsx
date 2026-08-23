@@ -13,10 +13,10 @@ export function DesktopAuthButtons() {
     return (
       <>
         <Button href={ROUTES.signIn} variant="ghost" size="sm">
-          Sign in
+          Log in
         </Button>
         <Button href={ROUTES.signUp} size="sm">
-          Get started
+          Start free
         </Button>
       </>
     );
@@ -27,11 +27,11 @@ export function DesktopAuthButtons() {
       <Show when="signed-out">
         <SignInButton mode="redirect" forceRedirectUrl={ROUTES.home}>
           <button className="text-sm font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm px-2 py-1">
-            Sign in
+            Log in
           </button>
         </SignInButton>
         <SignUpButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <Button size="sm">Get started</Button>
+          <Button size="sm">Start free</Button>
         </SignUpButton>
       </Show>
       <Show when="signed-in">
@@ -61,10 +61,10 @@ export function MobileAuthButtons() {
     return (
       <>
         <Button href={ROUTES.signIn} variant="ghost" className="w-full">
-          Sign in
+          Log in
         </Button>
         <Button href={ROUTES.signUp} className="w-full">
-          Get started
+          Start free
         </Button>
       </>
     );
@@ -74,12 +74,12 @@ export function MobileAuthButtons() {
     <>
       <Show when="signed-out">
         <SignInButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <button className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted hover:bg-mint-dark">
-            Sign in
+            <button className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted hover:bg-mint-dark">
+            Log in
           </button>
         </SignInButton>
         <SignUpButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <Button className="w-full">Get started</Button>
+          <Button className="w-full">Start free</Button>
         </SignUpButton>
       </Show>
       <Show when="signed-in">
