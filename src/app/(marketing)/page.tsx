@@ -24,7 +24,7 @@ export default function HomePage() {
       <JsonLd data={buildHomeJsonLd()} />
       <AnnouncementBar />
       <Navbar />
-      <main>
+      <main className="min-w-0">
         <HeroSection />
         <HumanizerSection />
         <FeaturesSection />

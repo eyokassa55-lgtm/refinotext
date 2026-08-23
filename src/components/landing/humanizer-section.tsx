@@ -7,7 +7,7 @@ export function HumanizerSection() {
     <section
       id="humanizer"
       aria-labelledby="humanizer-heading"
-      className="pb-20 sm:pb-28"
+      className="min-w-0 overflow-x-clip pb-20 sm:pb-28"
     >
       {/* Mid-gap band above the editor */}
       <div className="py-14 sm:py-20">

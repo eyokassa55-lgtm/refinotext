@@ -57,7 +57,7 @@ export function TestimonialsSection() {
     <section
       id="reviews"
       aria-labelledby="reviews-heading"
-      className="bg-mint py-20 sm:py-28"
+      className="overflow-x-clip bg-mint py-20 sm:py-28"
     >
       <Container>
         <SectionHeader
@@ -68,9 +68,9 @@ export function TestimonialsSection() {
           className="mb-14"
         />
 
-        <div className="relative mx-auto max-w-4xl">
+        <div className="relative mx-auto max-w-4xl overflow-x-clip">
           <div
-            className="testimonials-stage relative mx-auto h-[320px] sm:h-[300px]"
+            className="testimonials-stage relative mx-auto h-[320px] overflow-x-clip sm:h-[300px]"
             aria-live="polite"
           >
             {TESTIMONIALS.map((item, index) => {

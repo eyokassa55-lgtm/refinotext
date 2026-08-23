@@ -81,7 +81,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="overflow-x-clip">
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} antialiased min-h-screen`}
       >

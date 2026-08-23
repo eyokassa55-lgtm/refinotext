@@ -67,12 +67,12 @@ export function HumanizerPreview() {
 
   return (
     <div
-      className="relative w-full max-w-lg"
+      className="relative w-full min-w-0 max-w-lg overflow-x-clip"
       aria-label="AI Draft to Human Tone Transformation Preview"
     >
       {/* Background Ambient Glow */}
       <div
-        className="absolute -inset-4 rounded-3xl bg-gradient-to-r from-accent/20 via-primary/10 to-accent/20 blur-xl"
+        className="absolute inset-0 rounded-3xl bg-gradient-to-r from-accent/20 via-primary/10 to-accent/20 blur-xl"
         aria-hidden
       />
 

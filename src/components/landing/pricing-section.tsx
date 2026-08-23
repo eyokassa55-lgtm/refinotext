@@ -91,7 +91,7 @@ export function PricingSection() {
 
         <div className="mb-12 flex flex-col items-center gap-3">
           <div
-            className="inline-flex items-center rounded-full border border-border bg-card p-1 shadow-sm"
+            className="inline-flex max-w-full flex-wrap items-center justify-center rounded-full border border-border bg-card p-1 shadow-sm"
             role="group"
             aria-label="Billing period"
           >

@@ -196,7 +196,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     "rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground";
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-4">
+    <div className="mx-auto flex w-full min-w-0 flex-col gap-4">
       <input
         type="file"
         ref={fileInputRef}

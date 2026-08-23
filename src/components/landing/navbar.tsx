@@ -17,10 +17,10 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 overflow-x-clip border-b border-border/60 bg-background/90 backdrop-blur-md">
       <Container as="nav" ariaLabel="Main navigation">
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center gap-12">
+        <div className="flex h-16 min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-12">
             <Link
               href={ROUTES.home}
               className="text-xl font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"

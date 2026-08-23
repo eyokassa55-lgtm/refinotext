@@ -14,7 +14,7 @@ const featureIcons = {
 
 export function HeroSection() {
   return (
-    <section aria-labelledby="hero-heading" className="relative overflow-hidden">
+    <section aria-labelledby="hero-heading" className="relative overflow-x-clip">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--color-accent-light)_0%,_transparent_50%)]"
         aria-hidden
@@ -22,7 +22,7 @@ export function HeroSection() {
 
       <Container className="relative pt-16 pb-10 sm:pt-24 sm:pb-12 lg:pt-28 lg:pb-14">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          <div>
+          <div className="min-w-0">
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-widest text-primary">
                 — AI Text Humanizer
@@ -35,7 +35,7 @@ export function HeroSection() {
 
             <h1
               id="hero-heading"
-              className="text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl lg:text-[3.25rem]"
+              className="text-4xl font-extrabold leading-[1.1] tracking-tight break-words sm:text-5xl lg:text-[3.25rem]"
             >
               Transform Your AI Text Into{" "}
               <span className="font-display block text-[1.15em] font-bold text-primary sm:inline sm:text-[1.2em]">
@@ -87,7 +87,7 @@ export function HeroSection() {
             </ul>
           </div>
 
-          <div className="flex justify-center lg:justify-end">
+          <div className="flex min-w-0 justify-center lg:justify-end">
             <HumanizerPreview />
           </div>
         </div>

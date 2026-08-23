@@ -36,13 +36,37 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 body {
+  max-width: 100%;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Grid items default to min-width: auto and can shove the page sideways. */
+.grid > * {
+  min-width: 0;
 }
 
 ::selection {

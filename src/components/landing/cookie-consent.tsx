@@ -49,7 +49,7 @@ export function CookieConsent() {
       aria-labelledby="cookie-consent-title"
       aria-live="polite"
       className={cn(
-        "fixed bottom-4 left-4 z-50 w-[min(calc(100vw-2rem),22rem)] transition-all duration-500 sm:bottom-6 sm:left-6",
+        "fixed bottom-4 left-4 z-50 w-[min(calc(100%-2rem),22rem)] transition-all duration-500 sm:bottom-6 sm:left-6",
         visible
           ? "translate-y-0 opacity-100"
           : "pointer-events-none translate-y-4 opacity-0",
