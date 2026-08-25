@@ -20,7 +20,11 @@ export class GeminiError extends Error {
 }
 
 function getApiKey(): string {
-  const apiKey = process.env.GEMINI_API_KEY?.trim().replace(/^["']|["']$/g, "");
+  const apiKey = (
+    process.env.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY
+  )
+    ?.trim()
+    .replace(/^["']|["']$/g, "");
   if (!apiKey) {
     throw new GeminiError(
       "The writing service is not configured.",
@@ -31,7 +35,11 @@ function getApiKey(): string {
 }
 
 export function getGeminiModel(): string {
-  const model = process.env.GEMINI_MODEL?.trim().replace(/^["']|["']$/g, "");
+  const model = (
+    process.env.GEMINI_MODEL ?? process.env.GEMINI_MODEL
+  )
+    ?.trim()
+    .replace(/^["']|["']$/g, "");
   return model || DEFAULT_MODEL;
 }
 

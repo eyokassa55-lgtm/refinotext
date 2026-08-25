@@ -1,10 +1,16 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 export const alt = "RefinoText — AI Writing Humanizer";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  const logo = await readFile(join(process.cwd(), "public/logo-mark.png"));
+  const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -19,17 +25,25 @@ export default function OpenGraphImage() {
           color: "#e8f5ef",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            fontSize: 28,
-            fontWeight: 600,
-            letterSpacing: 4,
-            textTransform: "uppercase",
-            color: "#1a8f6a",
-          }}
-        >
-          RefinoText
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <img
+            src={logoSrc}
+            width={88}
+            height={88}
+            alt=""
+            style={{ objectFit: "contain" }}
+          />
+          <div
+            style={{
+              display: "flex",
+              fontSize: 32,
+              fontWeight: 700,
+              letterSpacing: 1,
+              color: "#e8f5ef",
+            }}
+          >
+            RefinoText
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div

@@ -1,4 +1,5 @@
 export const APP_NAME = "RefinoText";
+export const APP_LOGO_SRC = "/logo-mark.png";
 export const APP_DESCRIPTION =
   "AI-powered writing humanizer that transforms robotic text into natural, human-sounding prose.";
 

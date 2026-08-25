@@ -8,8 +8,8 @@ import {
   DesktopAuthButtons,
   MobileAuthButtons,
 } from "@/components/landing/auth-buttons";
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { Container } from "@/components/ui/container";
-import { APP_NAME, ROUTES } from "@/lib/constants";
 import { NAV_LINKS } from "@/lib/landing-data";
 import { cn } from "@/lib/utils";
 
@@ -21,12 +21,7 @@ export function Navbar() {
       <Container as="nav" ariaLabel="Main navigation">
         <div className="flex h-16 min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-12">
-            <Link
-              href={ROUTES.home}
-              className="text-xl font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
-            >
-              {APP_NAME}
-            </Link>
+            <BrandLogo priority />
 
             <div className="hidden items-center gap-8 md:flex">
               {NAV_LINKS.map((link) => (

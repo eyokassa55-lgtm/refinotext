@@ -64,4 +64,12 @@ prisma/
 
 ## Deployment
 
-Deploy to [Vercel](https://vercel.com). Set all environment variables from `.env.example` in the Vercel project settings.
+Production site: [https://refinotext.com](https://refinotext.com)
+
+Deploy to [Vercel](https://vercel.com). Set all environment variables from `.env.example` in the Vercel project settings, including:
+
+```
+NEXT_PUBLIC_APP_URL=https://refinotext.com
+```
+
+The old `refinotext.vercel.app` host redirects to `https://refinotext.com`. Update Clerk, Polar, and webhook dashboards to use the new domain.

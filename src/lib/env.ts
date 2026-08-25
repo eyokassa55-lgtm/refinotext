@@ -34,8 +34,13 @@ export const env = {
   },
 
   gemini: {
-    apiKey: getEnv("GEMINI_API_KEY"),
-    model: getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
+    apiKey: getEnv("GEMINI_API_KEY") ?? getEnv("GEMINI_API_KEY"),
+    model: getEnv("GEMINI_MODEL") ?? getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
+  },
+
+  fireworks: {
+    apiKey: getEnv("FIREWORKS_API_KEY"),
+    model: getEnv("FIREWORKS_MODEL"),
   },
 
   polar: {

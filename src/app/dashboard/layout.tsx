@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { isClerkEnabled } from "@/lib/auth-config";
-import { APP_NAME, ROUTES } from "@/lib/constants";
+import { ROUTES } from "@/lib/constants";
 
 export default function DashboardLayout({
   children,
@@ -13,9 +14,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href={ROUTES.dashboard} className="font-semibold">
-            {APP_NAME}
-          </Link>
+          <BrandLogo href={ROUTES.dashboard} />
           {isClerkEnabled ? (
             <UserButton />
           ) : (

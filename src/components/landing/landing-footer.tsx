@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { APP_NAME, PUBLIC_PAGES, ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
@@ -13,12 +14,7 @@ export function LandingFooter() {
       <Container as="footer" className="py-16">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2 lg:col-span-1">
-            <Link
-              href={ROUTES.home}
-              className="text-xl font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
-            >
-              {APP_NAME}
-            </Link>
+            <BrandLogo href={ROUTES.home} />
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
               Transform AI-generated text into authentic human writing. Built for
               students, creators, and professionals.

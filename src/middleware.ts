@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
+import { PRODUCTION_APP_URL, isLegacyAppHost } from "@/lib/app-url";
 import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
@@ -20,6 +21,14 @@ const clerkHandler = clerkMiddleware(async (auth, req) => {
 });
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  const host = req.headers.get("host");
+  if (isLegacyAppHost(host) && !isWebhookRoute(req)) {
+    const destination = new URL(
+      `${PRODUCTION_APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`,
+    );
+    return NextResponse.redirect(destination, 308);
+  }
+
   if (!isClerkEnabled || !clerkPublishableKey.startsWith("pk_")) {
     return NextResponse.next();
   }

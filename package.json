@@ -15,6 +15,7 @@
     "db:validate": "prisma validate",
     "test:credits": "tsx --conditions=react-server scripts/test-credits.mts",
     "test:gemini": "tsx --conditions=react-server scripts/test-gemini.mts",
+    "test:fireworks": "tsx --conditions=react-server scripts/test-fireworks.mts",
     "test:polar": "tsx scripts/verify-polar.mts"
   },
   "dependencies": {

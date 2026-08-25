@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { getAppUrl } from "@/lib/app-url";
-import { APP_DESCRIPTION, APP_NAME, SUPPORT_EMAIL } from "@/lib/constants";
+import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
+import { APP_DESCRIPTION, APP_LOGO_SRC, APP_NAME, SUPPORT_EMAIL } from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
 export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
@@ -51,16 +51,17 @@ export function pageMetadata(
 ): Metadata {
   const index = options?.index ?? true;
   const ogTitle = options?.absoluteTitle ? title : `${title} | ${APP_NAME}`;
+  const url = getAbsoluteUrl(path);
 
   return {
     title: options?.absoluteTitle ? { absolute: title } : title,
     description,
     alternates: {
-      canonical: path,
+      canonical: url,
     },
     openGraph: {
       type: "website",
-      url: path,
+      url,
       siteName: APP_NAME,
       locale: "en_US",
       title: ogTitle,
@@ -88,6 +89,7 @@ export function buildHomeJsonLd() {
         "@id": `${url}/#organization`,
         name: APP_NAME,
         url,
+        logo: `${url}${APP_LOGO_SRC}`,
         email: SUPPORT_EMAIL,
         description: APP_DESCRIPTION,
       },

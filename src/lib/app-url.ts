@@ -1,3 +1,7 @@
+export const PRODUCTION_APP_URL = "https://refinotext.com";
+export const PRODUCTION_HOST = "refinotext.com";
+export const LEGACY_APP_HOSTS = ["refinotext.vercel.app", "www.refinotext.com"] as const;
+
 const FALLBACK_APP_URL = "http://localhost:3000";
 
 function cleanEnvValue(value: string | undefined): string {
@@ -23,20 +27,38 @@ function toOrigin(value: string): string | null {
   }
 }
 
-export function getAppUrl(): string {
-  const candidates = [
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.VERCEL_PROJECT_PRODUCTION_URL,
-    process.env.VERCEL_URL,
-    FALLBACK_APP_URL,
-  ];
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
 
-  for (const candidate of candidates) {
-    const cleaned = cleanEnvValue(candidate);
-    if (!cleaned) continue;
-    const origin = toOrigin(cleaned);
-    if (origin) return origin;
+/**
+ * Public site origin for canonical, sitemap, Open Graph, and JSON-LD.
+ * `next dev` keeps localhost. Production builds and Vercel always use
+ * https://refinotext.com — never the old Vercel hostname.
+ */
+export function getAppUrl(): string {
+  const explicit = toOrigin(cleanEnvValue(process.env.NEXT_PUBLIC_APP_URL));
+
+  if (process.env.NODE_ENV !== "production") {
+    if (explicit) {
+      const hostname = new URL(explicit).hostname.toLowerCase();
+      if (isLocalHost(hostname)) return explicit;
+    }
+    return FALLBACK_APP_URL;
   }
 
-  return FALLBACK_APP_URL;
+  return PRODUCTION_APP_URL;
+}
+
+export function getAbsoluteUrl(path = "/"): string {
+  const origin = getAppUrl();
+  if (!path || path === "/") return `${origin}/`;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${origin}${normalized}`;
+}
+
+export function isLegacyAppHost(host: string | null): boolean {
+  if (!host) return false;
+  const hostname = host.split(":")[0]?.toLowerCase();
+  return LEGACY_APP_HOSTS.includes(hostname as (typeof LEGACY_APP_HOSTS)[number]);
 }

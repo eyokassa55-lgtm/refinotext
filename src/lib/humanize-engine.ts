@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  FireworksError,
+  generateWithFireworks,
+  isFireworksEnabled,
+} from "@/lib/fireworks";
 import { GeminiError, generateText } from "@/lib/gemini";
 
 export type HumanizeRequest = {
@@ -52,8 +57,23 @@ ${request.text}`;
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<string> {
+  const prompt = buildHumanizePrompt(request);
+
+  if (isFireworksEnabled()) {
+    try {
+      const result = await generateWithFireworks(prompt);
+      return result.text;
+    } catch (error) {
+      const code =
+        error instanceof FireworksError ? error.code : "FIREWORKS_ERROR";
+      console.error("[humanize] Fireworks failed; falling back to Gemini", {
+        code,
+      });
+    }
+  }
+
   try {
-    return await generateText(buildHumanizePrompt(request));
+    return await generateText(prompt);
   } catch (error) {
     if (error instanceof GeminiError) {
       throw new HumanizationFailedError(error.message, error.code, error.status);
