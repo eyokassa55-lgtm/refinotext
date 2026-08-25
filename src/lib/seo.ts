@@ -6,6 +6,11 @@ import { FAQ_ITEMS } from "@/lib/landing-data";
 
 export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
 
+const OG_IMAGE = {
+  width: 1200,
+  height: 630,
+} as const;
+
 export const PAGE_SEO = {
   home: {
     path: "/",
@@ -14,9 +19,9 @@ export const PAGE_SEO = {
   },
   pricing: {
     path: "/pricing",
-    title: "Pricing",
+    title: "Pricing — Plans & Credits",
     description:
-      "Simple RefinoText plans. Start free with 500 words per month, then upgrade to Basic, Pro, or Ultra for more credits and longer humanizations.",
+      "Compare RefinoText plans. Start free with 500 words per month, then upgrade to Basic, Pro, or Ultra for more credits and longer humanizations.",
   },
   contact: {
     path: "/contact",
@@ -41,7 +46,33 @@ export const PAGE_SEO = {
     description:
       "Rules for using RefinoText, including prohibited content and how we handle abuse of the humanizer.",
   },
+  signIn: {
+    path: "/sign-in",
+    title: "Sign In",
+    description: `Sign in to your ${APP_NAME} account to humanize writing and manage credits.`,
+  },
+  signUp: {
+    path: "/sign-up",
+    title: "Sign Up",
+    description: `Create a free ${APP_NAME} account to humanize AI-generated text. No credit card required.`,
+  },
+  dashboard: {
+    path: "/dashboard",
+    title: "Credits",
+    description: `View your ${APP_NAME} credit balance, plan, and recent humanization activity.`,
+  },
 } as const;
+
+function socialImages(alt: string) {
+  return [
+    {
+      url: getAbsoluteUrl("/opengraph-image"),
+      width: OG_IMAGE.width,
+      height: OG_IMAGE.height,
+      alt,
+    },
+  ];
+}
 
 export function pageMetadata(
   path: string,
@@ -52,6 +83,7 @@ export function pageMetadata(
   const index = options?.index ?? true;
   const ogTitle = options?.absoluteTitle ? title : `${title} | ${APP_NAME}`;
   const url = getAbsoluteUrl(path);
+  const images = socialImages(ogTitle);
 
   return {
     title: options?.absoluteTitle ? { absolute: title } : title,
@@ -66,19 +98,34 @@ export function pageMetadata(
       locale: "en_US",
       title: ogTitle,
       description,
+      images,
     },
     twitter: {
       card: "summary_large_image",
       title: ogTitle,
       description,
+      images,
     },
     robots: index
-      ? { index: true, follow: true }
-      : { index: false, follow: false, nocache: true },
+      ? {
+          index: true,
+          follow: true,
+          googleBot: { index: true, follow: true },
+        }
+      : {
+          index: false,
+          follow: false,
+          nocache: true,
+          googleBot: {
+            index: false,
+            follow: false,
+            noimageindex: true,
+          },
+        },
   };
 }
 
-export function buildHomeJsonLd() {
+export function buildOrganizationAndWebsiteJsonLd() {
   const url = getAppUrl();
 
   return {
@@ -89,7 +136,7 @@ export function buildHomeJsonLd() {
         "@id": `${url}/#organization`,
         name: APP_NAME,
         url,
-        logo: `${url}${APP_LOGO_SRC}`,
+        logo: getAbsoluteUrl(APP_LOGO_SRC),
         email: SUPPORT_EMAIL,
         description: APP_DESCRIPTION,
       },
@@ -102,6 +149,16 @@ export function buildHomeJsonLd() {
         publisher: { "@id": `${url}/#organization` },
         inLanguage: "en-US",
       },
+    ],
+  };
+}
+
+export function buildHomeJsonLd() {
+  const url = getAppUrl();
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
       {
         "@type": "SoftwareApplication",
         "@id": `${url}/#app`,

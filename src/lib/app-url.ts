@@ -47,12 +47,21 @@ export function getAppUrl(): string {
     return FALLBACK_APP_URL;
   }
 
+  // Production canonical host is always the apex domain, even if the env
+  // var is missing, uses www, or still points at the old Vercel hostname.
+  if (explicit) {
+    const hostname = new URL(explicit).hostname.toLowerCase();
+    if (hostname === PRODUCTION_HOST || hostname === `www.${PRODUCTION_HOST}`) {
+      return PRODUCTION_APP_URL;
+    }
+  }
+
   return PRODUCTION_APP_URL;
 }
 
 export function getAbsoluteUrl(path = "/"): string {
   const origin = getAppUrl();
-  if (!path || path === "/") return `${origin}/`;
+  if (!path || path === "/") return origin;
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${origin}${normalized}`;
 }

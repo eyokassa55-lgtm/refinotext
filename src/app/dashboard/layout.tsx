@@ -1,9 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false, noimageindex: true },
+  },
+};
 
 export default function DashboardLayout({
   children,

@@ -17,7 +17,7 @@ export default function PricingPage() {
       <AnnouncementBar />
       <Navbar />
       <main className="pt-8">
-        <PricingSection />
+        <PricingSection headingLevel="h1" />
       </main>
       <LandingFooter />
     </>

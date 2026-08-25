@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { SignUp } from "@clerk/nextjs";
 
-import type { Metadata } from "next";
-
 import { isClerkEnabled } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { ROUTES } from "@/lib/constants";
+import { PAGE_SEO, pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Sign Up",
-  robots: { index: false, follow: false },
-};
+export const metadata = pageMetadata(
+  PAGE_SEO.signUp.path,
+  PAGE_SEO.signUp.title,
+  PAGE_SEO.signUp.description,
+  { index: false },
+);
 
 export default function SignUpPage() {
   if (!isClerkEnabled) {

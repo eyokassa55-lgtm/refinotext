@@ -38,7 +38,11 @@ function getAnnualTotal(plan: PricingPlan, yearly: boolean) {
   };
 }
 
-export function PricingSection() {
+export function PricingSection({
+  headingLevel = "h2",
+}: {
+  headingLevel?: "h1" | "h2";
+}) {
   const [yearly, setYearly] = useState(true);
   const [loadingProductKey, setLoadingProductKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -83,6 +87,7 @@ export function PricingSection() {
       <Container className="max-w-7xl">
         <SectionHeader
           id="pricing-heading"
+          titleAs={headingLevel}
           eyebrow="Pricing"
           title="Simple, transparent pricing"
           description="Start free and upgrade when you need more. No hidden fees, cancel anytime."

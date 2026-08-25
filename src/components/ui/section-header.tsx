@@ -9,6 +9,7 @@ type SectionHeaderProps = {
   id?: string;
   tone?: "light" | "dark";
   titleWeight?: "bold" | "medium";
+  titleAs?: "h1" | "h2";
 };
 
 export function SectionHeader({
@@ -20,6 +21,7 @@ export function SectionHeader({
   id,
   tone = "light",
   titleWeight = "bold",
+  titleAs: TitleTag = "h2",
 }: SectionHeaderProps) {
   return (
     <div
@@ -34,7 +36,7 @@ export function SectionHeader({
           {eyebrow}
         </p>
       )}
-      <h2
+      <TitleTag
         id={id}
         className={cn(
           "text-3xl tracking-tight sm:text-4xl",
@@ -43,7 +45,7 @@ export function SectionHeader({
         )}
       >
         {title}
-      </h2>
+      </TitleTag>
       {description && (
         <p
           className={cn(

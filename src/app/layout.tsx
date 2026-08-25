@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import localFont from "next/font/local";
 
-import { getAppUrl } from "@/lib/app-url";
+import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
 import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
@@ -30,6 +30,18 @@ const caveat = localFont({
 });
 
 const appUrl = getAppUrl();
+const ogImage = {
+  url: getAbsoluteUrl("/opengraph-image"),
+  width: 1200,
+  height: 630,
+  alt: SEO_TITLE,
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#e8f5ef",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
@@ -57,11 +69,13 @@ export const metadata: Metadata = {
     siteName: APP_NAME,
     title: SEO_TITLE,
     description: APP_DESCRIPTION,
+    images: [ogImage],
   },
   twitter: {
     card: "summary_large_image",
     title: SEO_TITLE,
     description: APP_DESCRIPTION,
+    images: [ogImage],
   },
   robots: {
     index: true,

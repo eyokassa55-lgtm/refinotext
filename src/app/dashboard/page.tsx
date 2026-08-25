@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
@@ -7,12 +6,15 @@ import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
 import { getCreditBalance } from "@/lib/credits";
 import { prisma } from "@/lib/prisma";
+import { PAGE_SEO, pageMetadata } from "@/lib/seo";
 import { ensureCurrentUser } from "@/lib/users";
 
-export const metadata: Metadata = {
-  title: "Credits",
-  robots: { index: false, follow: false },
-};
+export const metadata = pageMetadata(
+  PAGE_SEO.dashboard.path,
+  PAGE_SEO.dashboard.title,
+  PAGE_SEO.dashboard.description,
+  { index: false },
+);
 
 export const dynamic = "force-dynamic";
 
