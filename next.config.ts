@@ -13,22 +13,6 @@ const nextConfig: NextConfig = {
   ],
   // Hide the Vercel/Next.js floating dev badge in the browser.
   devIndicators: false,
-  async redirects() {
-    return [
-      {
-        source: "/",
-        has: [{ type: "host", value: "www.refinotext.com" }],
-        destination: "https://refinotext.com",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.refinotext.com" }],
-        destination: "https://refinotext.com/:path*",
-        permanent: true,
-      },
-    ];
-  },
 };
 
 export default nextConfig;

@@ -1,6 +1,6 @@
 export const PRODUCTION_APP_URL = "https://refinotext.com";
 export const PRODUCTION_HOST = "refinotext.com";
-export const LEGACY_APP_HOSTS = ["refinotext.vercel.app", "www.refinotext.com"] as const;
+export const LEGACY_APP_HOSTS = ["refinotext.vercel.app"] as const;
 
 const FALLBACK_APP_URL = "http://localhost:3000";
 
