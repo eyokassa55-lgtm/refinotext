@@ -6,6 +6,21 @@ import { FAQ_ITEMS } from "@/lib/landing-data";
 
 export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
 
+/** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
+export const SITE_LAST_MODIFIED = new Date("2026-08-26T14:00:00.000Z");
+
+const indexableRobots = {
+  index: true,
+  follow: true,
+  googleBot: {
+    index: true,
+    follow: true,
+    "max-image-preview": "large" as const,
+    "max-snippet": -1,
+    "max-video-preview": -1,
+  },
+};
+
 const OG_IMAGE = {
   width: 1200,
   height: 630,
@@ -107,11 +122,7 @@ export function pageMetadata(
       images,
     },
     robots: index
-      ? {
-          index: true,
-          follow: true,
-          googleBot: { index: true, follow: true },
-        }
+      ? indexableRobots
       : {
           index: false,
           follow: false,
@@ -139,6 +150,7 @@ export function buildOrganizationAndWebsiteJsonLd() {
         logo: getAbsoluteUrl(APP_LOGO_SRC),
         email: SUPPORT_EMAIL,
         description: APP_DESCRIPTION,
+        foundingDate: "2026",
       },
       {
         "@type": "WebSite",
@@ -148,6 +160,7 @@ export function buildOrganizationAndWebsiteJsonLd() {
         description: APP_DESCRIPTION,
         publisher: { "@id": `${url}/#organization` },
         inLanguage: "en-US",
+        dateModified: SITE_LAST_MODIFIED.toISOString(),
       },
     ],
   };
@@ -174,6 +187,32 @@ export function buildHomeJsonLd() {
           priceCurrency: "USD",
         },
         publisher: { "@id": `${url}/#organization` },
+        dateModified: SITE_LAST_MODIFIED.toISOString(),
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${url}/#webpage`,
+        url,
+        name: SEO_TITLE,
+        description: APP_DESCRIPTION,
+        inLanguage: "en-US",
+        isPartOf: { "@id": `${url}/#website` },
+        about: { "@id": `${url}/#app` },
+        primaryImageOfPage: getAbsoluteUrl("/opengraph-image"),
+        dateModified: SITE_LAST_MODIFIED.toISOString(),
+        breadcrumb: { "@id": `${url}/#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${url}/#breadcrumb`,
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: APP_NAME,
+            item: url,
+          },
+        ],
       },
       {
         "@type": "FAQPage",
