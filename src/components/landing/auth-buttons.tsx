@@ -1,6 +1,6 @@
 "use client";
 
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { Show, UserButton } from "@clerk/nextjs";
 import { Coins } from "lucide-react";
 
 import { CreditNavBadge } from "@/components/credits/credit-nav-badge";
@@ -25,14 +25,12 @@ export function DesktopAuthButtons() {
   return (
     <>
       <Show when="signed-out">
-        <SignInButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <button className="text-sm font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm px-2 py-1">
-            Log in
-          </button>
-        </SignInButton>
-        <SignUpButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <Button size="sm">Start free</Button>
-        </SignUpButton>
+        <Button href={ROUTES.signIn} variant="ghost" size="sm">
+          Log in
+        </Button>
+        <Button href={ROUTES.signUp} size="sm">
+          Start free
+        </Button>
       </Show>
       <Show when="signed-in">
         <CreditNavBadge />
@@ -73,14 +71,12 @@ export function MobileAuthButtons() {
   return (
     <>
       <Show when="signed-out">
-        <SignInButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-            <button className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted hover:bg-mint-dark">
-            Log in
-          </button>
-        </SignInButton>
-        <SignUpButton mode="redirect" forceRedirectUrl={ROUTES.home}>
-          <Button className="w-full">Start free</Button>
-        </SignUpButton>
+        <Button href={ROUTES.signIn} variant="ghost" className="w-full">
+          Log in
+        </Button>
+        <Button href={ROUTES.signUp} className="w-full">
+          Start free
+        </Button>
       </Show>
       <Show when="signed-in">
         <div className="flex flex-col items-center gap-3 pt-2">

@@ -13,7 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { Show, SignInButton } from "@clerk/nextjs";
+import { Show } from "@clerk/nextjs";
 
 import { Button } from "@/components/ui/button";
 import { isClerkEnabled } from "@/lib/auth-config";
@@ -192,16 +192,15 @@ export function HumanizerControls({
         {isClerkEnabled ? (
           <>
             <Show when="signed-out">
-              <SignInButton mode="redirect" forceRedirectUrl={ROUTES.humanizer}>
-                <Button
-                  className="w-full shrink-0 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover lg:ml-auto lg:w-auto"
-                  size="sm"
-                  ariaLabel="Sign in to humanize"
-                >
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                  Sign in to Humanize
-                </Button>
-              </SignInButton>
+              <Button
+                href={ROUTES.signIn}
+                className="w-full shrink-0 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover lg:ml-auto lg:w-auto"
+                size="sm"
+                ariaLabel="Sign in to humanize"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                Sign in to Humanize
+              </Button>
             </Show>
             <Show when="signed-in">
               <Button

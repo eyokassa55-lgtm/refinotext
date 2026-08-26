@@ -5,7 +5,15 @@ import { GeistSans } from "geist/font/sans";
 import localFont from "next/font/local";
 
 import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
-import { clerkPublishableKey, isClerkEnabled } from "@/lib/auth-config";
+import {
+  clerkAfterSignInUrl,
+  clerkAfterSignUpUrl,
+  clerkAllowedRedirectOrigins,
+  clerkPublishableKey,
+  clerkSignInUrl,
+  clerkSignUpUrl,
+  isClerkEnabled,
+} from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 import { SEO_TITLE } from "@/lib/seo";
@@ -111,6 +119,11 @@ export default function RootLayout({
           <ClerkProvider
             appearance={clerkAppearance}
             publishableKey={clerkPublishableKey}
+            signInUrl={clerkSignInUrl}
+            signUpUrl={clerkSignUpUrl}
+            signInFallbackRedirectUrl={clerkAfterSignInUrl}
+            signUpFallbackRedirectUrl={clerkAfterSignUpUrl}
+            allowedRedirectOrigins={clerkAllowedRedirectOrigins}
           >
             {children}
           </ClerkProvider>

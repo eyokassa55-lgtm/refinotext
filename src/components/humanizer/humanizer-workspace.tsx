@@ -1,6 +1,6 @@
 "use client";
 
-import { Show, SignInButton, useAuth } from "@clerk/nextjs";
+import { Show, useAuth } from "@clerk/nextjs";
 import {
   Check,
   Copy,
@@ -9,6 +9,7 @@ import {
   Sparkles,
   UploadCloud,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isClerkEnabled } from "@/lib/auth-config";
@@ -232,18 +233,13 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
-                      <SignInButton
-                        mode="redirect"
-                        forceRedirectUrl={ROUTES.humanizer}
+                      <Link
+                        href={ROUTES.signIn}
+                        title="Sign in to upload"
+                        className={requireAuthButtonClass}
                       >
-                        <button
-                          type="button"
-                          title="Sign in to upload"
-                          className={requireAuthButtonClass}
-                        >
-                          <UploadCloud className="h-4 w-4" />
-                        </button>
-                      </SignInButton>
+                        <UploadCloud className="h-4 w-4" />
+                      </Link>
                     </Show>
                     <Show when="signed-in">
                       <button
@@ -291,18 +287,13 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
-                      <SignInButton
-                        mode="redirect"
-                        forceRedirectUrl={ROUTES.humanizer}
+                      <Link
+                        href={ROUTES.signIn}
+                        title="Sign in to download"
+                        className={requireAuthButtonClass}
                       >
-                        <button
-                          type="button"
-                          title="Sign in to download"
-                          className={requireAuthButtonClass}
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
-                      </SignInButton>
+                        <Download className="h-4 w-4" />
+                      </Link>
                     </Show>
                     <Show when="signed-in">
                       <button
@@ -354,18 +345,13 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
-                      <SignInButton
-                        mode="redirect"
-                        forceRedirectUrl={ROUTES.humanizer}
+                      <Link
+                        href={ROUTES.signIn}
+                        title="Sign in to download"
+                        className={requireAuthButtonClass}
                       >
-                        <button
-                          type="button"
-                          title="Sign in to download"
-                          className={requireAuthButtonClass}
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
-                      </SignInButton>
+                        <Download className="h-4 w-4" />
+                      </Link>
                     </Show>
                     <Show when="signed-in">
                       <button
