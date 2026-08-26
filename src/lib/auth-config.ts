@@ -11,13 +11,21 @@ function publicPath(value: string | undefined, fallback: string): string {
   return cleaned || fallback;
 }
 
-export const isClerkEnabled =
-  publishableKey.startsWith("pk_") && !publishableKey.includes("placeholder");
-
-export const clerkPublishableKey = publishableKey;
+const isVercelProduction =
+  process.env.VERCEL_ENV === "production" ||
+  process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
 
 export const isClerkDevelopmentKey = publishableKey.startsWith("pk_test_");
 export const isClerkProductionKey = publishableKey.startsWith("pk_live_");
+
+// Development Clerk instances handshake to *.clerk.accounts.dev. Never load
+// them on the Vercel Production deployment.
+export const isClerkEnabled =
+  publishableKey.startsWith("pk_") &&
+  !publishableKey.includes("placeholder") &&
+  !(isVercelProduction && isClerkDevelopmentKey);
+
+export const clerkPublishableKey = publishableKey;
 
 export const clerkSignInUrl = publicPath(
   process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,

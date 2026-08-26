@@ -60,12 +60,24 @@ const clerkHandler = clerkMiddleware(
 );
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  // Polar/Clerk webhooks must never hit Clerk auth or host redirects.
+  if (isWebhookRoute(req)) {
+    return NextResponse.next();
+  }
+
   const host = req.headers.get("host");
-  if (isLegacyAppHost(host) && !isWebhookRoute(req)) {
+  if (isLegacyAppHost(host)) {
     const destination = new URL(
       `${PRODUCTION_APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`,
     );
     return NextResponse.redirect(destination, 308);
+  }
+
+  // Public marketing/SEO pages must render as normal HTML. clerkMiddleware
+  // still performs a handshake before the callback, and a Development instance
+  // redirects that handshake to *.clerk.accounts.dev?__clerk_hs_reason=dev-browser-missing.
+  if (isPublicRoute(req)) {
+    return NextResponse.next();
   }
 
   // Never send Googlebot (or other crawlers) through a Clerk handshake.
@@ -73,8 +85,6 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
-  // Development Clerk keys always handshake against accounts.dev. Do not run
-  // that handshake on the Vercel Production deployment.
   if (process.env.VERCEL_ENV === "production" && isClerkDevelopmentKey) {
     return NextResponse.next();
   }
@@ -88,7 +98,7 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 
 export const config = {
   matcher: [
-    "/((?!_next|sitemap\\.xml|robots\\.txt|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)",
-    "/(api|trpc)(.*)",
+    "/((?!_next|api/webhooks|sitemap\\.xml|robots\\.txt|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|xml|txt)).*)",
+    "/(api(?!/webhooks)|trpc)(.*)",
   ],
 };

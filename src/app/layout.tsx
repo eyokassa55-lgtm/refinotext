@@ -124,6 +124,7 @@ export default function RootLayout({
             signInFallbackRedirectUrl={clerkAfterSignInUrl}
             signUpFallbackRedirectUrl={clerkAfterSignUpUrl}
             allowedRedirectOrigins={clerkAllowedRedirectOrigins}
+            isSatellite={false}
           >
             {children}
           </ClerkProvider>

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
+import { SDKValidationError } from "@polar-sh/sdk/models/errors/sdkvalidationerror.js";
 import type { Order } from "@polar-sh/sdk/models/components/order.js";
 import type { OrderSubscription } from "@polar-sh/sdk/models/components/ordersubscription.js";
 import type { Subscription } from "@polar-sh/sdk/models/components/subscription.js";
@@ -8,12 +9,20 @@ import type { SubscriptionStatus as AppSubscriptionStatus, User } from "@prisma/
 import { getBillingProductByProductId } from "@/lib/billing";
 import { grantCredits } from "@/lib/credits";
 import { env } from "@/lib/env";
+import { redactPolarSecrets } from "@/lib/polar-error";
 import { prisma } from "@/lib/prisma";
 import { ensureBillingUser } from "@/lib/users";
 import type { ApiErrorResponse } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+class PolarWebhookSkipError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PolarWebhookSkipError";
+  }
+}
 
 type MetadataValue = string | number | boolean | Date | null | undefined;
 type PolarMetadata = Record<string, MetadataValue>;
@@ -29,12 +38,30 @@ function errorResponse(error: string, code: string, status: number) {
   return NextResponse.json(body, { status });
 }
 
-function headersToRecord(headers: Headers): Record<string, string> {
+function logWebhook(
+  status: number,
+  details: Record<string, string | number | boolean | null | undefined>,
+) {
+  const sanitized: Record<string, string | number | boolean | null> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (value === undefined) continue;
+    sanitized[key] =
+      typeof value === "string" ? redactPolarSecrets(value) : value;
+  }
+  console.info("[polar/webhook]", { status, ...sanitized });
+}
+
+function webhookHeaders(headers: Headers): Record<string, string> {
   const record: Record<string, string> = {};
   headers.forEach((value, key) => {
-    record[key] = value;
+    record[key.toLowerCase()] = value;
   });
   return record;
+}
+
+function eventDataId(event: { data?: { id?: string } }): string | null {
+  const id = event.data?.id;
+  return typeof id === "string" && id.trim() ? id : null;
 }
 
 function asString(value: MetadataValue): string | null {
@@ -49,7 +76,9 @@ function toDate(value: Date | string | null | undefined): Date {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
-  throw new Error("Polar webhook payload is missing a valid period date.");
+  throw new PolarWebhookSkipError(
+    "Polar webhook payload is missing a valid period date.",
+  );
 }
 
 function mapStatus(status: string): AppSubscriptionStatus {
@@ -121,7 +150,9 @@ async function resolveBillingUser(params: {
   }
 
   if (!clerkUserId || !email) {
-    throw new Error("Polar webhook payload is missing Clerk user identity.");
+    throw new PolarWebhookSkipError(
+      "Polar webhook payload is missing Clerk user identity.",
+    );
   }
 
   return ensureBillingUser({
@@ -241,8 +272,15 @@ async function handleOrderPaid(order: Order) {
   });
 }
 
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "polar-webhook" });
+}
+
 export async function POST(req: NextRequest) {
+  const started = Date.now();
+
   if (!env.polar.webhookSecret) {
+    logWebhook(500, { code: "WEBHOOK_SECRET_MISSING" });
     return errorResponse(
       "POLAR_WEBHOOK_SECRET is not configured.",
       "WEBHOOK_SECRET_MISSING",
@@ -251,25 +289,55 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.text();
-  const headerRecord = headersToRecord(req.headers);
+  const headerRecord = webhookHeaders(req.headers);
+  const hasSignature = Boolean(headerRecord["webhook-signature"]);
 
   let event: ReturnType<typeof validateEvent>;
   try {
     event = validateEvent(body, headerRecord, env.polar.webhookSecret);
   } catch (error) {
     if (error instanceof WebhookVerificationError) {
+      logWebhook(400, {
+        code: "INVALID_SIGNATURE",
+        hasSignature,
+        errorName: error.name,
+      });
       return errorResponse("Invalid webhook signature.", "INVALID_SIGNATURE", 400);
     }
 
+    if (error instanceof SDKValidationError) {
+      logWebhook(200, {
+        code: "UNPARSED_EVENT",
+        hasSignature,
+        errorName: error.name,
+        message: error.message.slice(0, 180),
+        elapsedMs: Date.now() - started,
+      });
+      return NextResponse.json({ received: true, ignored: true });
+    }
+
+    logWebhook(400, {
+      code: "INVALID_WEBHOOK",
+      hasSignature,
+      errorName: error instanceof Error ? error.name : "Error",
+    });
     return errorResponse("Invalid webhook payload.", "INVALID_WEBHOOK", 400);
   }
 
-  const webhookId = req.headers.get("webhook-id");
+  const webhookId =
+    req.headers.get("webhook-id") ??
+    (eventDataId(event) ? `polar:${event.type}:${eventDataId(event)}` : null);
+
   if (webhookId) {
     const alreadyProcessed = await prisma.processedWebhook.findUnique({
       where: { id: webhookId },
     });
     if (alreadyProcessed) {
+      logWebhook(200, {
+        code: "DUPLICATE",
+        type: event.type,
+        elapsedMs: Date.now() - started,
+      });
       return NextResponse.json({ received: true, duplicate: true });
     }
   }
@@ -305,12 +373,43 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("[polar/webhook] handler failed", {
+    if (error instanceof PolarWebhookSkipError) {
+      if (webhookId) {
+        await prisma.processedWebhook.createMany({
+          data: [
+            {
+              id: webhookId,
+              source: "polar",
+              eventType: event.type,
+            },
+          ],
+          skipDuplicates: true,
+        });
+      }
+      logWebhook(200, {
+        code: "SKIPPED",
+        type: event.type,
+        errorName: error.name,
+        message: error.message,
+        elapsedMs: Date.now() - started,
+      });
+      return NextResponse.json({ received: true, skipped: true });
+    }
+
+    logWebhook(500, {
+      code: "WEBHOOK_HANDLER_FAILED",
       type: event.type,
       errorName: error instanceof Error ? error.name : "Error",
+      message: error instanceof Error ? error.message.slice(0, 180) : "unknown",
+      elapsedMs: Date.now() - started,
     });
     return errorResponse("Webhook processing failed.", "WEBHOOK_HANDLER_FAILED", 500);
   }
 
+  logWebhook(200, {
+    code: "OK",
+    type: event.type,
+    elapsedMs: Date.now() - started,
+  });
   return NextResponse.json({ received: true });
 }
