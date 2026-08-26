@@ -7,7 +7,7 @@ import { FAQ_ITEMS } from "@/lib/landing-data";
 export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
-export const SITE_LAST_MODIFIED = new Date("2026-08-26T14:00:00.000Z");
+export const SITE_LAST_MODIFIED = new Date("2026-08-26T15:00:00.000Z");
 
 const indexableRobots = {
   index: true,
@@ -147,10 +147,17 @@ export function buildOrganizationAndWebsiteJsonLd() {
         "@id": `${url}/#organization`,
         name: APP_NAME,
         url,
-        logo: getAbsoluteUrl(APP_LOGO_SRC),
+        logo: {
+          "@type": "ImageObject",
+          url: getAbsoluteUrl(APP_LOGO_SRC),
+        },
         email: SUPPORT_EMAIL,
         description: APP_DESCRIPTION,
-        foundingDate: "2026",
+        contactPoint: {
+          "@type": "ContactPoint",
+          email: SUPPORT_EMAIL,
+          contactType: "customer support",
+        },
       },
       {
         "@type": "WebSite",
@@ -173,7 +180,7 @@ export function buildHomeJsonLd() {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "SoftwareApplication",
+        "@type": ["SoftwareApplication", "WebApplication"],
         "@id": `${url}/#app`,
         name: APP_NAME,
         applicationCategory: "BusinessApplication",
@@ -227,5 +234,39 @@ export function buildHomeJsonLd() {
         })),
       },
     ],
+  };
+}
+
+export function buildWebPageJsonLd(path: string, title: string, description: string) {
+  const url = getAppUrl();
+  const pageUrl = getAbsoluteUrl(path);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${pageUrl}#webpage`,
+    url: pageUrl,
+    name: title,
+    description,
+    inLanguage: "en-US",
+    isPartOf: { "@id": `${url}/#website` },
+    dateModified: SITE_LAST_MODIFIED.toISOString(),
+    breadcrumb: {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: APP_NAME,
+          item: url,
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: title,
+          item: pageUrl,
+        },
+      ],
+    },
   };
 }

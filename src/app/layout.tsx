@@ -59,17 +59,6 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
-  authors: [{ name: APP_NAME, url: appUrl }],
-  creator: APP_NAME,
-  publisher: APP_NAME,
-  category: "writing",
-  keywords: [
-    "AI humanizer",
-    "AI writing humanizer",
-    "humanize AI text",
-    "undetectable AI writing",
-    "ChatGPT humanizer",
-  ],
   openGraph: {
     type: "website",
     url: appUrl,
