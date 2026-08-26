@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const indexRobots = [{ key: "X-Robots-Tag", value: "index, follow" }];
 const noindexRobots = [{ key: "X-Robots-Tag", value: "noindex, nofollow" }];
 
 const nextConfig: NextConfig = {
@@ -17,6 +18,17 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   async headers() {
     return [
+      { source: "/", headers: indexRobots },
+      { source: "/pricing", headers: indexRobots },
+      { source: "/pricing/:path*", headers: indexRobots },
+      { source: "/contact", headers: indexRobots },
+      { source: "/contact/:path*", headers: indexRobots },
+      { source: "/privacy", headers: indexRobots },
+      { source: "/privacy/:path*", headers: indexRobots },
+      { source: "/terms", headers: indexRobots },
+      { source: "/terms/:path*", headers: indexRobots },
+      { source: "/acceptable-use", headers: indexRobots },
+      { source: "/acceptable-use/:path*", headers: indexRobots },
       { source: "/dashboard", headers: noindexRobots },
       { source: "/dashboard/:path*", headers: noindexRobots },
       { source: "/sign-in", headers: noindexRobots },

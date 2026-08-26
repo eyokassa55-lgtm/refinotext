@@ -13,6 +13,14 @@ import {
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 const isWebhookRoute = createRouteMatcher(["/api/webhooks(.*)"]);
+const isIndexableRoute = createRouteMatcher([
+  "/",
+  "/pricing(.*)",
+  "/contact(.*)",
+  "/privacy(.*)",
+  "/terms(.*)",
+  "/acceptable-use(.*)",
+]);
 const isPublicRoute = createRouteMatcher([
   "/",
   "/pricing(.*)",
@@ -76,6 +84,12 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   // Public marketing/SEO pages must render as normal HTML. clerkMiddleware
   // still performs a handshake before the callback, and a Development instance
   // redirects that handshake to *.clerk.accounts.dev?__clerk_hs_reason=dev-browser-missing.
+  if (isIndexableRoute(req)) {
+    const response = NextResponse.next();
+    response.headers.set("X-Robots-Tag", "index, follow");
+    return response;
+  }
+
   if (isPublicRoute(req)) {
     return NextResponse.next();
   }
