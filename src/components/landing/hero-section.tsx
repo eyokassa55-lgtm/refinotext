@@ -29,7 +29,7 @@ export function HeroSection() {
               </span>
               <Badge variant="accent">
                 <Globe className="h-3 w-3" aria-hidden />
-                500K+ users
+                Free to start
               </Badge>
             </div>
 

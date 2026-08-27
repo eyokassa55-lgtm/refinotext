@@ -1,7 +1,7 @@
 export const APP_NAME = "RefinoText";
 export const APP_LOGO_SRC = "/logo-mark.png";
 export const APP_DESCRIPTION =
-  "Humanize AI-generated text into natural, human-sounding writing. RefinoText rewrites ChatGPT and other AI drafts while keeping your meaning. Start free.";
+  "RefinoText is an AI writing humanizer that rewrites ChatGPT and other AI drafts into clearer, more natural writing while keeping your meaning. Start free.";
 
 export const SUPPORT_EMAIL = "supportrefino@gmail.com";
 

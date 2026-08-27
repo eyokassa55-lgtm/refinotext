@@ -211,7 +211,7 @@ export function HumanizerPreview() {
                     <Bot className="h-3.5 w-3.5" /> AI Draft
                   </span>
                   <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px]">
-                    88% Flagged
+                    Stiff AI draft
                   </span>
                 </div>
                 <p className="text-xs text-white/60 leading-relaxed font-mono">
@@ -225,7 +225,7 @@ export function HumanizerPreview() {
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Humanized
                   </span>
                   <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                    99.8% Bypass
+                    Natural rewrite
                   </span>
                 </div>
                 <p className="text-xs text-white/90 leading-relaxed font-sans">

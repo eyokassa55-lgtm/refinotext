@@ -1,4 +1,5 @@
 import { AnnouncementBar } from "@/components/landing/announcement-bar";
+import { AudienceSection } from "@/components/landing/audience-section";
 import { FaqSection } from "@/components/landing/faq-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { HeroSection } from "@/components/landing/hero-section";
@@ -7,7 +8,6 @@ import { HumanizerSection } from "@/components/landing/humanizer-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { Navbar } from "@/components/landing/navbar";
 import { PricingSection } from "@/components/landing/pricing-section";
-import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { JsonLd } from "@/components/seo/json-ld";
 import { buildHomeJsonLd, PAGE_SEO, pageMetadata } from "@/lib/seo";
 
@@ -29,7 +29,7 @@ export default function HomePage() {
         <HumanizerSection />
         <FeaturesSection />
         <HowItWorksSection />
-        <TestimonialsSection />
+        <AudienceSection />
         <PricingSection />
         <FaqSection />
       </main>

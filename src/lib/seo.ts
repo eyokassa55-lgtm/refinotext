@@ -7,7 +7,7 @@ import { FAQ_ITEMS } from "@/lib/landing-data";
 export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
-export const SITE_LAST_MODIFIED = new Date("2026-08-26T15:00:00.000Z");
+export const SITE_LAST_MODIFIED = new Date("2026-08-27T14:00:00.000Z");
 
 const indexableRobots = {
   index: true,

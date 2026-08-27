@@ -1,4 +1,4 @@
-export const PRODUCTION_APP_URL = "https://refinotext.com";
+export const PRODUCTION_APP_URL = "https://www.refinotext.com";
 export const PRODUCTION_HOST = "refinotext.com";
 export const LEGACY_APP_HOSTS = ["refinotext.vercel.app"] as const;
 
@@ -34,7 +34,7 @@ function isLocalHost(hostname: string): boolean {
 /**
  * Public site origin for canonical, sitemap, Open Graph, and JSON-LD.
  * `next dev` keeps localhost. Production builds and Vercel always use
- * https://refinotext.com — never the old Vercel hostname.
+ * https://www.refinotext.com — never the old Vercel hostname.
  */
 export function getAppUrl(): string {
   const explicit = toOrigin(cleanEnvValue(process.env.NEXT_PUBLIC_APP_URL));
@@ -47,8 +47,8 @@ export function getAppUrl(): string {
     return FALLBACK_APP_URL;
   }
 
-  // Production canonical host is always the apex domain, even if the env
-  // var is missing, uses www, or still points at the old Vercel hostname.
+  // Production canonical host is always www, even if the env var is missing,
+  // uses apex, or still points at the old Vercel hostname.
   if (explicit) {
     const hostname = new URL(explicit).hostname.toLowerCase();
     if (hostname === PRODUCTION_HOST || hostname === `www.${PRODUCTION_HOST}`) {
@@ -61,7 +61,7 @@ export function getAppUrl(): string {
 
 export function getAbsoluteUrl(path = "/"): string {
   const origin = getAppUrl();
-  if (!path || path === "/") return origin;
+  if (!path || path === "/") return `${origin}/`;
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${origin}${normalized}`;
 }

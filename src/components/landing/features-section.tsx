@@ -31,7 +31,7 @@ export function FeaturesSection() {
         <SectionHeader
           eyebrow="Features"
           title="Everything you need to humanize AI text"
-          description="Powerful tools designed for students, creators, and professionals who need authentic-sounding writing."
+          description="Tools for students, creators, and professionals who want clearer, more natural AI-assisted writing."
           className="mb-14"
         />
 

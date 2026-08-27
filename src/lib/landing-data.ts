@@ -7,8 +7,8 @@ export const NAV_LINKS = [
 ] as const;
 
 export const HERO_FEATURES = [
-  { icon: "shield", label: "100% Undetectable" },
-  { icon: "zap", label: "High Perplexity & Burstiness" },
+  { icon: "shield", label: "Natural-sounding rewrites" },
+  { icon: "zap", label: "Fast, meaning-preserving edits" },
 ] as const;
 
 export const TRUST_MARKERS = [
@@ -19,40 +19,58 @@ export const TRUST_MARKERS = [
 
 export const FEATURES = [
   {
-    title: "Bypass AI Detectors",
+    title: "Natural sentence rhythm",
     description:
-      "Refined output designed to pass Turnitin, GPTZero, Originality.ai, and other leading detection tools.",
-    icon: "shield-check",
-  },
-  {
-    title: "Natural Human Cadence",
-    description:
-      "Inject authentic rhythm, varied sentence length, and organic vocabulary into every rewrite.",
+      "Rewrites stiff AI phrasing into clearer cadence with varied sentence length and more natural word choice.",
     icon: "sparkles",
   },
   {
-    title: "Multiple Tone Options",
+    title: "Multiple tone options",
     description:
-      "Choose academic, casual, professional, or creative tones to match your exact writing style.",
+      "Choose standard, academic, conversational, or professional tone to match your audience.",
     icon: "palette",
   },
   {
-    title: "Lightning Fast",
+    title: "Fast turnaround",
     description:
-      "Get polished, human-sounding text in seconds — no waiting, no complex setup required.",
+      "Paste a draft and get a readable rewrite in seconds — no complex setup required.",
     icon: "zap",
   },
   {
-    title: "Preserves Meaning",
+    title: "Keeps your meaning",
     description:
-      "Your core ideas and intent stay intact while the delivery becomes unmistakably human.",
+      "Your ideas and intent stay intact while the wording becomes clearer and more natural.",
     icon: "target",
   },
   {
-    title: "Privacy First",
+    title: "Built for real writing workflows",
     description:
-      "Your content is processed securely and never used to train models or shared with third parties.",
+      "Useful for essays, emails, blog posts, product copy, and other AI-assisted drafts you want to refine.",
+    icon: "shield-check",
+  },
+  {
+    title: "Privacy-minded processing",
+    description:
+      "Your text is processed to generate a rewrite. We do not use your content to train public models.",
     icon: "lock",
+  },
+] as const;
+
+export const AUDIENCE_USE_CASES = [
+  {
+    title: "Students and researchers",
+    description:
+      "Turn stiff AI outlines into clearer drafts you can edit, cite, and finish in your own voice.",
+  },
+  {
+    title: "Creators and marketers",
+    description:
+      "Refine blog posts, emails, and landing copy so they sound less robotic and more on-brand.",
+  },
+  {
+    title: "Professionals and teams",
+    description:
+      "Clean up reports, proposals, and documentation without rewriting every sentence from scratch.",
   },
 ] as const;
 
@@ -73,13 +91,13 @@ export const HOW_IT_WORKS = [
     step: "03",
     title: "Humanize instantly",
     description:
-      "Our engine rewrites your text with natural perplexity and burstiness in seconds.",
+      "Our engine rewrites your text with clearer rhythm and more natural wording in seconds.",
   },
   {
     step: "04",
     title: "Copy & publish",
     description:
-      "Review the output, copy with one click, and publish with confidence.",
+      "Review the output, copy with one click, and keep editing in your own voice.",
   },
 ] as const;
 
@@ -118,7 +136,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Up to 500 words per request",
       "Basic Humanization Engine",
       "Standard priority on AI generations",
-      "Bypass common AI detectors",
+      "Natural rewrite quality",
       "2 tones (Standard, Academic)",
       "Customer support",
     ],
@@ -142,8 +160,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       "1 free rehumanization per task",
       "Basic Humanization Engine",
       "Standard priority on AI generations",
-      "Bypass all AI detectors (incl. Turnitin & GPTZero)",
-      "Error free rewriting",
+      "Clearer, more natural phrasing",
+      "Careful rewriting that keeps meaning",
       "3 tones (Standard, Academic, Professional)",
       "All languages supported",
       "Customer support",
@@ -172,8 +190,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Faster processing",
       "Advanced Humanization Engine",
       "High priority on AI generations",
-      "Bypass all AI detectors (incl. Turnitin & GPTZero)",
-      "Error free rewriting",
+      "Clearer, more natural phrasing",
+      "Careful rewriting that keeps meaning",
       "All tonalities available",
       "All languages supported",
       "Priority email support",
@@ -200,8 +218,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Priority processing",
       "Advanced Humanization Engine",
       "Always first on AI generations",
-      "Bypass all AI detectors (incl. Turnitin & GPTZero)",
-      "Error free rewriting",
+      "Clearer, more natural phrasing",
+      "Careful rewriting that keeps meaning",
       "All tonalities available",
       "All languages supported",
       "API access for integrations",
@@ -250,7 +268,7 @@ export const FAQ_ITEMS = [
   {
     question: "Will my text pass AI detectors?",
     answer:
-      "RefinoText is engineered to increase perplexity and burstiness — key signals AI detectors look for. Results vary by detector and input quality, but our engine targets 99%+ human scores.",
+      "RefinoText rewrites AI drafts so they read more naturally. Detector results vary by tool, settings, and input quality, so we do not promise a specific score or outcome.",
   },
   {
     question: "Which AI tools does RefinoText work with?",
@@ -309,38 +327,5 @@ export const READABILITY_LEVELS = [
 export const INTENSITY_LABELS = [
   { min: 0, max: 33, name: "Light Touch" },
   { min: 34, max: 74, name: "Balanced" },
-  { min: 75, max: 100, name: "Deep Bypass" },
-] as const;
-
-export const TESTIMONIALS = [
-  {
-    quote:
-      "It was an incredible experience. RefinoText made my ChatGPT drafts sound like I actually wrote them — natural, confident, and completely undetectable.",
-    name: "Kerod Kibatu",
-    source: "Google Play review",
-  },
-  {
-    quote:
-      "I used to spend hours rewriting AI copy. Now I paste, refine, and publish. The cadence is so human that even my editor couldn't tell.",
-    name: "Amelia Chen",
-    source: "Product Hunt review",
-  },
-  {
-    quote:
-      "Turnitin kept flagging my outlines. After RefinoText, every submission came back clean without losing my original argument.",
-    name: "Marcus Hale",
-    source: "Trustpilot review",
-  },
-  {
-    quote:
-      "The intensity slider is the killer feature. Light touch for emails, deep bypass for long-form. Exactly the control I wanted.",
-    name: "Sofia Alvarez",
-    source: "G2 review",
-  },
-  {
-    quote:
-      "We rolled this out across our content team. Output quality jumped overnight — less robotic, more on-brand, zero extra workflow.",
-    name: "James Okonkwo",
-    source: "Capterra review",
-  },
+  { min: 75, max: 100, name: "Strong Rewrite" },
 ] as const;
