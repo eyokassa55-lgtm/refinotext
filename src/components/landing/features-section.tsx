@@ -30,8 +30,8 @@ export function FeaturesSection() {
       <Container>
         <SectionHeader
           eyebrow="Features"
-          title="Everything you need to humanize AI text"
-          description="Tools for students, creators, and professionals who want clearer, more natural AI-assisted writing."
+          title="Tools for clearer AI-assisted writing"
+          description="Tone, readability, and meaning-preserving rewrites for students, creators, and professionals."
           className="mb-14"
         />
 

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
 
 import { isClerkEnabled } from "@/lib/auth-config";
-import { ROUTES } from "@/lib/constants";
+import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { getCreditBalance } from "@/lib/credits";
 import { prisma } from "@/lib/prisma";
 import { PAGE_SEO, pageMetadata } from "@/lib/seo";
@@ -60,6 +60,18 @@ export default async function DashboardPage() {
         <p className="mt-2 text-sm text-muted">
           1 word = 1 credit. Credits are charged on the text you paste in, never
           on the output.
+        </p>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+          Paid subscriptions are billed by Polar, the merchant of record. They
+          renew automatically until cancelled. To cancel, use Polar’s Customer
+          Portal from Polar’s billing emails, or email{" "}
+          <a
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            href={`mailto:${SUPPORT_EMAIL}`}
+          >
+            {SUPPORT_EMAIL}
+          </a>
+          . Recurring charges continue until you cancel.
         </p>
       </header>
 

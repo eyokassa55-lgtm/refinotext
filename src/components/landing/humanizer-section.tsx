@@ -15,8 +15,8 @@ export function HumanizerSection() {
           <SectionHeader
             id="humanizer-heading"
             eyebrow="Humanizer"
-            title="Refine AI text into authentic writing"
-            description="Paste your draft on the left. Humanized writing appears in the output pane on the right after you click Humanize Text Now."
+            title="Revise AI-assisted drafts in the editor"
+            description="Paste your draft on the left. A rewrite appears on the right after you click Humanize. Sign in is required to run a rewrite."
           />
         </Container>
       </div>

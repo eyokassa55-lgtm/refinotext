@@ -48,6 +48,15 @@ export function Button({
   );
 
   if (href) {
+    const isExternal = /^(https?:|mailto:)/i.test(href);
+    if (isExternal) {
+      return (
+        <a href={href} className={classes} aria-label={ariaLabel}>
+          {children}
+        </a>
+      );
+    }
+
     return (
       <Link href={href} className={classes} aria-label={ariaLabel}>
         {children}

@@ -12,8 +12,8 @@ export function HowItWorksSection() {
       <Container>
         <SectionHeader
           eyebrow="How it works"
-          title="Four steps to authentic writing"
-          description="From paste to publish in under a minute. No learning curve required."
+          title="Four steps to a clearer rewrite"
+          description="Paste a draft, choose tone, generate a rewrite, then review it yourself."
           className="mb-14"
         />
 

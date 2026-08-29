@@ -29,6 +29,8 @@ const nextConfig: NextConfig = {
       { source: "/terms/:path*", headers: indexRobots },
       { source: "/acceptable-use", headers: indexRobots },
       { source: "/acceptable-use/:path*", headers: indexRobots },
+      { source: "/refunds", headers: indexRobots },
+      { source: "/refunds/:path*", headers: indexRobots },
       { source: "/dashboard", headers: noindexRobots },
       { source: "/dashboard/:path*", headers: noindexRobots },
       { source: "/sign-in", headers: noindexRobots },

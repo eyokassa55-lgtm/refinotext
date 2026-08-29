@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { Container } from "@/components/ui/container";
-import { APP_NAME } from "@/lib/constants";
 
 export function AnnouncementBar() {
   return (
@@ -12,14 +11,14 @@ export function AnnouncementBar() {
             V1.0
           </span>
           <span className="min-w-0 text-pretty">
-            Qualitative Motion Engine — {APP_NAME} AI Humanizer now live.
+            Qualitative Motion Engine — RefinoText writing revision is live.
           </span>
         </div>
         <Link
           href="#humanizer"
           className="font-medium text-primary transition-colors hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
         >
-          Try Humanizer →
+          Open editor
         </Link>
       </Container>
     </div>

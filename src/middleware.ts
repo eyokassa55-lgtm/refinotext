@@ -20,6 +20,7 @@ const isIndexableRoute = createRouteMatcher([
   "/privacy(.*)",
   "/terms(.*)",
   "/acceptable-use(.*)",
+  "/refunds(.*)",
 ]);
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -28,6 +29,7 @@ const isPublicRoute = createRouteMatcher([
   "/privacy(.*)",
   "/terms(.*)",
   "/acceptable-use(.*)",
+  "/refunds(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/health(.*)",

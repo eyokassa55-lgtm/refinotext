@@ -68,7 +68,7 @@ export function HumanizerPreview() {
   return (
     <div
       className="relative w-full min-w-0 max-w-lg overflow-x-clip"
-      aria-label="AI Draft to Human Tone Transformation Preview"
+      aria-label="Example of RefinoText rewriting a stiff draft into clearer writing"
     >
       {/* Background Ambient Glow */}
       <div
@@ -84,8 +84,8 @@ export function HumanizerPreview() {
               <ScanSearch className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-white">Refino Engine v1.0</p>
-              <p className="text-[10px] text-white/50">Qualitative Motion Transform</p>
+              <p className="text-xs font-semibold text-white">RefinoText</p>
+              <p className="text-[10px] text-white/50">Example rewrite preview</p>
             </div>
           </div>
 
@@ -100,7 +100,7 @@ export function HumanizerPreview() {
                   : "text-white/60 hover:text-white",
               )}
             >
-              Motion Scan
+              Rewrite
             </button>
             <button
               type="button"
@@ -126,25 +126,25 @@ export function HumanizerPreview() {
                 {stage === "scanning" && (
                   <Badge variant="dark" className="bg-amber-500/20 text-amber-300 border-amber-500/30">
                     <Bot className="h-3 w-3 animate-pulse" />
-                    Detecting AI Cadence...
+                    Reading the draft...
                   </Badge>
                 )}
                 {stage === "rewriting" && (
                   <Badge variant="dark" className="bg-primary/20 text-accent border-accent/30">
                     <Wand2 className="h-3 w-3 animate-spin" />
-                    Humanizing Tone &amp; Rhythm...
+                    Improving clarity and tone...
                   </Badge>
                 )}
                 {stage === "complete" && (
                   <Badge variant="dark" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
                     <UserCheck className="h-3 w-3 text-emerald-400" />
-                    100% Authentic Human Tone
+                    Rewrite complete
                   </Badge>
                 )}
               </div>
 
               <span className="text-[11px] font-mono text-white/50">
-                {stage === "scanning" ? "Raw Draft" : "Passed Turnitin &amp; GPTZero"}
+                {stage === "scanning" ? "Original draft" : "Clearer rewrite"}
               </span>
             </div>
 
@@ -176,7 +176,7 @@ export function HumanizerPreview() {
                           </span>
                           <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-white px-2 py-0.5 text-[9px] font-bold text-black shadow-md animate-fade-tooltip">
                             <Sparkles className="inline h-2.5 w-2.5 text-accent mr-0.5" />
-                            Burstiness Enhanced
+                            Clearer phrasing
                           </span>
                         </span>
                       );
@@ -190,7 +190,7 @@ export function HumanizerPreview() {
             {/* Score Progress Bar */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-semibold">
-                <span className="text-white/70">Human Probability Score</span>
+                <span className="text-white/70">Rewrite progress</span>
                 <span className="text-accent font-mono font-bold">{progress}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -240,7 +240,7 @@ export function HumanizerPreview() {
         <div className="flex items-center justify-between border-t border-white/10 px-5 py-3.5 bg-white/[0.02]">
           <div className="flex items-center gap-2 text-xs text-white/60">
             <Sparkles className="h-3.5 w-3.5 text-accent" />
-            <span>Organic Sentence Flow</span>
+            <span>Example only — not a detector score</span>
           </div>
 
           <button

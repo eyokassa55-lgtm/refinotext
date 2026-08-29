@@ -36,7 +36,6 @@ function HumanizerWorkspaceWithAuth() {
 function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [detector, setDetector] = useState("other");
   const [tone, setTone] = useState("standard");
   const [intensity, setIntensity] = useState(75);
   const [readability, setReadability] = useState<string>(READABILITY_LEVELS[1]);
@@ -440,8 +439,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       </div>
 
       <HumanizerControls
-        detector={detector}
-        onDetectorChange={setDetector}
         tone={tone}
         onToneChange={setTone}
         intensity={intensity}

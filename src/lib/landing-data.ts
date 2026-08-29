@@ -7,14 +7,14 @@ export const NAV_LINKS = [
 ] as const;
 
 export const HERO_FEATURES = [
-  { icon: "shield", label: "Natural-sounding rewrites" },
-  { icon: "zap", label: "Fast, meaning-preserving edits" },
+  { icon: "shield", label: "Natural rewriting and clearer tone" },
+  { icon: "zap", label: "Keeps your meaning while improving readability" },
 ] as const;
 
 export const TRUST_MARKERS = [
   "Free plan available",
-  "No credit card required",
-  "Works instantly",
+  "No credit card required to start",
+  "Typical short drafts return in seconds",
 ] as const;
 
 export const FEATURES = [
@@ -27,31 +27,31 @@ export const FEATURES = [
   {
     title: "Multiple tone options",
     description:
-      "Choose standard, academic, conversational, or professional tone to match your audience.",
+      "Choose Standard, Academic, Conversational, or Executive tone to match your audience.",
     icon: "palette",
   },
   {
     title: "Fast turnaround",
     description:
-      "Paste a draft and get a readable rewrite in seconds — no complex setup required.",
+      "Paste a draft and get a readable rewrite in seconds for typical short texts. Longer drafts can take longer.",
     icon: "zap",
   },
   {
     title: "Keeps your meaning",
     description:
-      "Your ideas and intent stay intact while the wording becomes clearer and more natural.",
+      "Your ideas, facts, and intent stay intact while the wording becomes clearer and easier to read.",
     icon: "target",
   },
   {
     title: "Built for real writing workflows",
     description:
-      "Useful for essays, emails, blog posts, product copy, and other AI-assisted drafts you want to refine.",
+      "Useful for essays, emails, blog posts, product copy, and other AI-assisted drafts you want to revise.",
     icon: "shield-check",
   },
   {
     title: "Privacy-minded processing",
     description:
-      "Your text is processed to generate a rewrite. We do not use your content to train public models.",
+      "Your text is processed to generate a rewrite. We do not sell your content or use it to train our own public models.",
     icon: "lock",
   },
 ] as const;
@@ -60,7 +60,7 @@ export const AUDIENCE_USE_CASES = [
   {
     title: "Students and researchers",
     description:
-      "Turn stiff AI outlines into clearer drafts you can edit, cite, and finish in your own voice.",
+      "Turn stiff AI outlines into clearer drafts you can edit, cite, and finish in your own voice. RefinoText is a revision aid, not a way to submit work dishonestly.",
   },
   {
     title: "Creators and marketers",
@@ -77,27 +77,48 @@ export const AUDIENCE_USE_CASES = [
 export const HOW_IT_WORKS = [
   {
     step: "01",
-    title: "Paste your AI text",
+    title: "Paste your draft",
     description:
-      "Drop in content from ChatGPT, Claude, Gemini, or any AI writing tool into the editor.",
+      "Drop in text from ChatGPT, Claude, Gemini, or any other writing assistant, or paste your own draft.",
   },
   {
     step: "02",
-    title: "Choose your tone",
+    title: "Choose tone and readability",
     description:
-      "Select the voice and style that fits your audience — academic, casual, or professional.",
+      "Select Standard, Academic, Conversational, or Executive tone, then set readability and rewrite strength.",
   },
   {
     step: "03",
-    title: "Humanize instantly",
+    title: "Generate a rewrite",
     description:
-      "Our engine rewrites your text with clearer rhythm and more natural wording in seconds.",
+      "RefinoText rewrites the text for clarity, tone, and readability while aiming to preserve meaning.",
   },
   {
     step: "04",
-    title: "Copy & publish",
+    title: "Review and copy",
     description:
-      "Review the output, copy with one click, and keep editing in your own voice.",
+      "Read the output, copy it, and keep editing in your own voice before you publish or submit it.",
+  },
+] as const;
+
+export const TRUST_PANELS = [
+  {
+    title: "Privacy",
+    body: "Text you paste is processed to create a rewrite and stored as needed to provide the service, including credit records. We do not sell your writing. See the Privacy Policy for processors such as Clerk, Neon, Polar, and the AI providers we use.",
+    href: ROUTES.privacy,
+    linkLabel: "Privacy Policy",
+  },
+  {
+    title: "Billing",
+    body: "Paid plans are billed by Polar, the merchant of record and reseller for RefinoText checkout. Subscriptions renew automatically until cancelled. RefinoText does not collect or store your card details.",
+    href: ROUTES.refunds,
+    linkLabel: "Refunds and cancellation",
+  },
+  {
+    title: "Support",
+    body: "Email supportrefino@gmail.com for product, billing, cancellation, or refund questions. We aim to reply within 1–2 business days.",
+    href: ROUTES.contact,
+    linkLabel: "Contact support",
   },
 ] as const;
 
@@ -110,9 +131,7 @@ export type PricingPlan = {
   monthlyProductKey?: string;
   yearlyProductKey?: string;
   monthlyPrice: number;
-  yearlyPricePerMonth: number;
-  originalMonthlyPrice: number;
-  originalYearlyPricePerMonth: number;
+  yearlyPrice: number;
   creditsPerMonth: number;
   maxWordsPerRequest: number;
   features: string[];
@@ -120,111 +139,80 @@ export type PricingPlan = {
   href: string;
 };
 
+const SHARED_TONES =
+  "Standard, Academic, Conversational, and Executive tones";
+
 export const PRICING_PLANS: PricingPlan[] = [
   {
     name: "Free",
-    description: "Try RefinoText at no cost — perfect for light personal use.",
+    description: "Try RefinoText at no cost for light personal use.",
     isFree: true,
     monthlyPrice: 0,
-    yearlyPricePerMonth: 0,
-    originalMonthlyPrice: 0,
-    originalYearlyPricePerMonth: 0,
+    yearlyPrice: 0,
     creditsPerMonth: 500,
     maxWordsPerRequest: 500,
     features: [
-      "500 credits / mo (500 words)",
+      "500 credits per month (500 words)",
       "Up to 500 words per request",
-      "Basic Humanization Engine",
-      "Standard priority on AI generations",
-      "Natural rewrite quality",
-      "2 tones (Standard, Academic)",
-      "Customer support",
+      SHARED_TONES,
+      "Email support",
     ],
     cta: "Get started free",
     href: "/sign-up",
   },
   {
     name: "Basic",
-    description: "Essential humanizing for students and everyday writing.",
+    description: "More credits for students and everyday writing.",
     monthlyPrice: 5.99,
-    yearlyPricePerMonth: 2.99,
-    originalMonthlyPrice: 5.99,
-    originalYearlyPricePerMonth: 5.99,
+    yearlyPrice: 35.88,
     monthlyProductKey: "basic_monthly",
     yearlyProductKey: "basic_yearly",
     creditsPerMonth: 8000,
     maxWordsPerRequest: 600,
     features: [
-      "8,000 credits / mo (8,000 words)",
+      "8,000 credits per month (8,000 words)",
       "Up to 600 words per request",
-      "1 free rehumanization per task",
-      "Basic Humanization Engine",
-      "Standard priority on AI generations",
-      "Clearer, more natural phrasing",
-      "Careful rewriting that keeps meaning",
-      "3 tones (Standard, Academic, Professional)",
-      "All languages supported",
-      "Customer support",
+      SHARED_TONES,
+      "Email support",
     ],
-    cta: "Subscribe",
+    cta: "Continue to Polar checkout",
     href: "/sign-up",
   },
   {
     name: "Pro",
-    description: "Advanced rewriting for creators and daily high-volume use.",
-    badge: "50% OFF",
+    description: "Higher volume for creators and daily writing.",
     featured: true,
     monthlyPrice: 19.99,
-    yearlyPricePerMonth: 9.99,
-    originalMonthlyPrice: 19.99,
-    originalYearlyPricePerMonth: 19.99,
+    yearlyPrice: 119,
     monthlyProductKey: "pro_monthly",
     yearlyProductKey: "pro_yearly",
     creditsPerMonth: 40000,
     maxWordsPerRequest: 2000,
     features: [
-      "40,000 credits / mo (40,000 words)",
+      "40,000 credits per month (40,000 words)",
       "Up to 2,000 words per request",
-      "2 free rehumanizations per task",
-      "Ultra Mode access",
-      "Faster processing",
-      "Advanced Humanization Engine",
-      "High priority on AI generations",
-      "Clearer, more natural phrasing",
-      "Careful rewriting that keeps meaning",
-      "All tonalities available",
-      "All languages supported",
-      "Priority email support",
+      SHARED_TONES,
+      "Email support",
     ],
-    cta: "Subscribe",
+    cta: "Continue to Polar checkout",
     href: "/sign-up",
   },
   {
     name: "Ultra",
-    description: "Maximum power for teams, agencies, and power users.",
+    description: "Highest included credits for heavy individual use.",
     monthlyPrice: 39.99,
-    yearlyPricePerMonth: 19.99,
-    originalMonthlyPrice: 39.99,
-    originalYearlyPricePerMonth: 39.99,
+    yearlyPrice: 239.88,
     monthlyProductKey: "ultra_monthly",
     yearlyProductKey: "ultra_yearly",
     creditsPerMonth: 90000,
     maxWordsPerRequest: 3000,
     features: [
-      "90,000 credits / mo (90,000 words)",
+      "90,000 credits per month (90,000 words)",
       "Up to 3,000 words per request",
-      "3 free rehumanizations per task",
-      "Ultra Mode access",
-      "Priority processing",
-      "Advanced Humanization Engine",
-      "Always first on AI generations",
-      "Clearer, more natural phrasing",
-      "Careful rewriting that keeps meaning",
-      "All tonalities available",
-      "All languages supported",
-      "API access for integrations",
+      SHARED_TONES,
+      "Email support",
     ],
-    cta: "Subscribe",
+    cta: "Continue to Polar checkout",
     href: "/sign-up",
   },
 ];
@@ -263,58 +251,65 @@ export const FAQ_ITEMS = [
   {
     question: "What is RefinoText?",
     answer:
-      "RefinoText is an AI writing humanizer that transforms robotic AI-generated text into natural, human-sounding prose while preserving your original meaning.",
+      "RefinoText is an AI-assisted writing and revision tool. It rewrites drafts for clearer language, a more natural tone, and better readability while aiming to preserve your meaning. It is not a detector, a cheating service, or a guarantee that text will receive any particular score from another tool.",
   },
   {
-    question: "Will my text pass AI detectors?",
+    question: "Who is RefinoText for?",
     answer:
-      "RefinoText rewrites AI drafts so they read more naturally. Detector results vary by tool, settings, and input quality, so we do not promise a specific score or outcome.",
+      "RefinoText is for students, creators, and professionals who want to revise AI-assisted or rough drafts. You still review the output and remain responsible for how you use it, including school, workplace, and publisher rules.",
   },
   {
-    question: "Which AI tools does RefinoText work with?",
+    question: "What does RefinoText do?",
     answer:
-      "Any AI-generated text works — paste output from ChatGPT, Claude, Gemini, Jasper, Copy.ai, or any other writing assistant.",
+      "You paste text, choose tone and readability, and receive a rewritten version. Typical controls are Standard, Academic, Conversational, or Executive tone, a readability level, and rewrite strength. The product does not claim to beat AI detectors or to make writing undetectable.",
+  },
+  {
+    question: "How does it work?",
+    answer:
+      "Sign in, paste your draft into the editor, choose settings, and run a rewrite. Credits are charged on the words you paste in, at 1 word = 1 credit, not on the length of the output. You can then copy the result and keep editing it yourself.",
+  },
+  {
+    question: "What do users receive?",
+    answer:
+      "A rewritten draft intended to keep your meaning while improving clarity, tone, and readability. Results vary with the input. You should review the output before publishing or submitting it. RefinoText does not provide certificates, detector reports, or guaranteed acceptance anywhere.",
   },
   {
     question: "Is there a free plan?",
     answer:
-      "Yes. The free plan includes 500 words per month with no credit card required. Upgrade anytime for more words and advanced features.",
+      "Yes. The Free plan includes 500 credits per month (500 words) and up to 500 words per request. Creating a Free account does not require a credit card. The Free plan can change in the future; current limits are shown on the pricing page.",
   },
   {
-    question: "How is my data handled?",
+    question: "How does paid billing work?",
     answer:
-      "Your text is processed securely and is never stored longer than necessary or used to train AI models. We take privacy seriously.",
+      "Basic, Pro, and Ultra are subscriptions. Monthly plans are billed every month. Annual plans are billed once per year at the annual price shown on the pricing page. Subscriptions renew automatically at the same interval until you cancel. One-time credit top-ups are charged once and are not subscriptions. Polar is the merchant of record and reseller: Polar processes checkout, invoices, applicable sales tax, and refunds. RefinoText does not collect or store card numbers.",
   },
   {
-    question: "Can I cancel my subscription anytime?",
+    question: "How do I cancel, and when do charges stop?",
     answer:
-      "Absolutely. Cancel from your dashboard at any time. You keep access until the end of your billing period.",
+      "Cancel through Polar’s Customer Portal using the link in Polar’s purchase and billing emails, or email supportrefino@gmail.com. Cancellation stops future renewals. You keep access until the end of the current billing period. Recurring charges continue until you cancel. There is no in-app cancel button in the RefinoText dashboard today.",
+  },
+  {
+    question: "What is the refund policy?",
+    answer:
+      "Refunds are handled by Polar as merchant of record. Email supportrefino@gmail.com with your account email and Polar receipt details. We review requests in good faith. Unused subscription time is not automatically refunded unless required by law or Polar issues a refund. Top-up credits that have already been used are generally not refundable. Full details are on the Refunds and Cancellation page.",
+  },
+  {
+    question: "How is my text handled?",
+    answer:
+      "Submitted text is sent to our AI providers to generate the rewrite and is stored as needed to operate the service, such as credit accounting and saved rewrite records. We do not sell your content or use it to train our own public models. Providers have their own terms. See the Privacy Policy.",
+  },
+  {
+    question: "How do I get support?",
+    answer:
+      "Email supportrefino@gmail.com or use the Contact page. We aim to reply within 1–2 business days. Include your account email and, for billing issues, your Polar receipt or order details.",
   },
 ] as const;
-
-export const PREVIEW_WORDS = [
-  "focus",
-  "clarity",
-  "rhythm",
-  "authentic",
-  "natural",
-] as const;
-
-export const PREVIEW_TEXT =
-  "The primary objective is to maintain focus while ensuring clarity throughout the document. Effective communication requires authentic voice and natural rhythm that resonates with readers on a human level.";
 
 export const TONE_MODES = [
   { id: "standard", label: "Standard", icon: "brain" },
   { id: "academic", label: "Academic", icon: "graduation" },
   { id: "conversational", label: "Conversational", icon: "coffee" },
   { id: "executive", label: "Executive", icon: "briefcase" },
-] as const;
-
-export const DETECTORS = [
-  { id: "general", label: "Detector" },
-  { id: "gptzero", label: "GPTZero" },
-  { id: "turnitin", label: "Turnitin" },
-  { id: "originality", label: "Originality" },
 ] as const;
 
 export const READABILITY_LEVELS = [

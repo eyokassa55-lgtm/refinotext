@@ -1,6 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,31 +12,15 @@ import {
   PRICING_PLANS,
   type PricingPlan,
 } from "@/lib/landing-data";
+import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 function formatPrice(amount: number) {
   return amount.toFixed(2);
 }
 
-function getDisplayPrice(plan: PricingPlan, yearly: boolean) {
-  if (plan.isFree) return "0.00";
-  return formatPrice(yearly ? plan.yearlyPricePerMonth : plan.monthlyPrice);
-}
-
-function getOriginalPrice(plan: PricingPlan, yearly: boolean) {
-  if (plan.isFree) return null;
-  if (yearly) return formatPrice(plan.originalYearlyPricePerMonth);
-  return formatPrice(plan.originalMonthlyPrice);
-}
-
-function getAnnualTotal(plan: PricingPlan, yearly: boolean) {
-  if (plan.isFree || !yearly) return null;
-  const total = plan.yearlyPricePerMonth * 12;
-  const saved = plan.originalYearlyPricePerMonth * 12 - total;
-  return {
-    total: formatPrice(total),
-    saved: formatPrice(saved),
-  };
+function monthlyEquivalent(yearlyPrice: number) {
+  return formatPrice(yearlyPrice / 12);
 }
 
 export function PricingSection({
@@ -90,7 +75,7 @@ export function PricingSection({
           titleAs={headingLevel}
           eyebrow="Pricing"
           title="Simple, transparent pricing"
-          description="Start free and upgrade when you need more. No hidden fees, cancel anytime."
+          description="Start on the Free plan, then subscribe if you need more credits. Paid checkout is processed by Polar, the merchant of record."
           className="mb-10"
         />
 
@@ -122,25 +107,20 @@ export function PricingSection({
                   : "text-muted hover:text-foreground",
               )}
             >
-              Yearly billing
-              <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                Save 50%
-              </span>
+              Annual billing
             </button>
           </div>
-          {yearly && (
-            <p className="text-sm font-medium text-primary">
-              Save 50% per month with yearly billing
-            </p>
-          )}
+          <p className="max-w-xl text-center text-sm text-muted">
+            {yearly
+              ? "Annual prices below are billed once per year and renew each year until cancelled."
+              : "Monthly prices below are billed every month and renew each month until cancelled."}
+          </p>
 
           <div className="mt-2 flex flex-col items-center gap-1 rounded-2xl border border-accent/30 bg-accent-light px-5 py-3 text-center">
-            <p className="text-sm font-semibold text-primary">
-              1 word = 1 credit
-            </p>
+            <p className="text-sm font-semibold text-primary">1 word = 1 credit</p>
             <p className="text-xs text-muted">
-              Credits are charged on the words you paste in, never on the length
-              of the output. A 750-word draft costs 750 credits.
+              Credits are charged on the words you paste in, not on the length of
+              the output. A 750-word draft costs 750 credits.
             </p>
           </div>
           {checkoutError && (
@@ -150,10 +130,6 @@ export function PricingSection({
 
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {PRICING_PLANS.map((plan) => {
-            const displayPrice = getDisplayPrice(plan, yearly);
-            const originalPrice = getOriginalPrice(plan, yearly);
-            const annual = getAnnualTotal(plan, yearly);
-            const showStrike = yearly && !plan.isFree && originalPrice !== displayPrice;
             const productKey = yearly
               ? plan.yearlyProductKey
               : plan.monthlyProductKey;
@@ -178,55 +154,16 @@ export function PricingSection({
                 )}
 
                 <div className="mb-5">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
-                    {plan.badge && (
-                      <span className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        {plan.badge}
-                      </span>
-                    )}
-                  </div>
-
+                  <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted">
                     {plan.description}
                   </p>
 
-                  <div className="mt-4 flex items-baseline gap-2">
-                    {showStrike && originalPrice && (
-                      <span className="text-lg text-muted line-through">
-                        ${originalPrice}
-                      </span>
-                    )}
-                    <span className="text-4xl font-bold text-foreground">
-                      ${displayPrice}
-                    </span>
-                    {!plan.isFree && (
-                      <span className="text-sm text-muted">/mo</span>
-                    )}
-                  </div>
-
-                  {plan.isFree ? (
-                    <p className="mt-2 text-sm text-muted">Free forever</p>
-                  ) : yearly ? (
-                    <>
-                      <p className="mt-2 text-sm text-muted">
-                        per month (billed annually)
-                      </p>
-                      {annual && (
-                        <p className="mt-1 text-xs text-muted">
-                          ${annual.total}/year · save ${annual.saved}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted">per month</p>
-                  )}
+                  <PlanPrice plan={plan} yearly={yearly} />
 
                   <p className="mt-3 rounded-lg bg-mint-dark/40 px-3 py-2 text-xs font-medium text-foreground/80">
                     {plan.creditsPerMonth.toLocaleString()} credits / month ·{" "}
-                    <span className="font-semibold text-primary">
-                      1 word = 1 credit
-                    </span>
+                    <span className="font-semibold text-primary">1 word = 1 credit</span>
                   </p>
                 </div>
 
@@ -253,12 +190,16 @@ export function PricingSection({
                         "border-accent/30 bg-accent-light text-primary hover:bg-accent/20",
                     )}
                   >
-                    {isOpening ? "Opening checkout..." : plan.cta}
+                    {isOpening ? "Opening Polar checkout..." : plan.cta}
                   </Button>
                 )}
 
                 <p className="mt-3 text-center text-[11px] text-muted">
-                  No hidden fees · Cancel anytime · Secure checkout
+                  {plan.isFree
+                    ? "No credit card required for the Free plan"
+                    : yearly
+                      ? `$${formatPrice(plan.yearlyPrice)} billed once per year · renews annually until cancelled`
+                      : `$${formatPrice(plan.monthlyPrice)} billed every month · renews monthly until cancelled`}
                 </p>
 
                 <ul className="mt-5 flex-1 space-y-3 border-t border-border pt-5">
@@ -279,17 +220,55 @@ export function PricingSection({
           })}
         </div>
 
+        <div className="mt-10 space-y-4 rounded-3xl border border-border bg-card p-5 text-sm leading-relaxed text-muted sm:p-6">
+          <h3 className="text-base font-semibold text-foreground">
+            Polar checkout, renewal, cancellation, and refunds
+          </h3>
+          <p>
+            Polar is the merchant of record and reseller for RefinoText paid plans
+            and credit top-ups. You complete payment on Polar’s checkout. RefinoText
+            does not collect or store card details and does not process card
+            payments.
+          </p>
+          <p>
+            Subscriptions renew automatically at the chosen interval until you
+            cancel. Recurring charges continue until cancelled. Cancel through
+            Polar’s Customer Portal using the link in Polar’s purchase and billing
+            emails, or email{" "}
+            <a
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              href={`mailto:${SUPPORT_EMAIL}`}
+            >
+              {SUPPORT_EMAIL}
+            </a>
+            . Cancellation stops future renewals. You keep access until the end of
+            the current billing period.
+          </p>
+          <p>
+            Refund requests are reviewed by email and processed by Polar. Unused
+            subscription time is not automatically refunded unless required by law
+            or Polar issues a refund. See the{" "}
+            <Link
+              href={ROUTES.refunds}
+              className="font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Refunds and Cancellation Policy
+            </Link>
+            .
+          </p>
+        </div>
+
         <div className="mt-10 rounded-3xl border border-accent/25 bg-accent-light/55 p-4 shadow-sm sm:p-6">
           <div className="flex flex-col gap-2 text-center sm:text-left">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
               One-time top-ups
             </p>
             <h3 className="text-2xl font-bold tracking-tight text-foreground">
-              Need more credits without changing your monthly plan?
+              Need more credits without changing your subscription?
             </h3>
             <p className="text-sm leading-relaxed text-muted">
-              Add extra credits once and keep your existing subscription. Top-up
-              credits follow the same rule: 1 word = 1 credit.
+              Top-ups are billed once through Polar. They do not renew. Credits
+              follow the same rule: 1 word = 1 credit.
             </p>
           </div>
 
@@ -327,7 +306,7 @@ export function PricingSection({
 
                 <p className="mt-3 text-xs text-muted">
                   Up to {topup.maxWordsPerRequest.toLocaleString()} words per
-                  request.
+                  request. Does not renew.
                 </p>
 
                 <Button
@@ -340,8 +319,8 @@ export function PricingSection({
                   )}
                 >
                   {loadingProductKey === topup.productKey
-                    ? "Opening checkout..."
-                    : "Buy top-up"}
+                    ? "Opening Polar checkout..."
+                    : "Buy top-up on Polar"}
                 </Button>
               </article>
             ))}
@@ -349,5 +328,54 @@ export function PricingSection({
         </div>
       </Container>
     </section>
+  );
+}
+
+function PlanPrice({ plan, yearly }: { plan: PricingPlan; yearly: boolean }) {
+  if (plan.isFree) {
+    return (
+      <>
+        <div className="mt-4 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-foreground">$0.00</span>
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          Free plan · 500 credits each month · no paid subscription
+        </p>
+      </>
+    );
+  }
+
+  if (yearly) {
+    return (
+      <>
+        <div className="mt-4 flex items-baseline gap-2">
+          <span className="text-4xl font-bold text-foreground">
+            ${formatPrice(plan.yearlyPrice)}
+          </span>
+          <span className="text-sm text-muted">/year</span>
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          billed once per year, about ${monthlyEquivalent(plan.yearlyPrice)}/month
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          12 monthly payments would be ${formatPrice(plan.monthlyPrice * 12)}
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="mt-4 flex items-baseline gap-2">
+        <span className="text-4xl font-bold text-foreground">
+          ${formatPrice(plan.monthlyPrice)}
+        </span>
+        <span className="text-sm text-muted">/month</span>
+      </div>
+      <p className="mt-2 text-sm text-muted">billed every month</p>
+      <p className="mt-1 text-xs text-muted">
+        or ${formatPrice(plan.yearlyPrice)} billed once per year
+      </p>
+    </>
   );
 }

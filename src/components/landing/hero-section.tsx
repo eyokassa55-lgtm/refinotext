@@ -25,11 +25,11 @@ export function HeroSection() {
           <div className="min-w-0">
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                — AI Text Humanizer
+                — AI-assisted writing revision
               </span>
               <Badge variant="accent">
                 <Globe className="h-3 w-3" aria-hidden />
-                Free to start
+                Free plan available
               </Badge>
             </div>
 
@@ -37,9 +37,9 @@ export function HeroSection() {
               id="hero-heading"
               className="text-4xl font-extrabold leading-[1.1] tracking-tight break-words sm:text-5xl lg:text-[3.25rem]"
             >
-              Transform Your AI Text Into{" "}
+              RefinoText rewrites drafts into{" "}
               <span className="font-display block text-[1.15em] font-bold text-primary sm:inline sm:text-[1.2em]">
-                Authentic Human Writing
+                clearer, more natural writing
               </span>
             </h1>
 
@@ -59,14 +59,14 @@ export function HeroSection() {
             </div>
 
             <p className="mt-6 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
-              Paste in your AI draft and we rewrite it so it reads like you wrote
-              it yourself. Natural flow, real voice, and writing that feels
-              genuinely human.
+              Paste an AI-assisted or rough draft. RefinoText revises it for
+              clarity, tone, and readability while aiming to keep your meaning.
+              Review the result before you use it.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="#humanizer" size="lg">
-                Start humanizing
+                Try the editor
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Button>
               <Button href={ROUTES.pricing} variant="ghost" size="lg">

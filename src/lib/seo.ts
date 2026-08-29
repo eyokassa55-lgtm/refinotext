@@ -4,10 +4,10 @@ import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
 import { APP_DESCRIPTION, APP_LOGO_SRC, APP_NAME, SUPPORT_EMAIL } from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
-export const SEO_TITLE = `${APP_NAME} — AI Writing Humanizer`;
+export const SEO_TITLE = `${APP_NAME} — AI-assisted writing revision`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
-export const SITE_LAST_MODIFIED = new Date("2026-08-27T14:00:00.000Z");
+export const SITE_LAST_MODIFIED = new Date("2026-08-29T12:00:00.000Z");
 
 const indexableRobots = {
   index: true,
@@ -34,9 +34,9 @@ export const PAGE_SEO = {
   },
   pricing: {
     path: "/pricing",
-    title: "Pricing — Plans & Credits",
+    title: "Pricing — Plans and credits",
     description:
-      "Compare RefinoText plans. Start free with 500 words per month, then upgrade to Basic, Pro, or Ultra for more credits and longer humanizations.",
+      "RefinoText pricing: Free at 500 credits per month, then Basic, Pro, or Ultra subscriptions. Polar is the merchant of record for paid checkout. Cancel anytime through Polar.",
   },
   contact: {
     path: "/contact",
@@ -47,19 +47,25 @@ export const PAGE_SEO = {
     path: "/privacy",
     title: "Privacy Policy",
     description:
-      "How RefinoText collects, uses, and protects your data when you humanize writing with our AI service.",
+      "How RefinoText collects, uses, and stores account and writing data, and the role of processors including Clerk, Neon, Polar, and AI providers.",
   },
   terms: {
     path: "/terms",
     title: "Terms of Service",
     description:
-      "The terms that govern your use of RefinoText, including accounts, credits, subscriptions, and acceptable use.",
+      "Terms for using RefinoText, including accounts, credits, Polar checkout, automatic renewal, and acceptable use.",
+  },
+  refunds: {
+    path: "/refunds",
+    title: "Refunds and Cancellation",
+    description:
+      "How RefinoText subscriptions renew, how to cancel through Polar, and when refunds may be available.",
   },
   acceptableUse: {
     path: "/acceptable-use",
     title: "Acceptable Use Policy",
     description:
-      "Rules for using RefinoText, including prohibited content and how we handle abuse of the humanizer.",
+      "Rules for using RefinoText. The product is a writing revision tool and must not be used to cheat or to circumvent other services.",
   },
   signIn: {
     path: "/sign-in",
@@ -189,9 +195,11 @@ export function buildHomeJsonLd() {
         description: APP_DESCRIPTION,
         url,
         offers: {
-          "@type": "Offer",
-          price: "0",
+          "@type": "AggregateOffer",
+          lowPrice: "0",
+          highPrice: "39.99",
           priceCurrency: "USD",
+          offerCount: "4",
         },
         publisher: { "@id": `${url}/#organization` },
         dateModified: SITE_LAST_MODIFIED.toISOString(),

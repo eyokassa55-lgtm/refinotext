@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
-export const alt = "RefinoText — AI Writing Humanizer";
+export const alt = "RefinoText — AI-assisted writing revision";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -55,7 +55,7 @@ export default async function OpenGraphImage() {
               color: "#ffffff",
             }}
           >
-            AI Writing Humanizer
+            AI-assisted writing revision
           </div>
           <div
             style={{
@@ -66,7 +66,7 @@ export default async function OpenGraphImage() {
               maxWidth: 900,
             }}
           >
-            Turn robotic AI text into natural, human-sounding prose.
+            Rewrite drafts for clarity, tone, and readability.
           </div>
         </div>
       </div>

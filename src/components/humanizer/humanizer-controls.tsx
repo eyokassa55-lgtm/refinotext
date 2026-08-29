@@ -5,7 +5,6 @@ import {
   Brain,
   Briefcase,
   Coffee,
-  Cpu,
   Gauge,
   GraduationCap,
   Loader2,
@@ -29,15 +28,7 @@ const toneIcons = {
   briefcase: Briefcase,
 };
 
-const DETECTORS = [
-  { id: "other", label: "Other" },
-  { id: "gptzero", label: "GPTZero" },
-  { id: "turnitin", label: "Turnitin" },
-];
-
 type HumanizerControlsProps = {
-  detector: string;
-  onDetectorChange: (detector: string) => void;
   tone: string;
   onToneChange: (tone: string) => void;
   intensity: number;
@@ -50,8 +41,6 @@ type HumanizerControlsProps = {
 };
 
 export function HumanizerControls({
-  detector,
-  onDetectorChange,
   tone,
   onToneChange,
   intensity,
@@ -70,38 +59,6 @@ export function HumanizerControls({
       aria-label="Humanizer settings"
     >
       <div className="flex flex-col gap-2.5 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-2">
-        {/* Detector */}
-        <div className="flex items-center gap-2">
-          <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted">
-            <Cpu className="h-3 w-3 text-accent" aria-hidden />
-            Detector
-          </span>
-          <div className="flex gap-1">
-            {DETECTORS.map((d) => {
-              const isActive = detector === d.id;
-
-              return (
-                <button
-                  key={d.id}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => onDetectorChange(d.id)}
-                  className={cn(
-                    "rounded-md px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-mint-dark/70 text-muted hover:text-foreground",
-                  )}
-                >
-                  {d.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="hidden h-4 w-px bg-border lg:block" aria-hidden />
-
         {/* Tone Mode */}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted">
