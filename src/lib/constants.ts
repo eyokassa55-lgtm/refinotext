@@ -3,7 +3,7 @@ export const APP_LOGO_SRC = "/logo-mark.png";
 export const APP_DESCRIPTION =
   "RefinoText is an AI-assisted writing tool that rewrites drafts for clarity, tone, and readability while preserving your meaning. Start with a free plan. Paid checkout is handled by Polar.";
 
-export const SUPPORT_EMAIL = "supportrefino@gmail.com";
+export const SUPPORT_EMAIL = "support@refinotext.com";
 
 export const ROUTES = {
   home: "/",

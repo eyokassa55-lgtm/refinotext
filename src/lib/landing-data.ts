@@ -1,4 +1,4 @@
-import { ROUTES } from "@/lib/constants";
+import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 
 export const NAV_LINKS = [
   { label: "Pricing", href: ROUTES.pricing },
@@ -116,7 +116,7 @@ export const TRUST_PANELS = [
   },
   {
     title: "Support",
-    body: "Email supportrefino@gmail.com for product, billing, cancellation, or refund questions. We aim to reply within 1–2 business days.",
+    body: `Email ${SUPPORT_EMAIL} for product, billing, cancellation, or refund questions. We aim to reply within 1–2 business days.`,
     href: ROUTES.contact,
     linkLabel: "Contact support",
   },
@@ -286,12 +286,12 @@ export const FAQ_ITEMS = [
   {
     question: "How do I cancel, and when do charges stop?",
     answer:
-      "Cancel through Polar’s Customer Portal using the link in Polar’s purchase and billing emails, or email supportrefino@gmail.com. Cancellation stops future renewals. You keep access until the end of the current billing period. Recurring charges continue until you cancel. There is no in-app cancel button in the RefinoText dashboard today.",
+      `Cancel through Polar’s Customer Portal using the link in Polar’s purchase and billing emails, or email ${SUPPORT_EMAIL}. Cancellation stops future renewals. You keep access until the end of the current billing period. Recurring charges continue until you cancel. There is no in-app cancel button in the RefinoText dashboard today.`,
   },
   {
     question: "What is the refund policy?",
     answer:
-      "Refunds are handled by Polar as merchant of record. Email supportrefino@gmail.com with your account email and Polar receipt details. We review requests in good faith. Unused subscription time is not automatically refunded unless required by law or Polar issues a refund. Top-up credits that have already been used are generally not refundable. Full details are on the Refunds and Cancellation page.",
+      `Refunds are handled by Polar as merchant of record. Email ${SUPPORT_EMAIL} with your account email and Polar receipt details. We review requests in good faith. Unused subscription time is not automatically refunded unless required by law or Polar issues a refund. Top-up credits that have already been used are generally not refundable. Full details are on the Refunds and Cancellation page.`,
   },
   {
     question: "How is my text handled?",
@@ -301,7 +301,7 @@ export const FAQ_ITEMS = [
   {
     question: "How do I get support?",
     answer:
-      "Email supportrefino@gmail.com or use the Contact page. We aim to reply within 1–2 business days. Include your account email and, for billing issues, your Polar receipt or order details.",
+      `Email ${SUPPORT_EMAIL} or use the Contact page. We aim to reply within 1–2 business days. Include your account email and, for billing issues, your Polar receipt or order details.`,
   },
 ] as const;
 

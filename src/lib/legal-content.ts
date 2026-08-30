@@ -263,7 +263,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "3. How to cancel",
         content:
-          "Cancel in Polar’s Customer Portal using the manage-subscription or portal link in Polar’s purchase, receipt, and billing emails. You can also email supportrefino@gmail.com and ask us to help with cancellation. The RefinoText dashboard does not currently include a cancel button.",
+          `Cancel in Polar’s Customer Portal using the manage-subscription or portal link in Polar’s purchase, receipt, and billing emails. You can also email ${SUPPORT_EMAIL} and ask us to help with cancellation. The RefinoText dashboard does not currently include a cancel button.`,
         bullets: [
           "Cancellation stops future renewals",
           "You keep access until the end of the paid period already billed",
@@ -273,7 +273,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "4. Refund eligibility",
         content:
-          "Refunds are issued by Polar as merchant of record. Email supportrefino@gmail.com with your account email and Polar order or receipt details. We review requests in good faith.",
+          `Refunds are issued by Polar as merchant of record. Email ${SUPPORT_EMAIL} with your account email and Polar order or receipt details. We review requests in good faith.`,
         bullets: [
           "Duplicate or clearly erroneous Polar charges: we will help Polar correct them",
           "Subscriptions: unused time is not automatically refunded or prorated unless required by law or Polar issues a refund",
