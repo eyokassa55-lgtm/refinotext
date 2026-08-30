@@ -36,9 +36,16 @@ export function ContactPageContent() {
             Contact Us
           </h1>
           <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
-            Email the RefinoText team for product questions, billing, cancellation,
-            or refunds. We aim to reply within 1–2 business days. Paid checkout and
-            refunds are processed by Polar, the merchant of record.
+            Email the RefinoText team at{" "}
+            <a
+              href={mailHref}
+              className="font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+            >
+              {SUPPORT_EMAIL}
+            </a>{" "}
+            for product questions, billing, cancellation, or refunds. We aim to
+            reply within 1–2 business days. Paid checkout and refunds are
+            processed by Polar, the merchant of record.
           </p>
         </header>
 

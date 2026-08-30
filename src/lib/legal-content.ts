@@ -106,7 +106,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "8. Your rights and choices",
         content:
-          "Depending on your location, you may have rights to access, correct, delete, or export personal data we hold, or to object to certain processing. To make a request, email us. You can also close your RefinoText account by contacting support. Polar holds billing records for paid orders as merchant of record.",
+          `Depending on your location, you may have rights to access, correct, delete, or export personal data we hold, or to object to certain processing. To make a request, email ${SUPPORT_EMAIL}. You can also close your RefinoText account by emailing ${SUPPORT_EMAIL}. Polar holds billing records for paid orders as merchant of record.`,
       },
       {
         title: "9. Children",
@@ -194,7 +194,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "8. Cancellation and refunds",
         content:
-          "You may cancel a subscription at any time through Polar’s Customer Portal (linked from Polar’s purchase and billing emails) or by emailing support. Cancellation stops future renewals. You keep access until the end of the current billing period. Refund rules are in the Refunds and Cancellation Policy.",
+          `You may cancel a subscription at any time through Polar’s Customer Portal (linked from Polar’s purchase and billing emails) or by emailing ${SUPPORT_EMAIL}. Cancellation stops future renewals. You keep access until the end of the current billing period. Refund rules are in the Refunds and Cancellation Policy.`,
       },
       {
         title: "9. Intellectual property and output",

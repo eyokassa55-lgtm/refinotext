@@ -3,6 +3,8 @@ import "server-only";
 import { PolarError } from "@polar-sh/sdk/models/errors/polarerror.js";
 import { SDKValidationError } from "@polar-sh/sdk/models/errors/sdkvalidationerror.js";
 
+import { SUPPORT_EMAIL } from "@/lib/constants";
+
 function getErrorStatus(error: unknown): number | null {
   if (error instanceof PolarError) return error.statusCode;
   if (error && typeof error === "object" && "statusCode" in error) {
@@ -104,7 +106,7 @@ function publicMessageForStatus(statusCode: number, body: string | null): string
     return "Payments could not be authorized. Please try again later.";
   }
   if (statusCode === 404) {
-    return "The selected plan is unavailable. Please try another plan or contact support.";
+    return `The selected plan is unavailable. Please try another plan or email ${SUPPORT_EMAIL}.`;
   }
   if (statusCode === 422) {
     return "Polar rejected the checkout request. Check the server logs for the validation details.";
