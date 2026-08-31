@@ -18,6 +18,7 @@ const {
   isVertexConfigured,
   redactModelName,
 } = await import("../src/lib/gemini");
+const { buildTunedSystemInstruction } = await import("../src/lib/humanize-prompt");
 
 async function main() {
   const vertex = getVertexConfig();
@@ -45,9 +46,7 @@ async function main() {
 
   try {
     const text = await generateText(input, {
-      systemInstruction: `Rewrite the input so it sounds more natural, clear, and human-written.
-Preserve the original meaning, facts, names, numbers, dates, and intent.
-Do not add or remove facts. Return only the rewritten text.`,
+      systemInstruction: buildTunedSystemInstruction(),
     });
     console.log(`Response: ${text}`);
     console.log("Vertex tuned-model test succeeded.");

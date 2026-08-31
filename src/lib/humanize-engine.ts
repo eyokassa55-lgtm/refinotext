@@ -10,6 +10,7 @@ import {
 import {
   buildEditorSystemInstruction,
   buildRepairSystemInstruction,
+  buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
@@ -37,13 +38,15 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-function generationOptions(request: HumanizeRequest) {
+function generationOptions(request: HumanizeRequest, tuned: boolean) {
   const intensity = request.intensity ?? 75;
-  const temperature = 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
+  const temperature = tuned
+    ? 0.18 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.22
+    : 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   const words = countWords(request.text);
   return {
     temperature,
-    topP: 0.95,
+    topP: tuned ? 0.9 : 0.95,
     maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160)),
   };
 }
@@ -60,11 +63,13 @@ function wrapAsError(error: unknown): HumanizationFailedError {
 
 async function rewriteWithModel(
   request: HumanizeRequest,
-  systemInstruction: string,
+  options: { systemInstruction?: string; tuned: boolean },
 ): Promise<string> {
   return generateText(request.text, {
-    systemInstruction,
-    ...generationOptions(request),
+    ...(options.systemInstruction
+      ? { systemInstruction: options.systemInstruction }
+      : {}),
+    ...generationOptions(request, options.tuned),
   });
 }
 
@@ -100,10 +105,10 @@ function finalizeOutput(input: string, raw: string): string {
 export async function runHumanization(request: HumanizeRequest): Promise<string> {
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
-      const first = await rewriteWithModel(
-        request,
-        buildEditorSystemInstruction(request),
-      );
+      const first = await rewriteWithModel(request, {
+        tuned: true,
+        systemInstruction: buildTunedSystemInstruction(),
+      });
       const firstQuality = assessRewriteQuality(request.text, first);
       if (firstQuality.ok) return firstQuality.output;
 
@@ -111,13 +116,13 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
         codes: firstQuality.issues.map((issue) => issue.code),
       });
 
-      const repaired = await rewriteWithModel(
-        request,
-        buildRepairSystemInstruction(
+      const repaired = await rewriteWithModel(request, {
+        tuned: true,
+        systemInstruction: buildRepairSystemInstruction(
           request,
           missingFactsForRetry(request.text, firstQuality.output || first),
         ),
-      );
+      });
       return finalizeOutput(request.text, repaired);
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
@@ -127,10 +132,10 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
 
   if (isBaseGeminiFallbackEnabled()) {
     try {
-      const text = await rewriteWithModel(
-        request,
-        buildEditorSystemInstruction(request),
-      );
+      const text = await rewriteWithModel(request, {
+        tuned: false,
+        systemInstruction: buildEditorSystemInstruction(request),
+      });
       return finalizeOutput(request.text, text);
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;

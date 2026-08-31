@@ -97,6 +97,9 @@ const GENERIC_PATTERNS = [
   /here is (your )?(the )?(rewritten|humanized|revised|refined) text/i,
   /sure,?\s+(here('s| is)|i've)/i,
   /below is the (rewritten|revised) version/i,
+  /here are (a few|several|some) (ways|options|versions)/i,
+  /\*\*\s*option\s+\d+/i,
+  /key changes and why/i,
 ];
 
 const LEAK_PATTERNS = [
