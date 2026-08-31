@@ -103,6 +103,18 @@ const GENERIC_PATTERNS = [
   /key changes and why/i,
 ];
 
+const TEMPLATE_VOICE_PATTERNS = [
+  /it is (essential|important|imperative|crucial|vital) to\b/i,
+  /play(?:s)? a (crucial|vital|key|significant) role/i,
+  /in (today'?s|modern) (society|world)/i,
+  /\ba wide range of\b/i,
+  /it is important to note/i,
+  /delve into/i,
+  /pave(?:s)? the way/i,
+  /landscape of\b/i,
+  /\bvital ecosystems\b/i,
+];
+
 const LEAK_PATTERNS = [
   /professional editor and reviser for RefinoText/i,
   /VERTEX_AI_TUNED_ENDPOINT/i,
@@ -179,9 +191,34 @@ function normalizedTokens(text: string): string[] {
 }
 
 /**
- * Fraction of source n-grams that also appear in the rewrite.
- * Training human_text almost never copies long phrases from ai_text.
+ * Training human_text stays close to source length and almost never copies long phrases.
  */
+export function lengthRatio(input: string, output: string): number {
+  const inCount = countWords(input);
+  if (inCount === 0) return 0;
+  return countWords(output) / inCount;
+}
+
+export function paragraphCount(text: string): number {
+  return text
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+}
+
+function templateVoiceHits(text: string): number {
+  return TEMPLATE_VOICE_PATTERNS.reduce(
+    (count, pattern) => count + (pattern.test(text) ? 1 : 0),
+    0,
+  );
+}
+
+function significantNumbers(text: string): string[] {
+  const matches = text.match(/\d+(?:\.\d+)?%|[$€£]\s?\d[\d,]*(?:\.\d+)?|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?|\b\d{4}\b|\b\d{3,}\b/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((value) => value.replace(/[$,€£\s]/g, "").toLowerCase()))];
+}
+
 export function phraseCopyRatio(input: string, output: string, n = 5): number {
   const source = normalizedTokens(input);
   const rewritten = normalizedTokens(output);
@@ -293,6 +330,41 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
     });
   }
 
+  if (inCount >= 40 && outCount > inCount * 1.35) {
+    issues.push({
+      code: "TOO_LONG",
+      message: "The rewrite expanded the source instead of matching training length.",
+    });
+  }
+
+  const inputParas = paragraphCount(input);
+  const outputParas = paragraphCount(output);
+  if (inCount >= 80 && inputParas >= 3 && outputParas <= 1) {
+    issues.push({
+      code: "PARAGRAPH_DRIFT",
+      message: "The rewrite dropped the source paragraph structure.",
+    });
+  }
+
+  const invented = significantNumbers(output).filter((value) => {
+    const inputNumbers = new Set(significantNumbers(input));
+    if (inputNumbers.has(value)) return false;
+    return !input.replace(/[$,€£\s]/g, "").toLowerCase().includes(value);
+  });
+  if (invented.length > 0) {
+    issues.push({
+      code: "INVENTED_FACTS",
+      message: "The rewrite introduced numbers that were not in the source.",
+    });
+  }
+
+  if (templateVoiceHits(output) >= 2 && templateVoiceHits(output) > templateVoiceHits(input)) {
+    issues.push({
+      code: "TEMPLATE_VOICE",
+      message: "The rewrite used generic template phrasing.",
+    });
+  }
+
   const blocking = issues.filter((issue) =>
     [
       "EMPTY",
@@ -303,13 +375,16 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
       "MISSING_FACTS",
       "MISSING_NAMES",
       "MISSING_QUOTES",
+      "INVENTED_FACTS",
     ].includes(issue.code),
   );
 
   return {
     ok:
       blocking.length === 0 &&
-      issues.filter((issue) => issue.code === "TOO_SHORT" || issue.code === "TOO_SIMILAR").length === 0,
+      issues.filter((issue) =>
+        ["TOO_SHORT", "TOO_SIMILAR", "TOO_LONG", "PARAGRAPH_DRIFT", "TEMPLATE_VOICE"].includes(issue.code),
+      ).length === 0,
     output,
     issues,
   };
@@ -329,6 +404,6 @@ export function missingFactsForRetry(input: string, output: string): string[] {
 
 export function isBlockingQualityFailure(result: QualityResult): boolean {
   return result.issues.some((issue) =>
-    ["EMPTY", "REFUSAL", "GENERIC", "LEAK", "UNRELATED"].includes(issue.code),
+    ["EMPTY", "REFUSAL", "GENERIC", "LEAK", "UNRELATED", "INVENTED_FACTS"].includes(issue.code),
   );
 }

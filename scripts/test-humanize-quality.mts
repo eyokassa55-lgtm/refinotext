@@ -21,6 +21,7 @@ import {
   assessRewriteQuality,
   extractNumbers,
   extractProperNames,
+  lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
 } from "../src/lib/humanize-quality";
@@ -183,6 +184,20 @@ async function runOfflineTests() {
     phraseCopyRatio(nearCopySource, nearCopy.output) >= 0.32,
   );
 
+  const padded = assessRewriteQuality(
+    nearCopySource,
+    `${nearCopySource}
+
+Rainforests also illustrate a much broader set of global development debates. It is essential to note that they play a crucial role in today's world, and a wide range of extra case studies, funding models, classroom exercises, and policy experiments could be added here. Those additions would more than double the original draft with new arguments that the source never made.`,
+  );
+  assert("flags a padded rewrite", padded.issues.some((issue) => issue.code === "TOO_LONG"));
+
+  const invented = assessRewriteQuality(
+    "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
+    "Harborline counted 4,812 commuters in Milwaukee during April 2026 and later claimed a 48% national increase worth $18,400.",
+  );
+  assert("flags invented numbers", invented.issues.some((issue) => issue.code === "INVENTED_FACTS"));
+
   assert("extracts 4812 from 4,812", extractNumbers("4,812 commuters").includes("4812"));
   assert("extracts Priya Nandakumar", extractProperNames(source).includes("Priya Nandakumar"));
 
@@ -211,6 +226,11 @@ async function runOfflineTests() {
     tunedCue.startsWith(TUNED_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("asks for a real rewrite, not a copy", /do not copy/i.test(tunedCue));
+  assert("asks to keep source length and paragraphs", /same length/i.test(tunedCue) && /paragraph/i.test(tunedCue));
+  assert(
+    "does not send University readability into the tuned model",
+    !/university/i.test(tunedCue),
+  );
   assert(
     "does not mention detectors or the 720-pair dataset",
     !/detector|gptzero|turnitin|720/i.test(tunedCue),
@@ -268,19 +288,21 @@ async function runLiveTests() {
       const started = Date.now();
       const output = await runHumanization({
         text: sample.text,
-        tone: sample.name === "simple-essay" ? "academic" : "standard",
-        readability: sample.name === "simple-essay" ? "University / Academic" : "General Audience",
+        tone: "standard",
+        readability: "General Audience",
         intensity: 75,
       });
       const ms = Date.now() - started;
       const quality = assessRewriteQuality(sample.text, output);
       const copyRatio = phraseCopyRatio(sample.text, output);
-      const rewriteEnough =
-        sample.name !== "simple-essay" || copyRatio < 0.32;
+      const ratio = lengthRatio(sample.text, output);
+      const longEnough = sample.text.trim().split(/\s+/).length >= 40;
+      const lengthOk = !longEnough || (ratio >= 0.55 && ratio <= 1.4);
+      const rewriteEnough = sample.name !== "simple-essay" || copyRatio < 0.32;
       assert(
         `${sample.name} rewrite`,
-        Boolean(output.trim()) && quality.ok && rewriteEnough,
-        `ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)}`,
+        Boolean(output.trim()) && quality.ok && rewriteEnough && lengthOk,
+        `ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
       );
       console.log(`  --- ${sample.name} output ---`);
       console.log(output);

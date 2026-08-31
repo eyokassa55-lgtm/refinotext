@@ -9,6 +9,7 @@ import {
 } from "@/lib/gemini";
 import {
   buildEditorSystemInstruction,
+  buildLengthRepairInstruction,
   buildRepairSystemInstruction,
   buildStrongerRewriteInstruction,
   buildTunedSystemInstruction,
@@ -16,6 +17,7 @@ import {
 import {
   assessRewriteQuality,
   isBlockingQualityFailure,
+  lengthRatio,
   missingFactsForRetry,
   phraseCopyRatio,
 } from "@/lib/humanize-quality";
@@ -43,13 +45,13 @@ export class HumanizationFailedError extends Error {
 function generationOptions(request: HumanizeRequest, tuned: boolean, extraTemperature = 0) {
   const intensity = request.intensity ?? 75;
   const temperature = tuned
-    ? 0.48 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32
+    ? 0.32 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.22
     : 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   const words = countWords(request.text);
   return {
-    temperature: Math.min(0.95, temperature + extraTemperature),
-    topP: 0.95,
-    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.4) + 200)),
+    temperature: Math.min(0.72, temperature + extraTemperature),
+    topP: tuned ? 0.9 : 0.95,
+    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * (tuned ? 1.55 : 2.2)) + (tuned ? 120 : 160))),
   };
 }
 
@@ -75,10 +77,25 @@ async function rewriteWithModel(
   });
 }
 
-function pickLessCopied(input: string, first: string, second: string): string {
-  const firstCopy = phraseCopyRatio(input, first);
-  const secondCopy = phraseCopyRatio(input, second);
-  return secondCopy <= firstCopy ? second : first;
+function scoreRewrite(input: string, candidate: string): number {
+  const quality = assessRewriteQuality(input, candidate);
+  if (!quality.output || isBlockingQualityFailure(quality)) return -100;
+
+  let score = 10;
+  const codes = new Set(quality.issues.map((issue) => issue.code));
+  if (codes.has("TOO_SHORT")) score -= 20;
+  if (codes.has("TOO_LONG")) score -= 16;
+  if (codes.has("TOO_SIMILAR")) score -= 14;
+  if (codes.has("TEMPLATE_VOICE")) score -= 12;
+  if (codes.has("PARAGRAPH_DRIFT")) score -= 10;
+  if ([...codes].some((code) => code.startsWith("MISSING"))) score -= 12;
+  score -= Math.abs(1 - lengthRatio(input, quality.output)) * 12;
+  score -= phraseCopyRatio(input, quality.output) * 10;
+  return score;
+}
+
+function pickBetterRewrite(input: string, first: string, second: string): string {
+  return scoreRewrite(input, second) >= scoreRewrite(input, first) ? second : first;
 }
 
 function finalizeOutput(input: string, raw: string): string {
@@ -125,24 +142,24 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
       });
 
       const missing = missingFactsForRetry(request.text, firstQuality.output || first);
-      const copiedTooClosely = firstQuality.issues.some((issue) => issue.code === "TOO_SIMILAR");
+      const codes = new Set(firstQuality.issues.map((issue) => issue.code));
+      const copiedTooClosely = codes.has("TOO_SIMILAR") || codes.has("TEMPLATE_VOICE");
+      const expandedTooMuch = codes.has("TOO_LONG") || codes.has("PARAGRAPH_DRIFT");
       const repaired = await rewriteWithModel(request, {
         tuned: true,
-        extraTemperature: copiedTooClosely ? 0.12 : 0,
-        systemInstruction: copiedTooClosely
-          ? buildStrongerRewriteInstruction(request, missing)
-          : buildRepairSystemInstruction(request, missing),
+        extraTemperature: copiedTooClosely ? 0.08 : 0,
+        systemInstruction: expandedTooMuch
+          ? buildLengthRepairInstruction(request, missing)
+          : copiedTooClosely
+            ? buildStrongerRewriteInstruction(request, missing)
+            : buildRepairSystemInstruction(request, missing),
       });
-      const repairedQuality = assessRewriteQuality(request.text, repaired);
-      if (copiedTooClosely && !isBlockingQualityFailure(repairedQuality)) {
-        const chosen = pickLessCopied(
-          request.text,
-          firstQuality.output || first,
-          repairedQuality.output || repaired,
-        );
-        return finalizeOutput(request.text, chosen);
-      }
-      return finalizeOutput(request.text, repaired);
+      const chosen = pickBetterRewrite(
+        request.text,
+        firstQuality.output || first,
+        repaired,
+      );
+      return finalizeOutput(request.text, chosen);
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);

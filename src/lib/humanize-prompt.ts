@@ -28,21 +28,16 @@ export function buildTunedSystemInstruction(request?: HumanizePromptRequest): st
   const intensity = request?.intensity ?? 75;
   const strength =
     intensity <= 33
-      ? "Change stiff phrasing, but you may keep more of the original rhythm."
-      : "Do not copy the original sentences. Change the wording, sentence structure, and rhythm the way you were trained.";
-
-  const tone = request?.tone && request.tone !== "standard" ? `Prefer a ${formatTone(request.tone)} voice.` : "";
-  const readability = request?.readability ? `Aim for ${request.readability} readability.` : "";
+      ? "Keep most of the original rhythm. Smooth stiff phrasing only."
+      : "Rewrite with the sentence rhythm, wording, and paragraph flow you learned from your training targets. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
 
   return [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
     strength,
-    tone,
-    readability,
-    "Return only one rewritten draft. No options, titles, or commentary.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    "Keep the source tone. Keep the same claims, terminology, names, numbers, dates, quotations, and intent.",
+    "Keep about the same length and the same paragraph breaks. Do not summarize, pad, invent examples, add arguments, or answer the topic.",
+    "Vary sentence openings and length. Return only one rewritten draft.",
+  ].join("\n");
 }
 
 /**
@@ -104,7 +99,8 @@ export function buildRepairSystemInstruction(
       : "Restore any names, numbers, dates, and quotations from the source.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-Do not copy the original sentences. Write a new version with different wording and structure.
+Rewrite with the trained target style: natural rhythm, varied sentences, same meaning.
+Keep the same length and paragraph breaks. Do not invent or drop facts.
 ${facts}
 Return only one rewritten draft.`;
 }
@@ -116,11 +112,27 @@ export function buildStrongerRewriteInstruction(
   const facts =
     missingFacts.length > 0
       ? `Keep these source details: ${missingFacts.join("; ")}.`
-      : "Keep names, numbers, dates, and quotations if they appear in the draft.";
+      : "Keep names, numbers, dates, quotations, and terminology from the draft.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-The last version was too close to the original. Rewrite it more thoroughly.
-Change sentence openings, structure, and word choice. Do not paraphrase one word at a time.
+The last version copied the draft or used a generic template. Rewrite it in the trained target style.
+Change sentence openings and rhythm. Keep the same length, paragraphs, tone, and claims. Do not expand.
+${facts}
+Return only one rewritten draft.`;
+}
+
+export function buildLengthRepairInstruction(
+  request: HumanizePromptRequest,
+  missingFacts: string[],
+): string {
+  const facts =
+    missingFacts.length > 0
+      ? `Keep these source details: ${missingFacts.join("; ")}.`
+      : "Keep names, numbers, dates, quotations, and terminology from the draft.";
+
+  return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
+The last version was too long. Write a version close to the source length, in the trained target style.
+Do not pad, do not summarize, and do not add examples or new arguments.
 ${facts}
 Return only one rewritten draft.`;
 }
