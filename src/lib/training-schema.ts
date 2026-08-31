@@ -2,8 +2,9 @@
  * Dataset contract for Humanize exact-match lookup.
  *
  * The 715-pair corpus lives in `data/training_data.jsonl`. Exact ai_text
- * matches return stored human_text. All other drafts go to the fine-tuned
- * Vertex endpoint. The JSONL is not sent with inference requests.
+ * matches, and same-draft near-matches, return stored human_text. All other
+ * drafts go to the fine-tuned Vertex endpoint. The JSONL is not sent with
+ * inference requests. A related topic with different sentences is not a hit.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

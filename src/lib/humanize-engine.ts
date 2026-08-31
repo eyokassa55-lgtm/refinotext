@@ -14,7 +14,8 @@ import {
   buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import { assessRewriteQuality, stripModelChrome } from "@/lib/humanize-quality";
-import { findExactTrainingMatch, getTrainingRowCount } from "@/lib/training-lookup";
+import { getTrainingRowCount } from "@/lib/training-lookup";
+import { findDatabaseMatch } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -25,7 +26,7 @@ export type HumanizeRequest = {
   intensity?: number;
 };
 
-export type HumanizeSource = "EXACT_TRAINING_MATCH" | "FINE_TUNED_MODEL";
+export type HumanizeSource = "EXACT_TRAINING_MATCH" | "DATABASE_SIMILARITY_MATCH" | "FINE_TUNED_MODEL";
 
 export type HumanizeRetrievalMatch = {
   index: number;
@@ -33,7 +34,7 @@ export type HumanizeRetrievalMatch = {
 };
 
 export type HumanizeRetrievalSummary = {
-  band: "exact";
+  band: "exact" | "high";
   matches: HumanizeRetrievalMatch[];
 };
 
@@ -112,21 +113,25 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
+function databaseSource(kind: "exact" | "near_exact" | "similarity" | "topic"): HumanizeSource {
+  return kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH";
+}
+
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const exact = findExactTrainingMatch(request.text);
-  if (exact) {
-    console.info("[humanize] [DATABASE_EXACT_MATCH]", {
-      row: exact.index,
-      kind: "exact",
-      score: 1,
+  const databaseHit = findDatabaseMatch(request.text);
+  if (databaseHit) {
+    console.info("[humanize] [DATABASE_MATCH]", {
+      row: databaseHit.index,
+      kind: databaseHit.kind,
+      score: databaseHit.score,
       rows: getTrainingRowCount(),
     });
     return {
-      text: exact.output,
-      source: "EXACT_TRAINING_MATCH",
+      text: databaseHit.output,
+      source: databaseSource(databaseHit.kind),
       retrieval: {
-        band: "exact",
-        matches: [{ index: exact.index, score: 1 }],
+        band: databaseHit.kind === "exact" ? "exact" : "high",
+        matches: [{ index: databaseHit.index, score: databaseHit.score }],
       },
     };
   }

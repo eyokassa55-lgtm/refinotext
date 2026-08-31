@@ -152,6 +152,10 @@ People often wait for a perfect schedule before they start. A smaller plan that 
 
 Friends and family also influence habits. It is easier to keep a promise when someone else expects you to show up. That is why study groups, training partners, and shared deadlines still matter in an age of solo apps.`;
 
+const TECH_SCREENSHOT_ESSAY = `Technology is now an essential part of modern life, transforming how people communicate, work, and learn. From smartphones to artificial intelligence, technological advancements have made daily tasks faster and more efficient. Information is now accessible within seconds, allowing individuals to expand their knowledge and stay connected with the world.
+One of the greatest benefits of technology is its impact on communication. People can interact instantly across continents through social media, video calls, and messaging platforms. This has strengthened global connections and enabled collaboration like never before. In education, technology has opened new opportunities through online learning, making knowledge available to students regardless of their location.
+However, technology also presents challenges. Overdependence on digital devices can reduce face-to-face interactions and affect mental well-being. Privacy and data security have also become major concerns as personal information is increasingly stored online. It is important for individuals to use technology responsibly and maintain a balance between digital and real-world experiences.`;
+
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
   const meaningCodes = quality.issues
@@ -338,9 +342,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   console.log("\n3d. Exact match vs fine-tuned model (cases A–D)");
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
-  const { findExactTrainingMatch, getTrainingLookupStats } = await import(
+  const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
     "../src/lib/training-lookup"
   );
+  const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
   const { runHumanization, toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 715, `rows=${stats.rows}`);
@@ -374,17 +379,35 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   printCaseReport("A exact training input", firstPair.input, exactRun);
 
-  assert("B new essay is not an exact training match", findExactTrainingMatch(NEW_ESSAY) === null);
+  const techPair = getTrainingPairs()[1]!;
+  const oneWordSwap = techPair.input.replace("has become", "is now");
+  const oneWordRun = await runHumanization({ text: oneWordSwap, intensity: 75 });
   assert(
-    "C same-topic different essay is not an exact training match",
-    findExactTrainingMatch(SAME_TOPIC_DIFFERENT_ESSAY) === null,
+    "tiny wording change returns stored human_text",
+    oneWordRun.source === "DATABASE_SIMILARITY_MATCH" && oneWordRun.text === techPair.output,
+    `source=${oneWordRun.source} row=${oneWordRun.retrieval?.matches[0]?.index}`,
   );
-  assert("D new topic is not an exact training match", findExactTrainingMatch(NEW_TOPIC) === null);
-  assert("T1 AI essay is not an exact training match", findExactTrainingMatch(AI_TECH_ESSAY) === null);
-  assert("T2 education essay is not an exact training match", findExactTrainingMatch(EDUCATION_ESSAY) === null);
-  assert("T3 environment essay is not an exact training match", findExactTrainingMatch(ENVIRONMENT_ESSAY) === null);
-  assert("T4 business essay is not an exact training match", findExactTrainingMatch(BUSINESS_ESSAY) === null);
-  assert("T5 general essay is not an exact training match", findExactTrainingMatch(GENERAL_ESSAY) === null);
+  printCaseReport("tiny wording change", oneWordSwap, oneWordRun);
+
+  const screenshotRun = await runHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
+  assert(
+    "truncated technology essay returns stored human_text",
+    screenshotRun.source === "DATABASE_SIMILARITY_MATCH" && screenshotRun.text === techPair.output,
+    `source=${screenshotRun.source} row=${screenshotRun.retrieval?.matches[0]?.index}`,
+  );
+  printCaseReport("screenshot-style technology essay", TECH_SCREENSHOT_ESSAY, screenshotRun);
+
+  assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
+  assert(
+    "C same-topic different essay is not a database match",
+    findDatabaseMatch(SAME_TOPIC_DIFFERENT_ESSAY) === null,
+  );
+  assert("D new topic is not a database match", findDatabaseMatch(NEW_TOPIC) === null);
+  assert("T1 AI essay is not a database match", findDatabaseMatch(AI_TECH_ESSAY) === null);
+  assert("T2 education essay is not a database match", findDatabaseMatch(EDUCATION_ESSAY) === null);
+  assert("T3 environment essay is not a database match", findDatabaseMatch(ENVIRONMENT_ESSAY) === null);
+  assert("T4 business essay is not a database match", findDatabaseMatch(BUSINESS_ESSAY) === null);
+  assert("T5 general essay is not a database match", findDatabaseMatch(GENERAL_ESSAY) === null);
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
   const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -395,6 +418,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/academic register|conversational register|executive register/i.test(newPrompt),
   );
   assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
+  assert("same-draft API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
 
 

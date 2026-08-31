@@ -621,19 +621,18 @@ function lockedPair(
 function lengthRatioOk(queryWords: number, docWords: number): boolean {
   if (queryWords <= 0 || docWords <= 0) return false;
   const ratio = queryWords / docWords;
-  return ratio >= 0.82 && ratio <= 1.22;
+  return ratio >= 0.68 && ratio <= 1.4;
 }
 
 function isSameUnderlyingDraft(query: string, doc: string, overlap: number): boolean {
   if (overlap < 0.75) return false;
   const qWords = wordCount(query);
-  if (qWords >= 80) {
-    const copy = phraseCopyRatio(query, doc, 5);
-    if (copy < 0.42) return false;
-  }
+  const copy = qWords >= 40 ? phraseCopyRatio(query, doc, 5) : 1;
+  if (qWords >= 80 && copy < 0.42) return false;
+
   const queryParas = paragraphCount(query);
   const docParas = paragraphCount(doc);
-  if (Math.max(queryParas, docParas) >= 3) {
+  if (Math.max(queryParas, docParas) >= 3 && copy < 0.55) {
     const ratio = queryParas / docParas;
     if (ratio < 0.55 || ratio > 1.8) return false;
   }
