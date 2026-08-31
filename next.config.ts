@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     "@prisma/adapter-neon",
     "@neondatabase/serverless",
     "@google/genai",
+    "google-auth-library",
     "ws",
   ],
   // Hide the Vercel/Next.js floating dev badge in the browser.

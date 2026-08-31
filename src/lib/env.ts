@@ -34,8 +34,15 @@ export const env = {
   },
 
   gemini: {
-    apiKey: getEnv("GEMINI_API_KEY") ?? getEnv("GEMINI_API_KEY"),
-    model: getEnv("GEMINI_MODEL") ?? getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
+    apiKey: getEnv("GEMINI_API_KEY"),
+    model: getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
+    allowBaseFallback: getEnv("ALLOW_BASE_GEMINI_FALLBACK") === "true",
+  },
+
+  vertex: {
+    project: getEnv("GOOGLE_CLOUD_PROJECT"),
+    location: getEnv("GOOGLE_CLOUD_LOCATION") ?? getEnv("VERTEX_AI_LOCATION"),
+    tunedEndpoint: getEnv("VERTEX_AI_TUNED_ENDPOINT"),
   },
 
   fireworks: {

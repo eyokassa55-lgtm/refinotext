@@ -46,8 +46,13 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
     case "RATE_LIMITED":
       return 429;
     case "MODEL_NOT_FOUND":
+    case "QUALITY_CHECK_FAILED":
       return 502;
+    case "INVALID_SERVICE_ACCOUNT":
+      return 401;
     case "UNAVAILABLE":
+    case "MISSING_VERTEX_CONFIG":
+    case "INVALID_VERTEX_ENDPOINT":
       return 503;
     default:
       return 502;

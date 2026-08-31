@@ -1,11 +1,22 @@
 import "server-only";
 
 import {
-  FireworksError,
-  generateWithFireworks,
-  isFireworksEnabled,
-} from "@/lib/fireworks";
-import { GeminiError, generateText } from "@/lib/gemini";
+  GeminiError,
+  generateText,
+  hasVertexEndpointEnv,
+  isBaseGeminiFallbackEnabled,
+  isVertexConfigured,
+} from "@/lib/gemini";
+import {
+  buildEditorSystemInstruction,
+  buildRepairSystemInstruction,
+} from "@/lib/humanize-prompt";
+import {
+  assessRewriteQuality,
+  isBlockingQualityFailure,
+  missingFactsForRetry,
+} from "@/lib/humanize-quality";
+import { countWords } from "@/lib/words";
 
 export type HumanizeRequest = {
   text: string;
@@ -26,61 +37,113 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-function formatTone(tone?: string): string {
-  if (!tone) return "natural";
-  return tone.replace(/[-_]/g, " ");
+function generationOptions(request: HumanizeRequest) {
+  const intensity = request.intensity ?? 75;
+  const temperature = 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
+  const words = countWords(request.text);
+  return {
+    temperature,
+    topP: 0.95,
+    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160)),
+  };
 }
 
-function buildHumanizePrompt(request: HumanizeRequest): string {
-  const tone = formatTone(request.tone);
-  const readability = request.readability ?? "General Audience";
-  const intensity = request.intensity ?? 75;
+function wrapAsError(error: unknown): HumanizationFailedError {
+  if (error instanceof GeminiError) {
+    return new HumanizationFailedError(error.message, error.code, error.status);
+  }
 
-  return `You are a careful writing editor for RefinoText.
+  return new HumanizationFailedError(
+    "Humanization failed. Your credits were refunded.",
+  );
+}
 
-Rewrite the user's text to sound more natural, clear, and human-written.
+async function rewriteWithModel(
+  request: HumanizeRequest,
+  systemInstruction: string,
+): Promise<string> {
+  return generateText(request.text, {
+    systemInstruction,
+    ...generationOptions(request),
+  });
+}
 
-Rules:
-- Preserve the original meaning, facts, names, numbers, dates, links, citations, and intent.
-- Do not invent claims, examples, statistics, sources, links, or citations.
-- Do not remove important details.
-- Improve grammar, clarity, flow, sentence rhythm, and readability.
-- Do not optimize for bypassing AI detectors.
-- Return only the rewritten text. Do not add explanations, labels, markdown fences, or notes.
+function finalizeOutput(input: string, raw: string): string {
+  const quality = assessRewriteQuality(input, raw);
+  if (quality.ok) return quality.output;
 
-Requested tone: ${tone}
-Target readability: ${readability}
-Rewrite strength: ${intensity}/100
+  if (isBlockingQualityFailure(quality) || !quality.output) {
+    console.error("[humanize] quality check failed", {
+      codes: quality.issues.map((issue) => issue.code),
+    });
+    throw new HumanizationFailedError(
+      "Humanization failed. Please try again.",
+      "QUALITY_CHECK_FAILED",
+      502,
+    );
+  }
 
-Text to rewrite:
-${request.text}`;
+  if (quality.issues.some((issue) => issue.code === "TOO_SHORT" || issue.code.startsWith("MISSING"))) {
+    console.error("[humanize] quality check failed", {
+      codes: quality.issues.map((issue) => issue.code),
+    });
+    throw new HumanizationFailedError(
+      "Humanization failed. Please try again.",
+      "QUALITY_CHECK_FAILED",
+      502,
+    );
+  }
+
+  return quality.output;
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<string> {
-  const prompt = buildHumanizePrompt(request);
-
-  if (isFireworksEnabled()) {
+  if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
-      const result = await generateWithFireworks(prompt);
-      return result.text;
-    } catch (error) {
-      const code =
-        error instanceof FireworksError ? error.code : "FIREWORKS_ERROR";
-      console.error("[humanize] Fireworks failed; falling back to Gemini", {
-        code,
+      const first = await rewriteWithModel(
+        request,
+        buildEditorSystemInstruction(request),
+      );
+      const firstQuality = assessRewriteQuality(request.text, first);
+      if (firstQuality.ok) return firstQuality.output;
+
+      console.info("[humanize] retrying once after quality check", {
+        codes: firstQuality.issues.map((issue) => issue.code),
       });
+
+      const repaired = await rewriteWithModel(
+        request,
+        buildRepairSystemInstruction(
+          request,
+          missingFactsForRetry(request.text, firstQuality.output || first),
+        ),
+      );
+      return finalizeOutput(request.text, repaired);
+    } catch (error) {
+      if (error instanceof HumanizationFailedError) throw error;
+      throw wrapAsError(error);
     }
   }
 
-  try {
-    return await generateText(prompt);
-  } catch (error) {
-    if (error instanceof GeminiError) {
-      throw new HumanizationFailedError(error.message, error.code, error.status);
+  if (isBaseGeminiFallbackEnabled()) {
+    try {
+      const text = await rewriteWithModel(
+        request,
+        buildEditorSystemInstruction(request),
+      );
+      return finalizeOutput(request.text, text);
+    } catch (error) {
+      if (error instanceof HumanizationFailedError) throw error;
+      throw wrapAsError(error);
     }
-
-    throw new HumanizationFailedError(
-      "Humanization failed. Your credits were refunded.",
-    );
   }
+
+  console.error(
+    "[humanize] Vertex AI tuned endpoint is not configured; refusing base Gemini",
+  );
+  throw new HumanizationFailedError(
+    "The writing service is not configured. Please try again later.",
+    "MISSING_VERTEX_CONFIG",
+    503,
+  );
 }
