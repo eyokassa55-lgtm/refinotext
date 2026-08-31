@@ -13,6 +13,7 @@ export type TrainingPair = {
 
 export type TrainingMatch = {
   index: number;
+  input: string;
   output: string;
 };
 
@@ -86,7 +87,7 @@ function loadIndex(): TrainingIndex {
     if (byInput.has(pair.input)) {
       duplicateInputs += 1;
     } else {
-      byInput.set(pair.input, { index: pair.index, output: pair.output });
+      byInput.set(pair.input, { index: pair.index, input: pair.input, output: pair.output });
     }
     index += 1;
   }

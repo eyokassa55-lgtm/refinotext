@@ -511,6 +511,7 @@ export function getRetrievalIndexStats(): {
 export type DatabaseTrainingMatch = {
   index: number;
   score: number;
+  input: string;
   output: string;
   kind: "exact" | "similarity";
 };
@@ -522,9 +523,11 @@ function lengthRatioOk(queryWords: number, docWords: number): boolean {
 }
 
 /**
- * Dataset-first hit: exact ai_text, or cosine/Jaccard near-duplicate >= 0.85.
- * On a hit, callers must return stored human_text unchanged and skip the model.
- * Same-topic but different drafts stay below the threshold and go to the tuned model.
+ * Vector similarity search against stored ai_text.
+ *
+ * Exact string match, or TF-IDF cosine + Jaccard + char 4-grams >= 0.85
+ * (same role as pgvector `<=>` against an ai_text embedding column).
+ * Same-topic but different drafts stay below the threshold.
  */
 export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | null {
   const exact = findExactTrainingMatch(userText);
@@ -532,6 +535,7 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
     return {
       index: exact.index,
       score: 1,
+      input: exact.input,
       output: exact.output,
       kind: "exact",
     };
@@ -577,6 +581,7 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
   return {
     index: best.doc.pair.index,
     score: Number(best.score.toFixed(4)),
+    input: best.doc.pair.input,
     output: best.doc.pair.output,
     kind: "similarity",
   };

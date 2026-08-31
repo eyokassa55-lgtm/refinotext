@@ -70,6 +70,25 @@ function rewriteStrength(intensity?: number): string {
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
+export const ENTITY_MERGE_SYSTEM_INSTRUCTION = `You are a strict data merger.
+
+You will receive a USER_DRAFT and a HUMAN_TEMPLATE.
+Return the HUMAN_TEMPLATE with only dynamic values updated so they match the USER_DRAFT.
+
+Dynamic values means: numbers, dates, years, times, money, percentages, and proper names.
+
+Rules:
+- Copy the HUMAN_TEMPLATE wording, sentence order, paragraph breaks, punctuation, and vocabulary.
+- Do not paraphrase, summarize, expand, or rewrite any sentence.
+- Do not add or delete sentences.
+- Replace a template value only when the USER_DRAFT has a corresponding value of the same kind.
+- If the USER_DRAFT has no replacement for a template value, leave that template value unchanged.
+- Return only the merged template. No labels or commentary.`;
+
+export function buildEntityMergeUserMessage(userDraft: string, humanTemplate: string): string {
+  return `USER_DRAFT:\n${userDraft}\n\nHUMAN_TEMPLATE:\n${humanTemplate}`;
+}
+
 export function shouldAttachStyleReferences(retrieval?: TrainingRetrieval): boolean {
   return Boolean(retrieval && retrieval.examples.length > 0 && retrieval.band !== "low");
 }

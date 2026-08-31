@@ -8,18 +8,23 @@ import {
   isVertexConfigured,
 } from "@/lib/gemini";
 import {
+  ENTITY_MERGE_SYSTEM_INSTRUCTION,
   buildEditorSystemInstruction,
+  buildEntityMergeUserMessage,
   buildLengthRepairInstruction,
   buildRepairSystemInstruction,
   buildStrongerRewriteInstruction,
   buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
+  assessMergeQuality,
   assessRewriteQuality,
+  entitiesNeedMerge,
   isBlockingQualityFailure,
   lengthRatio,
   missingFactsForRetry,
   phraseCopyRatio,
+  tryDeterministicEntityMerge,
   type QualityContext,
 } from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
@@ -39,7 +44,11 @@ export type HumanizeRequest = {
   intensity?: number;
 };
 
-export type HumanizeSource = "EXACT_TRAINING_MATCH" | "DATABASE_SIMILARITY_MATCH" | "FINE_TUNED_MODEL";
+export type HumanizeSource =
+  | "EXACT_TRAINING_MATCH"
+  | "DATABASE_SIMILARITY_MATCH"
+  | "DATABASE_ENTITY_MERGE"
+  | "FINE_TUNED_MODEL";
 
 export type HumanizeRetrievalMatch = {
   index: number;
@@ -79,6 +88,15 @@ function generationOptions(request: HumanizeRequest, tuned: boolean, extraTemper
     temperature: Math.min(0.72, temperature + extraTemperature),
     topP: tuned ? 0.9 : 0.95,
     maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * (tuned ? 1.55 : 2.2)) + (tuned ? 120 : 160))),
+  };
+}
+
+function mergeGenerationOptions(template: string) {
+  const words = countWords(template);
+  return {
+    temperature: 0,
+    topP: 0.1,
+    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 1.4) + 80)),
   };
 }
 
@@ -122,6 +140,17 @@ async function rewriteWithModel(
       : {}),
     ...generationOptions(request, options.tuned, options.extraTemperature),
   });
+}
+
+async function mergeEntitiesWithModel(userDraft: string, humanTemplate: string): Promise<string> {
+  return generateText(buildEntityMergeUserMessage(userDraft, humanTemplate), {
+    systemInstruction: ENTITY_MERGE_SYSTEM_INSTRUCTION,
+    ...mergeGenerationOptions(humanTemplate),
+  });
+}
+
+function modelAvailable(): boolean {
+  return hasVertexEndpointEnv() || isVertexConfigured() || isBaseGeminiFallbackEnabled();
 }
 
 function scoreRewrite(input: string, candidate: string, context?: QualityContext): number {
@@ -187,7 +216,16 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   const databaseHit = findDatabaseMatch(request.text);
-  if (databaseHit) {
+  const databaseRetrieval = databaseHit
+    ? {
+        band: "high" as const,
+        matches: [{ index: databaseHit.index, score: databaseHit.score }],
+      }
+    : null;
+  const needsEntityMerge =
+    databaseHit?.kind === "similarity" && entitiesNeedMerge(request.text, databaseHit.input);
+
+  if (databaseHit && !needsEntityMerge) {
     console.info("[humanize] [DATABASE_EXACT_MATCH]", {
       row: databaseHit.index,
       kind: databaseHit.kind,
@@ -197,11 +235,69 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     return {
       text: databaseHit.output,
       source: databaseHit.kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH",
-      retrieval: {
-        band: "high",
-        matches: [{ index: databaseHit.index, score: databaseHit.score }],
-      },
+      retrieval: databaseRetrieval,
     };
+  }
+
+  if (databaseHit && needsEntityMerge) {
+    const deterministic = tryDeterministicEntityMerge(
+      request.text,
+      databaseHit.input,
+      databaseHit.output,
+    );
+    if (deterministic) {
+      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
+        row: databaseHit.index,
+        score: databaseHit.score,
+        rows: getTrainingRowCount(),
+        mode: "deterministic",
+      });
+      return {
+        text: deterministic,
+        source: "DATABASE_ENTITY_MERGE",
+        retrieval: databaseRetrieval,
+      };
+    }
+
+    if (!modelAvailable()) {
+      console.info("[humanize] [DATABASE_EXACT_MATCH]", {
+        row: databaseHit.index,
+        kind: databaseHit.kind,
+        score: databaseHit.score,
+        rows: getTrainingRowCount(),
+        merge: "skipped_no_model",
+      });
+      return {
+        text: databaseHit.output,
+        source: "DATABASE_SIMILARITY_MATCH",
+        retrieval: databaseRetrieval,
+      };
+    }
+
+    try {
+      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
+        row: databaseHit.index,
+        score: databaseHit.score,
+        rows: getTrainingRowCount(),
+        mode: "llm",
+      });
+      const merged = await mergeEntitiesWithModel(request.text, databaseHit.output);
+      const mergeQuality = assessMergeQuality(request.text, databaseHit.output, merged);
+      if (mergeQuality.ok) {
+        return {
+          text: mergeQuality.output,
+          source: "DATABASE_ENTITY_MERGE",
+          retrieval: databaseRetrieval,
+        };
+      }
+      console.info("[humanize] entity merge quality failed; rewriting", {
+        codes: mergeQuality.issues.map((issue) => issue.code),
+      });
+    } catch (error) {
+      console.error("[humanize] entity merge failed; rewriting", {
+        code: error instanceof GeminiError ? error.code : "MERGE_FAILED",
+      });
+    }
   }
 
   const retrieval = retrieveTrainingExamples(request.text);

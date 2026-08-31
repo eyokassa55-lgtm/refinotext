@@ -12,19 +12,24 @@ config();
 
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
+  ENTITY_MERGE_SYSTEM_INSTRUCTION,
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildEditorSystemInstruction,
+  buildEntityMergeUserMessage,
   buildRepairSystemInstruction,
   buildStyleReferenceBlock,
   buildTunedSystemInstruction,
 } from "../src/lib/humanize-prompt";
 import {
+  assessMergeQuality,
   assessRewriteQuality,
+  entitiesNeedMerge,
   extractNumbers,
   extractProperNames,
   lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
+  tryDeterministicEntityMerge,
 } from "../src/lib/humanize-quality";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
 import type { TrainingRetrieval } from "../src/lib/training-retrieval";
@@ -318,6 +323,17 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/detector|gptzero|turnitin|720/i.test(tunedCue),
   );
   assert("does not wrap user drafts with extra prefixes", !tunedCue.includes("<<<USER_TEXT>>>"));
+  assert(
+    "entity merge prompt forbids paraphrasing",
+    /do not paraphrase/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION) &&
+      /do not add or delete sentences/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION),
+  );
+  assert(
+    "entity merge prompt does not mention detectors",
+    !/detector|gptzero|turnitin|undetectable|bypass/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION),
+  );
+  const mergeUser = buildEntityMergeUserMessage("Draft A with 2026.", "Template B from 2019.");
+  assert("entity merge user message includes both texts", mergeUser.includes("USER_DRAFT") && mergeUser.includes("HUMAN_TEMPLATE"));
   const preserved = preserveSourceText("\uFEFFLine one.\r\n\r\nLine two.  ");
   assert("keeps paragraph breaks from the user draft", preserved === "Line one.\n\nLine two.");
   const repaired = buildRepairSystemInstruction({ text: source }, ["4,812"]);
@@ -488,6 +504,72 @@ Rainforests also illustrate a much broader set of global development debates. It
     leakedFacts.issues.some((issue) => issue.code === "RETRIEVED_FACTS"),
   );
 
+  console.log("\n3f. Entity merge on high-confidence near-duplicates");
+  const { getTrainingPairs } = await import("../src/lib/training-lookup");
+  const { toApiSource } = await import("../src/lib/humanize-engine");
+  const matchedAi =
+    "In 2019, Dr. Elena Voss measured 12% growth across four Milwaukee clinics after the April review of Harborline Analytics. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
+  const userDraft =
+    "In 2024, Dr. Priya Nandakumar measured 18% growth across four Milwaukee clinics after the April review of Harborline Analytics. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
+  const template =
+    "Elena Voss found 12% growth in 2019 at four Milwaukee clinics once Harborline Analytics finished the April review. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
+  const goodMerge =
+    "Priya Nandakumar found 18% growth in 2024 at four Milwaukee clinics once Harborline Analytics finished the April review. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
+  const paraphrased =
+    "A later write-up said Priya Nandakumar saw stronger 18 percent results during 2024 across the same clinics and that budgets should move immediately.";
+  assert("detects number and name drift against matched ai_text", entitiesNeedMerge(userDraft, matchedAi));
+  assert("same entities do not request a merge", !entitiesNeedMerge(matchedAi, matchedAi));
+  const mergeOk = assessMergeQuality(userDraft, template, goodMerge);
+  assert("accepts a template that only swapped dates names and numbers", mergeOk.ok, mergeOk.issues.map((issue) => issue.code).join(","));
+  const yearOnlyAi =
+    "In 2019, Harborline Analytics counted commuters after the April review in Milwaukee clinics.";
+  const yearOnlyUser =
+    "In 2024, Harborline Analytics counted commuters after the April review in Milwaukee clinics.";
+  const yearOnlyTemplate =
+    "Harborline Analytics counted commuters in 2019 after the April review in Milwaukee clinics. The board treated that snapshot as a one-year look, not a forecast, and waited for the next April review before changing budgets at those Milwaukee clinics.";
+  const deterministic = tryDeterministicEntityMerge(yearOnlyUser, yearOnlyAi, yearOnlyTemplate);
+  assert(
+    "deterministically swaps a 1:1 year into the stored template",
+    Boolean(deterministic) && deterministic!.includes("2024") && !deterministic!.includes("2019") && deterministic!.includes("Harborline Analytics"),
+  );
+  const mergeDrift = assessMergeQuality(userDraft, template, paraphrased);
+  assert(
+    "rejects a paraphrased template",
+    !mergeDrift.ok && mergeDrift.issues.some((issue) => issue.code === "TEMPLATE_DRIFT"),
+  );
+  assert("entity merge API source stays database", toApiSource("DATABASE_ENTITY_MERGE") === "database");
+  assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+
+  function swapFirstYear(text: string): { next: string; from: string; to: string } | null {
+    const match = text.match(/\b(?:19|20)\d{2}\b/);
+    if (!match) return null;
+    const from = match[0];
+    const year = Number(from);
+    const to = String(year >= 2020 ? year - 7 : year + 7);
+    if (text.includes(to)) return null;
+    return { next: text.replace(from, to), from, to };
+  }
+
+  let yearSwap: { input: string; output: string; next: string; from: string; to: string } | null = null;
+  for (const pair of getTrainingPairs()) {
+    const swapped = swapFirstYear(pair.input);
+    if (!swapped) continue;
+    const hit = findDatabaseMatch(swapped.next);
+    if (hit && hit.kind === "similarity" && entitiesNeedMerge(swapped.next, hit.input)) {
+      yearSwap = { input: pair.input, output: pair.output, ...swapped };
+      if (hit.output.includes(swapped.from)) break;
+    }
+  }
+  assert(
+    "a one-year edit of a stored ai_text still hits the 0.85 database search",
+    Boolean(yearSwap),
+    yearSwap ? `from=${yearSwap.from} to=${yearSwap.to}` : "no year-swap near-duplicate found",
+  );
+  assert(
+    "climate and harborline drafts are not entity-merge skeletons",
+    findDatabaseMatch(climateCase.text) === null && findDatabaseMatch(differentCase.text) === null,
+  );
+
   console.log("\n3c. Tuned endpoint resource handling");
   const exact =
     "projects/demo-project/locations/us-central1/endpoints/123456789012345";
@@ -561,6 +643,51 @@ async function runLiveTests() {
       const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
       assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
     }
+  }
+
+  const { getTrainingPairs } = await import("../src/lib/training-lookup");
+  const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
+  function swapFirstYear(text: string): { next: string; from: string; to: string } | null {
+    const match = text.match(/\b(?:19|20)\d{2}\b/);
+    if (!match) return null;
+    const from = match[0];
+    const year = Number(from);
+    const to = String(year >= 2020 ? year - 7 : year + 7);
+    if (text.includes(to)) return null;
+    return { next: text.replace(from, to), from, to };
+  }
+  let liveSwap: { next: string; from: string; to: string; output: string } | null = null;
+  for (const pair of getTrainingPairs()) {
+    const swapped = swapFirstYear(pair.input);
+    if (!swapped) continue;
+    const hit = findDatabaseMatch(swapped.next);
+    if (hit && hit.kind === "similarity" && entitiesNeedMerge(swapped.next, hit.input)) {
+      liveSwap = { ...swapped, output: hit.output };
+      if (hit.output.includes(swapped.from)) break;
+    }
+  }
+  if (liveSwap) {
+    try {
+      const started = Date.now();
+      const result = await runHumanization({ text: liveSwap.next, intensity: 75 });
+      const ms = Date.now() - started;
+      const copy = phraseCopyRatio(liveSwap.output, result.text, 4);
+      const keptYear = result.text.includes(liveSwap.to);
+      const mergeOk =
+        result.source === "DATABASE_ENTITY_MERGE" && keptYear && copy >= 0.55;
+      const rewriteOk =
+        result.source === "FINE_TUNED_MODEL" && keptYear && result.text !== liveSwap.output;
+      assert(
+        "near-duplicate year swap merges or rewrites with the new year",
+        mergeOk || rewriteOk,
+        `source=${result.source} ms=${ms} copy=${copy.toFixed(2)} year=${keptYear}`,
+      );
+    } catch (error) {
+      const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
+      assert("near-duplicate year swap merges or rewrites with the new year", false, `failed [${code}]`);
+    }
+  } else {
+    console.log("  SKIP  no year-swap near-duplicate available for live merge");
   }
 
   let usedBaseGemini = false;
