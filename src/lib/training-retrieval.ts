@@ -1,7 +1,13 @@
 import "server-only";
 
 import { findExactTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
-import { DATABASE_MATCH_THRESHOLD } from "@/lib/training-schema";
+
+/**
+ * Offline TF-IDF index. Humanize inference no longer retrieves or returns
+ * nearest neighbors; new drafts go to the tuned Vertex endpoint.
+ */
+
+export const DATABASE_MATCH_THRESHOLD = 0.85;
 
 export const RETRIEVAL_METHOD =
   "cached inverted TF-IDF with dataset co-occurrence expansion, character n-grams, and structure affinity";

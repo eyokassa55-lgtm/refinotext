@@ -1,59 +1,9 @@
-import type { SimilarityBand, TrainingRetrieval } from "@/lib/training-retrieval";
-
 export type HumanizePromptRequest = {
   text: string;
   tone?: string;
   readability?: string;
   intensity?: number;
 };
-
-const EXAMPLE_EXCERPT_CHARS = 2400;
-
-function excerptForPrompt(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  const slice = text.slice(0, maxChars);
-  const para = slice.lastIndexOf("\n\n");
-  const sentence = slice.lastIndexOf(". ");
-  const cut =
-    para >= maxChars * 0.45 ? para : sentence >= maxChars * 0.4 ? sentence + 1 : maxChars;
-  return `${slice.slice(0, cut).trim()}\n[excerpt]`;
-}
-
-function bandGuidance(band: SimilarityBand): string {
-  if (band === "high") {
-    return "These training pairs are close in topic. Copy only their rewrite STYLE (rhythm, sentence variety, length). Do not copy their facts, names, numbers, examples, or conclusions.";
-  }
-  if (band === "medium") {
-    return "These training pairs are related enough to show rewrite STYLE. Keep the user's topic. Do not import facts or examples from the pairs.";
-  }
-  return "These training pairs are the closest available STYLE references, but they are not the same topic. Do not borrow their subject, facts, names, numbers, or examples.";
-}
-
-export function buildStyleReferenceBlock(retrieval: TrainingRetrieval): string {
-  const lines = [
-    "Use ONLY the following stored training pairs as writing-style references.",
-    "They are not the answer. Do not return a stored human_text. Do not mix their facts into the user's draft.",
-    bandGuidance(retrieval.band),
-  ];
-
-  retrieval.examples.forEach((example, offset) => {
-    lines.push(
-      "",
-      `STYLE REFERENCE ${offset + 1} (row ${example.index}, similarity ${example.score.toFixed(3)}, band ${retrieval.band})`,
-      "Draft:",
-      excerptForPrompt(example.input, EXAMPLE_EXCERPT_CHARS),
-      "Rewrite:",
-      excerptForPrompt(example.output, EXAMPLE_EXCERPT_CHARS),
-    );
-  });
-
-  return lines.join("\n");
-}
-
-function formatTone(tone?: string): string {
-  if (!tone || tone === "standard") return "the original tone";
-  return tone.replace(/[-_]/g, " ");
-}
 
 function rewriteStrength(intensity?: number): string {
   const value = intensity ?? 75;
@@ -62,65 +12,49 @@ function rewriteStrength(intensity?: number): string {
   return "stronger rewrite — more natural rhythm, still the same meaning";
 }
 
+function tunedToneGuidance(tone?: string): string {
+  switch (tone) {
+    case "academic":
+      return "Write in an academic register: precise, formal, and suitable for school or scholarly writing. Keep the same claims.";
+    case "conversational":
+      return "Write in a conversational register: natural and approachable, still accurate.";
+    case "executive":
+      return "Write in an executive register: concise, direct, and professional.";
+    default:
+      return "Keep the original tone. Do not flatten the voice.";
+  }
+}
+
+function formatTone(tone?: string): string {
+  if (!tone || tone === "standard") return "the original tone";
+  if (tone === "academic") return "an academic tone";
+  if (tone === "conversational") return "a conversational tone";
+  if (tone === "executive") return "an executive tone";
+  return tone.replace(/[-_]/g, " ");
+}
+
 /**
  * Base system line from the Vertex chat conversion of the ai_text → human_text
- * pairs. Endpoint weights hold the full dataset. Inference sends at most three
- * retrieved pairs as style references, never the whole JSONL.
+ * pairs. Endpoint weights hold the dataset. Inference does not send training rows.
  */
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
-export const ENTITY_MERGE_SYSTEM_INSTRUCTION = `You are a strict data merger.
-
-You will receive a USER_DRAFT and a HUMAN_TEMPLATE.
-Return the HUMAN_TEMPLATE with only dynamic values updated so they match the USER_DRAFT.
-
-Dynamic values means: numbers, dates, years, times, money, percentages, and proper names.
-
-Rules:
-- Copy the HUMAN_TEMPLATE wording, sentence order, paragraph breaks, punctuation, and vocabulary.
-- Do not paraphrase, summarize, expand, or rewrite any sentence.
-- Do not add or delete sentences.
-- Replace a template value only when the USER_DRAFT has a corresponding value of the same kind.
-- If the USER_DRAFT has no replacement for a template value, leave that template value unchanged.
-- Return only the merged template. No labels or commentary.`;
-
-export function buildEntityMergeUserMessage(userDraft: string, humanTemplate: string): string {
-  return `USER_DRAFT:\n${userDraft}\n\nHUMAN_TEMPLATE:\n${humanTemplate}`;
-}
-
-export function shouldAttachStyleReferences(retrieval?: TrainingRetrieval): boolean {
-  return Boolean(retrieval && retrieval.examples.length > 0 && retrieval.band !== "low");
-}
-
-export function buildTunedSystemInstruction(
-  request?: HumanizePromptRequest,
-  retrieval?: TrainingRetrieval,
-): string {
+export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
   const intensity = request?.intensity ?? 75;
-  const useStyleRefs = shouldAttachStyleReferences(retrieval);
   const strength =
     intensity <= 33
       ? "Keep most of the original rhythm. Smooth stiff phrasing only."
-      : useStyleRefs
-        ? "Rewrite with the sentence rhythm, wording, and paragraph flow shown by the retrieved training rewrites. Do not copy the draft sentence by sentence, and do not switch into a generic template voice."
-        : "Rewrite naturally with mixed sentence length. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
+      : "Rewrite naturally with mixed sentence length. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
 
-  const parts = [
+  return [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
     strength,
+    tunedToneGuidance(request?.tone),
     "The user message is the only source of meaning. Keep that topic, claims, terminology, names, numbers, dates, quotations, and intent.",
     "Keep about the same length and the same paragraph breaks. Do not summarize, pad, invent examples, add arguments, or answer the topic.",
-    useStyleRefs
-      ? "Vary sentence openings and length according to the retrieved rewrite patterns. Return only one rewritten draft."
-      : "Vary sentence openings and length. Do not add phrases such as \"a wide range of\" or extra background. Return only one rewritten draft.",
-  ];
-
-  if (useStyleRefs && retrieval) {
-    parts.push("", buildStyleReferenceBlock(retrieval));
-  }
-
-  return parts.join("\n");
+    "Vary sentence openings and length. Do not add phrases such as \"a wide range of\" or extra background. Return only one rewritten draft.",
+  ].join("\n");
 }
 
 /**
@@ -172,15 +106,9 @@ Rewrite strength: ${strength}
 Return only the rewritten source text. No labels, no markdown fences, no preface such as "Here is your rewritten text".`;
 }
 
-function repairSuffix(retrieval?: TrainingRetrieval): string {
-  if (!shouldAttachStyleReferences(retrieval) || !retrieval) return "";
-  return `\n${buildStyleReferenceBlock(retrieval)}`;
-}
-
 export function buildRepairSystemInstruction(
   request: HumanizePromptRequest,
   missingFacts: string[],
-  retrieval?: TrainingRetrieval,
 ): string {
   const facts =
     missingFacts.length > 0
@@ -188,16 +116,16 @@ export function buildRepairSystemInstruction(
       : "Restore any names, numbers, dates, and quotations from the source.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-Rewrite with the retrieved training style: natural rhythm, varied sentences, same meaning.
-Keep the same length and paragraph breaks. Do not invent or drop facts. Do not use retrieved example facts.
+${tunedToneGuidance(request.tone)}
+Rewrite with natural rhythm and varied sentences. Keep the same meaning.
+Keep the same length and paragraph breaks. Do not invent or drop facts.
 ${facts}
-Return only one rewritten draft.${repairSuffix(retrieval)}`;
+Return only one rewritten draft.`;
 }
 
 export function buildStrongerRewriteInstruction(
   request: HumanizePromptRequest,
   missingFacts: string[],
-  retrieval?: TrainingRetrieval,
 ): string {
   const facts =
     missingFacts.length > 0
@@ -205,16 +133,16 @@ export function buildStrongerRewriteInstruction(
       : "Keep names, numbers, dates, quotations, and terminology from the draft.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-The last version copied the draft or used a generic template. Rewrite it using only the retrieved training pairs as style.
-Change sentence openings and rhythm. Keep the same length, paragraphs, tone, and claims. Do not expand. Do not copy retrieved human_text.
+${tunedToneGuidance(request.tone)}
+The last version copied the draft or used a generic template. Rewrite it.
+Change sentence openings and rhythm. Keep the same length, paragraphs, and claims. Do not expand.
 ${facts}
-Return only one rewritten draft.${repairSuffix(retrieval)}`;
+Return only one rewritten draft.`;
 }
 
 export function buildLengthRepairInstruction(
   request: HumanizePromptRequest,
   missingFacts: string[],
-  retrieval?: TrainingRetrieval,
 ): string {
   const facts =
     missingFacts.length > 0
@@ -222,8 +150,9 @@ export function buildLengthRepairInstruction(
       : "Keep names, numbers, dates, quotations, and terminology from the draft.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-The last version was too long. Write a version close to the source length, using retrieved training rewrites only as style.
-Do not pad, do not summarize, and do not add examples or new arguments from the style references.
+${tunedToneGuidance(request.tone)}
+The last version was too long. Write a version close to the source length.
+Do not pad, do not summarize, and do not add examples or new arguments.
 ${facts}
-Return only one rewritten draft.${repairSuffix(retrieval)}`;
+Return only one rewritten draft.`;
 }

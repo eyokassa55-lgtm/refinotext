@@ -8,32 +8,20 @@ import {
   isVertexConfigured,
 } from "@/lib/gemini";
 import {
-  ENTITY_MERGE_SYSTEM_INSTRUCTION,
   buildEditorSystemInstruction,
-  buildEntityMergeUserMessage,
   buildLengthRepairInstruction,
   buildRepairSystemInstruction,
   buildStrongerRewriteInstruction,
   buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
-  assessMergeQuality,
   assessRewriteQuality,
-  entitiesNeedMerge,
   isBlockingQualityFailure,
   lengthRatio,
   missingFactsForRetry,
   phraseCopyRatio,
-  tryDeterministicEntityMerge,
-  type QualityContext,
 } from "@/lib/humanize-quality";
-import { getTrainingRowCount } from "@/lib/training-lookup";
-import {
-  findDatabaseMatch,
-  retrieveTrainingExamples,
-  type SimilarityBand,
-  type TrainingRetrieval,
-} from "@/lib/training-retrieval";
+import { findExactTrainingMatch, getTrainingRowCount } from "@/lib/training-lookup";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -44,11 +32,7 @@ export type HumanizeRequest = {
   intensity?: number;
 };
 
-export type HumanizeSource =
-  | "EXACT_TRAINING_MATCH"
-  | "DATABASE_SIMILARITY_MATCH"
-  | "DATABASE_ENTITY_MERGE"
-  | "FINE_TUNED_MODEL";
+export type HumanizeSource = "EXACT_TRAINING_MATCH" | "FINE_TUNED_MODEL";
 
 export type HumanizeRetrievalMatch = {
   index: number;
@@ -56,7 +40,7 @@ export type HumanizeRetrievalMatch = {
 };
 
 export type HumanizeRetrievalSummary = {
-  band: SimilarityBand;
+  band: "exact";
   matches: HumanizeRetrievalMatch[];
 };
 
@@ -91,15 +75,6 @@ function generationOptions(request: HumanizeRequest, tuned: boolean, extraTemper
   };
 }
 
-function mergeGenerationOptions(template: string) {
-  const words = countWords(template);
-  return {
-    temperature: 0,
-    topP: 0.1,
-    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 1.4) + 80)),
-  };
-}
-
 function wrapAsError(error: unknown): HumanizationFailedError {
   if (error instanceof GeminiError) {
     return new HumanizationFailedError(error.message, error.code, error.status);
@@ -108,26 +83,6 @@ function wrapAsError(error: unknown): HumanizationFailedError {
   return new HumanizationFailedError(
     "Humanization failed. Your credits were refunded.",
   );
-}
-
-function qualityContext(retrieval: TrainingRetrieval | null): QualityContext | undefined {
-  if (!retrieval || retrieval.examples.length === 0) return undefined;
-  return {
-    retrievedPairs: retrieval.examples.map((example) => ({
-      input: example.input,
-      output: example.output,
-    })),
-  };
-}
-
-function summarizeRetrieval(retrieval: TrainingRetrieval): HumanizeRetrievalSummary {
-  return {
-    band: retrieval.band,
-    matches: retrieval.examples.map((example) => ({
-      index: example.index,
-      score: example.score,
-    })),
-  };
 }
 
 async function rewriteWithModel(
@@ -142,19 +97,8 @@ async function rewriteWithModel(
   });
 }
 
-async function mergeEntitiesWithModel(userDraft: string, humanTemplate: string): Promise<string> {
-  return generateText(buildEntityMergeUserMessage(userDraft, humanTemplate), {
-    systemInstruction: ENTITY_MERGE_SYSTEM_INSTRUCTION,
-    ...mergeGenerationOptions(humanTemplate),
-  });
-}
-
-function modelAvailable(): boolean {
-  return hasVertexEndpointEnv() || isVertexConfigured() || isBaseGeminiFallbackEnabled();
-}
-
-function scoreRewrite(input: string, candidate: string, context?: QualityContext): number {
-  const quality = assessRewriteQuality(input, candidate, context);
+function scoreRewrite(input: string, candidate: string): number {
+  const quality = assessRewriteQuality(input, candidate);
   if (!quality.output || isBlockingQualityFailure(quality)) return -100;
 
   let score = 10;
@@ -172,17 +116,12 @@ function scoreRewrite(input: string, candidate: string, context?: QualityContext
   return score;
 }
 
-function pickBetterRewrite(
-  input: string,
-  first: string,
-  second: string,
-  context?: QualityContext,
-): string {
-  return scoreRewrite(input, second, context) >= scoreRewrite(input, first, context) ? second : first;
+function pickBetterRewrite(input: string, first: string, second: string): string {
+  return scoreRewrite(input, second) >= scoreRewrite(input, first) ? second : first;
 }
 
-function finalizeOutput(input: string, raw: string, context?: QualityContext): string {
-  const quality = assessRewriteQuality(input, raw, context);
+function finalizeOutput(input: string, raw: string): string {
+  const quality = assessRewriteQuality(input, raw);
   if (quality.ok) return quality.output;
 
   if (isBlockingQualityFailure(quality) || !quality.output) {
@@ -215,113 +154,40 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const databaseHit = findDatabaseMatch(request.text);
-  const databaseRetrieval = databaseHit
-    ? {
-        band: "high" as const,
-        matches: [{ index: databaseHit.index, score: databaseHit.score }],
-      }
-    : null;
-  const needsEntityMerge =
-    databaseHit?.kind === "similarity" && entitiesNeedMerge(request.text, databaseHit.input);
-
-  if (databaseHit && !needsEntityMerge) {
+  const exact = findExactTrainingMatch(request.text);
+  if (exact) {
     console.info("[humanize] [DATABASE_EXACT_MATCH]", {
-      row: databaseHit.index,
-      kind: databaseHit.kind,
-      score: databaseHit.score,
+      row: exact.index,
+      kind: "exact",
+      score: 1,
       rows: getTrainingRowCount(),
     });
     return {
-      text: databaseHit.output,
-      source: databaseHit.kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH",
-      retrieval: databaseRetrieval,
+      text: exact.output,
+      source: "EXACT_TRAINING_MATCH",
+      retrieval: {
+        band: "exact",
+        matches: [{ index: exact.index, score: 1 }],
+      },
     };
   }
-
-  if (databaseHit && needsEntityMerge) {
-    const deterministic = tryDeterministicEntityMerge(
-      request.text,
-      databaseHit.input,
-      databaseHit.output,
-    );
-    if (deterministic) {
-      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
-        row: databaseHit.index,
-        score: databaseHit.score,
-        rows: getTrainingRowCount(),
-        mode: "deterministic",
-      });
-      return {
-        text: deterministic,
-        source: "DATABASE_ENTITY_MERGE",
-        retrieval: databaseRetrieval,
-      };
-    }
-
-    if (!modelAvailable()) {
-      console.info("[humanize] [DATABASE_EXACT_MATCH]", {
-        row: databaseHit.index,
-        kind: databaseHit.kind,
-        score: databaseHit.score,
-        rows: getTrainingRowCount(),
-        merge: "skipped_no_model",
-      });
-      return {
-        text: databaseHit.output,
-        source: "DATABASE_SIMILARITY_MATCH",
-        retrieval: databaseRetrieval,
-      };
-    }
-
-    try {
-      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
-        row: databaseHit.index,
-        score: databaseHit.score,
-        rows: getTrainingRowCount(),
-        mode: "llm",
-      });
-      const merged = await mergeEntitiesWithModel(request.text, databaseHit.output);
-      const mergeQuality = assessMergeQuality(request.text, databaseHit.output, merged);
-      if (mergeQuality.ok) {
-        return {
-          text: mergeQuality.output,
-          source: "DATABASE_ENTITY_MERGE",
-          retrieval: databaseRetrieval,
-        };
-      }
-      console.info("[humanize] entity merge quality failed; rewriting", {
-        codes: mergeQuality.issues.map((issue) => issue.code),
-      });
-    } catch (error) {
-      console.error("[humanize] entity merge failed; rewriting", {
-        code: error instanceof GeminiError ? error.code : "MERGE_FAILED",
-      });
-    }
-  }
-
-  const retrieval = retrieveTrainingExamples(request.text);
-  const context = qualityContext(retrieval);
-  const retrievalSummary = summarizeRetrieval(retrieval);
 
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
       console.info("[humanize] [MODEL_GENERATED]", {
         rows: getTrainingRowCount(),
-        band: retrieval.band,
-        matches: retrievalSummary.matches,
-        sentExamples: retrieval.examples.length,
+        tone: request.tone ?? "standard",
       });
       const first = await rewriteWithModel(request, {
         tuned: true,
-        systemInstruction: buildTunedSystemInstruction(request, retrieval),
+        systemInstruction: buildTunedSystemInstruction(request),
       });
-      const firstQuality = assessRewriteQuality(request.text, first, context);
+      const firstQuality = assessRewriteQuality(request.text, first);
       if (firstQuality.ok) {
         return {
           text: firstQuality.output,
           source: "FINE_TUNED_MODEL",
-          retrieval: retrievalSummary,
+          retrieval: null,
         };
       }
 
@@ -341,21 +207,20 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
         tuned: true,
         extraTemperature: copiedTooClosely ? 0.08 : 0,
         systemInstruction: expandedTooMuch
-          ? buildLengthRepairInstruction(request, missing, retrieval)
+          ? buildLengthRepairInstruction(request, missing)
           : copiedTooClosely
-            ? buildStrongerRewriteInstruction(request, missing, retrieval)
-            : buildRepairSystemInstruction(request, missing, retrieval),
+            ? buildStrongerRewriteInstruction(request, missing)
+            : buildRepairSystemInstruction(request, missing),
       });
       const chosen = pickBetterRewrite(
         request.text,
         firstQuality.output || first,
         repaired,
-        context,
       );
       return {
-        text: finalizeOutput(request.text, chosen, context),
+        text: finalizeOutput(request.text, chosen),
         source: "FINE_TUNED_MODEL",
-        retrieval: retrievalSummary,
+        retrieval: null,
       };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
@@ -370,9 +235,9 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
         systemInstruction: buildEditorSystemInstruction(request),
       });
       return {
-        text: finalizeOutput(request.text, text, context),
+        text: finalizeOutput(request.text, text),
         source: "FINE_TUNED_MODEL",
-        retrieval: retrievalSummary,
+        retrieval: null,
       };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;

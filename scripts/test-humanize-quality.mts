@@ -12,27 +12,20 @@ config();
 
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
-  ENTITY_MERGE_SYSTEM_INSTRUCTION,
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildEditorSystemInstruction,
-  buildEntityMergeUserMessage,
   buildRepairSystemInstruction,
-  buildStyleReferenceBlock,
   buildTunedSystemInstruction,
 } from "../src/lib/humanize-prompt";
 import {
-  assessMergeQuality,
   assessRewriteQuality,
-  entitiesNeedMerge,
   extractNumbers,
   extractProperNames,
   lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
-  tryDeterministicEntityMerge,
 } from "../src/lib/humanize-quality";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
-import type { TrainingRetrieval } from "../src/lib/training-retrieval";
 
 let passed = 0;
 let failed = 0;
@@ -123,7 +116,7 @@ Schools can teach students why forests matter. Families can reduce waste. Govern
 const DATASET_CASES: { id: "B" | "C" | "D" | "E"; name: string; text: string }[] = [
   {
     id: "B",
-    name: "same-topic climate",
+    name: "new essay",
     text: `Rising temperatures are already changing how cities plan for heat waves and flooding. Burning coal, oil, and gas still puts greenhouse gases into the air, and those gases hold heat around the planet.
 
 Coastal towns see higher tides more often. Farmers notice longer dry spells, then sudden storms that wash soil away. Coral reefs bleach when the water stays too warm for too many weeks.
@@ -132,34 +125,23 @@ Cutting emissions, protecting forests, and using cleaner energy will not reverse
   },
   {
     id: "C",
-    name: "different-topic harborline",
-    text: SAMPLES.find((sample) => sample.name === "essay")!.text,
+    name: "new email",
+    text: SAMPLES.find((sample) => sample.name === "email")!.text,
   },
   {
     id: "D",
-    name: "long input",
-    text: SAMPLES.find((sample) => sample.name === "long")!.text,
+    name: "new business",
+    text: SAMPLES.find((sample) => sample.name === "business")!.text,
   },
   {
     id: "E",
-    name: "names-and-numbers",
-    text: SAMPLES.find((sample) => sample.name === "numbers-names")!.text,
+    name: "different-topic harborline",
+    text: SAMPLES.find((sample) => sample.name === "essay")!.text,
   },
 ];
 
-function meaningPreservation(input: string, output: string, retrieval?: TrainingRetrieval | null) {
-  const quality = assessRewriteQuality(
-    input,
-    output,
-    retrieval
-      ? {
-          retrievedPairs: retrieval.examples.map((example) => ({
-            input: example.input,
-            output: example.output,
-          })),
-        }
-      : undefined,
-  );
+function meaningPreservation(input: string, output: string) {
+  const quality = assessRewriteQuality(input, output);
   const meaningCodes = quality.issues
     .map((issue) => issue.code)
     .filter((code) =>
@@ -182,9 +164,8 @@ function printCaseReport(
   label: string,
   input: string,
   result: HumanizeResult,
-  retrieval: TrainingRetrieval | null,
 ) {
-  const meaning = meaningPreservation(input, result.text, retrieval);
+  const meaning = meaningPreservation(input, result.text);
   const matches =
     (result.retrieval?.matches ?? [])
       .map((match) => `#${match.index}=${match.score}`)
@@ -323,17 +304,16 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/detector|gptzero|turnitin|720/i.test(tunedCue),
   );
   assert("does not wrap user drafts with extra prefixes", !tunedCue.includes("<<<USER_TEXT>>>"));
+  assert("asks for an academic register when Academic is selected", /academic register/i.test(tunedCue));
   assert(
-    "entity merge prompt forbids paraphrasing",
-    /do not paraphrase/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION) &&
-      /do not add or delete sentences/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION),
+    "asks for a conversational register when Conversational is selected",
+    /conversational register/i.test(buildTunedSystemInstruction({ text: source, tone: "conversational", intensity: 75 })),
   );
   assert(
-    "entity merge prompt does not mention detectors",
-    !/detector|gptzero|turnitin|undetectable|bypass/i.test(ENTITY_MERGE_SYSTEM_INSTRUCTION),
+    "asks for an executive register when Executive is selected",
+    /executive register/i.test(buildTunedSystemInstruction({ text: source, tone: "executive", intensity: 75 })),
   );
-  const mergeUser = buildEntityMergeUserMessage("Draft A with 2026.", "Template B from 2019.");
-  assert("entity merge user message includes both texts", mergeUser.includes("USER_DRAFT") && mergeUser.includes("HUMAN_TEMPLATE"));
+  assert("does not attach training examples to the tuned prompt", !tunedCue.includes("STYLE REFERENCE"));
   const preserved = preserveSourceText("\uFEFFLine one.\r\n\r\nLine two.  ");
   assert("keeps paragraph breaks from the user draft", preserved === "Line one.\n\nLine two.");
   const repaired = buildRepairSystemInstruction({ text: source }, ["4,812"]);
@@ -380,106 +360,35 @@ Rainforests also illustrate a much broader set of global development debates. It
     exactRun.retrieval?.matches[0]?.index === lookup!.index && exactRun.retrieval?.matches[0]?.score === 1,
   );
   assert("does not match a new unseen draft", findExactTrainingMatch(SAMPLES[0]!.text) === null);
-  printCaseReport("A exact training input", firstPair.input, exactRun, null);
+  printCaseReport("A exact training input", firstPair.input, exactRun);
 
-  console.log("\n3e. Training retrieval index");
-  const {
-    RETRIEVAL_METHOD,
-    SIMILARITY_METHOD,
-    findDatabaseMatch,
-    getRetrievalIndexStats,
-    retrieveTrainingExamples,
-  } = await import("../src/lib/training-retrieval");
-  const { DATABASE_MATCH_THRESHOLD } = await import("../src/lib/training-schema");
-  const retrievalStats = getRetrievalIndexStats();
-  assert("indexes every training row", retrievalStats.docs === stats.rows, `docs=${retrievalStats.docs}`);
-  assert("builds a cached term index", retrievalStats.terms > 100, `terms=${retrievalStats.terms}`);
-  console.log(`  retrieval=${RETRIEVAL_METHOD}`);
-  console.log(`  similarity=${SIMILARITY_METHOD}`);
-
-  const selfRetrieve = retrieveTrainingExamples(firstPair.input);
-  assert("returns at most 3 examples", selfRetrieve.examples.length <= 3);
-  assert(
-    "ranks the exact input among the top matches",
-    selfRetrieve.examples.some((example) => example.index === lookup!.index),
-  );
-  assert("does not mutate stored output", selfRetrieve.examples.every((example) => example.output.length > 0));
-
-  const dbExact = findDatabaseMatch(firstPair.input);
-  assert("database match uses the 0.85 threshold constant", DATABASE_MATCH_THRESHOLD === 0.85);
-  assert("exact ai_text is a database hit", dbExact?.kind === "exact" && dbExact.score === 1);
-  assert(
-    "database hit returns stored human_text unchanged",
-    Boolean(dbExact) &&
-      Buffer.from(dbExact!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
-  );
-  const trimmedExact = findDatabaseMatch(`\n${firstPair.input}\n`);
-  assert("trimmed exact paste still hits the dataset", trimmedExact?.kind === "exact");
-  const doubledSpace = findDatabaseMatch(firstPair.input.replace(" is ", "  is "));
-  assert(
-    "tiny spacing change at or above 0.85 returns stored human_text",
-    Boolean(doubledSpace) &&
-      doubledSpace!.score >= DATABASE_MATCH_THRESHOLD &&
-      doubledSpace!.output === firstPair.output,
-    `score=${doubledSpace?.score ?? "none"} kind=${doubledSpace?.kind ?? "none"}`,
-  );
-
-  const climateCase = DATASET_CASES.find((item) => item.id === "B")!;
-  const climateRetrieve = retrieveTrainingExamples(climateCase.text);
-  const climateBlob = climateRetrieve.examples
-    .map((example) => `${example.input}\n${example.output}`)
-    .join("\n")
-    .toLowerCase();
-  assert("climate query stays within 3 examples", climateRetrieve.examples.length <= 3 && climateRetrieve.examples.length >= 1);
-  assert(
-    "climate query retrieves climate-related training pairs",
-    /climate|greenhouse|temperature|warming|carbon|emission|atmosphere/.test(climateBlob),
-    `band=${climateRetrieve.band} scores=${climateRetrieve.examples.map((example) => example.score).join(",")}`,
-  );
-  assert(
-    "same-topic climate similarity is not low",
-    climateRetrieve.band !== "low",
-    `band=${climateRetrieve.band} top=${climateRetrieve.examples[0]?.score}`,
-  );
-  assert(
-    "new climate draft stays below the 0.85 database-return threshold",
-    findDatabaseMatch(climateCase.text) === null,
-  );
-
-  const differentCase = DATASET_CASES.find((item) => item.id === "C")!;
-  const differentRetrieve = retrieveTrainingExamples(differentCase.text);
-  assert("different-topic query still returns closest examples", differentRetrieve.examples.length >= 1);
-  assert(
-    "different-topic score is weaker than same-topic climate",
-    (differentRetrieve.examples[0]?.score ?? 1) < (climateRetrieve.examples[0]?.score ?? 0),
-    `climate=${climateRetrieve.examples[0]?.score} other=${differentRetrieve.examples[0]?.score}`,
-  );
-  assert(
-    "different-topic is not treated as the same subject",
-    differentRetrieve.band === "low" || differentRetrieve.band === "medium",
-    `band=${differentRetrieve.band}`,
-  );
-
-  const styleBlock = buildStyleReferenceBlock(climateRetrieve);
-  assert("style block labels examples as references, not answers", /not the answer/i.test(styleBlock));
-  assert("style block never includes a fourth example", !styleBlock.includes("STYLE REFERENCE 4"));
-  const climatePrompt = buildTunedSystemInstruction({ text: climateCase.text, intensity: 75 }, climateRetrieve);
-  assert("tuned prompt includes retrieved style references", climatePrompt.includes("STYLE REFERENCE 1"));
-  assert("tuned prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(climatePrompt));
-  const lowPrompt = buildTunedSystemInstruction({ text: differentCase.text, intensity: 75 }, differentRetrieve);
-  assert(
-    "low-similarity drafts do not receive unrelated training essays as style",
-    !lowPrompt.includes("STYLE REFERENCE 1"),
-  );
+  console.log("\n3e. New inputs skip dataset return");
+  const { toApiSource } = await import("../src/lib/humanize-engine");
+  const doubledSpace = firstPair.input.replace(" is ", "  is ");
+  assert("tiny spacing change is not an exact training match", findExactTrainingMatch(doubledSpace) === null);
+  assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
+  for (const sample of DATASET_CASES) {
+    assert(
+      `${sample.id} ${sample.name} is not an exact training match`,
+      findExactTrainingMatch(sample.text) === null,
+    );
+  }
+  const newPrompt = buildTunedSystemInstruction({ text: DATASET_CASES[0]!.text, intensity: 75 });
+  assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
+  assert("new-input prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(newPrompt));
+  assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
+  assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
 
   const copiedRetrieved = assessRewriteQuality(
     "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
-    climateRetrieve.examples[0]!.output,
+    "Coral reefs bleached after Dr. Elena Voss recorded a 48.6% rise in hospital visits.",
     {
-      retrievedPairs: climateRetrieve.examples.map((example) => ({
-        input: example.input,
-        output: example.output,
-      })),
+      retrievedPairs: [
+        {
+          input: "Climate change is accelerating.",
+          output: "Coral reefs bleached after Dr. Elena Voss recorded a 48.6% rise in hospital visits.",
+        },
+      ],
     },
   );
   assert(
@@ -502,72 +411,6 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "flags names and numbers copied from retrieved examples",
     leakedFacts.issues.some((issue) => issue.code === "RETRIEVED_FACTS"),
-  );
-
-  console.log("\n3f. Entity merge on high-confidence near-duplicates");
-  const { getTrainingPairs } = await import("../src/lib/training-lookup");
-  const { toApiSource } = await import("../src/lib/humanize-engine");
-  const matchedAi =
-    "In 2019, Dr. Elena Voss measured 12% growth across four Milwaukee clinics after the April review of Harborline Analytics. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
-  const userDraft =
-    "In 2024, Dr. Priya Nandakumar measured 18% growth across four Milwaukee clinics after the April review of Harborline Analytics. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
-  const template =
-    "Elena Voss found 12% growth in 2019 at four Milwaukee clinics once Harborline Analytics finished the April review. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
-  const goodMerge =
-    "Priya Nandakumar found 18% growth in 2024 at four Milwaukee clinics once Harborline Analytics finished the April review. The memo asked the board to treat that number as a one-year snapshot, not a forecast, and to wait for the next April review before changing budgets.";
-  const paraphrased =
-    "A later write-up said Priya Nandakumar saw stronger 18 percent results during 2024 across the same clinics and that budgets should move immediately.";
-  assert("detects number and name drift against matched ai_text", entitiesNeedMerge(userDraft, matchedAi));
-  assert("same entities do not request a merge", !entitiesNeedMerge(matchedAi, matchedAi));
-  const mergeOk = assessMergeQuality(userDraft, template, goodMerge);
-  assert("accepts a template that only swapped dates names and numbers", mergeOk.ok, mergeOk.issues.map((issue) => issue.code).join(","));
-  const yearOnlyAi =
-    "In 2019, Harborline Analytics counted commuters after the April review in Milwaukee clinics.";
-  const yearOnlyUser =
-    "In 2024, Harborline Analytics counted commuters after the April review in Milwaukee clinics.";
-  const yearOnlyTemplate =
-    "Harborline Analytics counted commuters in 2019 after the April review in Milwaukee clinics. The board treated that snapshot as a one-year look, not a forecast, and waited for the next April review before changing budgets at those Milwaukee clinics.";
-  const deterministic = tryDeterministicEntityMerge(yearOnlyUser, yearOnlyAi, yearOnlyTemplate);
-  assert(
-    "deterministically swaps a 1:1 year into the stored template",
-    Boolean(deterministic) && deterministic!.includes("2024") && !deterministic!.includes("2019") && deterministic!.includes("Harborline Analytics"),
-  );
-  const mergeDrift = assessMergeQuality(userDraft, template, paraphrased);
-  assert(
-    "rejects a paraphrased template",
-    !mergeDrift.ok && mergeDrift.issues.some((issue) => issue.code === "TEMPLATE_DRIFT"),
-  );
-  assert("entity merge API source stays database", toApiSource("DATABASE_ENTITY_MERGE") === "database");
-  assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
-
-  function swapFirstYear(text: string): { next: string; from: string; to: string } | null {
-    const match = text.match(/\b(?:19|20)\d{2}\b/);
-    if (!match) return null;
-    const from = match[0];
-    const year = Number(from);
-    const to = String(year >= 2020 ? year - 7 : year + 7);
-    if (text.includes(to)) return null;
-    return { next: text.replace(from, to), from, to };
-  }
-
-  let yearSwap: { input: string; output: string; next: string; from: string; to: string } | null = null;
-  for (const pair of getTrainingPairs()) {
-    const swapped = swapFirstYear(pair.input);
-    if (!swapped) continue;
-    const hit = findDatabaseMatch(swapped.next);
-    if (hit && hit.kind === "similarity" && entitiesNeedMerge(swapped.next, hit.input)) {
-      yearSwap = { input: pair.input, output: pair.output, ...swapped };
-      if (hit.output.includes(swapped.from)) break;
-    }
-  }
-  assert(
-    "a one-year edit of a stored ai_text still hits the 0.85 database search",
-    Boolean(yearSwap),
-    yearSwap ? `from=${yearSwap.from} to=${yearSwap.to}` : "no year-swap near-duplicate found",
-  );
-  assert(
-    "climate and harborline drafts are not entity-merge skeletons",
-    findDatabaseMatch(climateCase.text) === null && findDatabaseMatch(differentCase.text) === null,
   );
 
   console.log("\n3c. Tuned endpoint resource handling");
@@ -596,7 +439,7 @@ async function runLiveTests() {
     requireVertexConfig,
   } = await import("../src/lib/gemini");
   const { runHumanization } = await import("../src/lib/humanize-engine");
-  const { retrieveTrainingExamples } = await import("../src/lib/training-retrieval");
+  const { getTrainingPairs } = await import("../src/lib/training-lookup");
 
   console.log("\n4. Dataset-driven live cases");
 
@@ -608,10 +451,10 @@ async function runLiveTests() {
 
   const vertex = requireVertexConfig();
   console.log(`  Using provider=vertex model=${redactModelName(vertex.model)} location=${vertex.location}`);
+  const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
 
   for (const sample of DATASET_CASES) {
     try {
-      const preview = retrieveTrainingExamples(sample.text);
       const started = Date.now();
       const result = await runHumanization({
         text: sample.text,
@@ -620,22 +463,23 @@ async function runLiveTests() {
         intensity: 75,
       });
       const ms = Date.now() - started;
-      const meaning = meaningPreservation(sample.text, result.text, preview);
+      const meaning = meaningPreservation(sample.text, result.text);
       const copyRatio = phraseCopyRatio(sample.text, result.text);
       const ratio = lengthRatio(sample.text, result.text);
       const longEnough = sample.text.trim().split(/\s+/).length >= 40;
       const lengthOk = !longEnough || (ratio >= 0.55 && ratio <= 1.4);
-      const usedRetrievedAnswer = preview.examples.some((example) => example.output === result.text);
+      const usedStoredEssay = storedOutputs.has(result.text);
       assert(
         `${sample.id} ${sample.name}`,
         result.source === "FINE_TUNED_MODEL" &&
+          result.retrieval === null &&
           Boolean(result.text.trim()) &&
           meaning.result === "preserved" &&
-          !usedRetrievedAnswer &&
+          !usedStoredEssay &&
           lengthOk,
-        `source=${result.source} ms=${ms} band=${result.retrieval?.band} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
       );
-      printCaseReport(`${sample.id} ${sample.name}`, sample.text, result, preview);
+      printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
       console.log(`  --- ${sample.id} output ---`);
       console.log(result.text);
       console.log("  --- end ---");
@@ -643,51 +487,6 @@ async function runLiveTests() {
       const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
       assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
     }
-  }
-
-  const { getTrainingPairs } = await import("../src/lib/training-lookup");
-  const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
-  function swapFirstYear(text: string): { next: string; from: string; to: string } | null {
-    const match = text.match(/\b(?:19|20)\d{2}\b/);
-    if (!match) return null;
-    const from = match[0];
-    const year = Number(from);
-    const to = String(year >= 2020 ? year - 7 : year + 7);
-    if (text.includes(to)) return null;
-    return { next: text.replace(from, to), from, to };
-  }
-  let liveSwap: { next: string; from: string; to: string; output: string } | null = null;
-  for (const pair of getTrainingPairs()) {
-    const swapped = swapFirstYear(pair.input);
-    if (!swapped) continue;
-    const hit = findDatabaseMatch(swapped.next);
-    if (hit && hit.kind === "similarity" && entitiesNeedMerge(swapped.next, hit.input)) {
-      liveSwap = { ...swapped, output: hit.output };
-      if (hit.output.includes(swapped.from)) break;
-    }
-  }
-  if (liveSwap) {
-    try {
-      const started = Date.now();
-      const result = await runHumanization({ text: liveSwap.next, intensity: 75 });
-      const ms = Date.now() - started;
-      const copy = phraseCopyRatio(liveSwap.output, result.text, 4);
-      const keptYear = result.text.includes(liveSwap.to);
-      const mergeOk =
-        result.source === "DATABASE_ENTITY_MERGE" && keptYear && copy >= 0.55;
-      const rewriteOk =
-        result.source === "FINE_TUNED_MODEL" && keptYear && result.text !== liveSwap.output;
-      assert(
-        "near-duplicate year swap merges or rewrites with the new year",
-        mergeOk || rewriteOk,
-        `source=${result.source} ms=${ms} copy=${copy.toFixed(2)} year=${keptYear}`,
-      );
-    } catch (error) {
-      const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
-      assert("near-duplicate year swap merges or rewrites with the new year", false, `failed [${code}]`);
-    }
-  } else {
-    console.log("  SKIP  no year-swap near-duplicate available for live merge");
   }
 
   let usedBaseGemini = false;
