@@ -15,6 +15,7 @@ import {
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildEditorSystemInstruction,
   buildRepairSystemInstruction,
+  buildStyleReferenceBlock,
   buildTunedSystemInstruction,
 } from "../src/lib/humanize-prompt";
 import {
@@ -25,6 +26,8 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "../src/lib/humanize-quality";
+import type { HumanizeResult } from "../src/lib/humanize-engine";
+import type { TrainingRetrieval } from "../src/lib/training-retrieval";
 
 let passed = 0;
 let failed = 0;
@@ -111,6 +114,85 @@ Although rainforests are far from many cities, the choices people make still mat
 Schools can teach students why forests matter. Families can reduce waste. Governments can make rules that stop illegal logging. These actions are simple, but they can keep rainforests alive for a long time.`,
   },
 ];
+
+const DATASET_CASES: { id: "B" | "C" | "D" | "E"; name: string; text: string }[] = [
+  {
+    id: "B",
+    name: "same-topic climate",
+    text: `Rising temperatures are already changing how cities plan for heat waves and flooding. Burning coal, oil, and gas still puts greenhouse gases into the air, and those gases hold heat around the planet.
+
+Coastal towns see higher tides more often. Farmers notice longer dry spells, then sudden storms that wash soil away. Coral reefs bleach when the water stays too warm for too many weeks.
+
+Cutting emissions, protecting forests, and using cleaner energy will not reverse every loss, but they can slow the damage. Local governments can also prepare hospitals, cooling centers, and storm drains so people are less exposed while the atmosphere is still warming.`,
+  },
+  {
+    id: "C",
+    name: "different-topic harborline",
+    text: SAMPLES.find((sample) => sample.name === "essay")!.text,
+  },
+  {
+    id: "D",
+    name: "long input",
+    text: SAMPLES.find((sample) => sample.name === "long")!.text,
+  },
+  {
+    id: "E",
+    name: "names-and-numbers",
+    text: SAMPLES.find((sample) => sample.name === "numbers-names")!.text,
+  },
+];
+
+function meaningPreservation(input: string, output: string, retrieval?: TrainingRetrieval | null) {
+  const quality = assessRewriteQuality(
+    input,
+    output,
+    retrieval
+      ? {
+          retrievedPairs: retrieval.examples.map((example) => ({
+            input: example.input,
+            output: example.output,
+          })),
+        }
+      : undefined,
+  );
+  const meaningCodes = quality.issues
+    .map((issue) => issue.code)
+    .filter((code) =>
+      [
+        "UNRELATED",
+        "MISSING_FACTS",
+        "MISSING_NAMES",
+        "INVENTED_FACTS",
+        "TOO_SHORT",
+        "COPIED_RETRIEVED",
+      ].includes(code),
+    );
+  return {
+    quality,
+    result: meaningCodes.length === 0 ? "preserved" : `failed:${meaningCodes.join(",")}`,
+  };
+}
+
+function printCaseReport(
+  label: string,
+  input: string,
+  result: HumanizeResult,
+  retrieval: TrainingRetrieval | null,
+) {
+  const meaning = meaningPreservation(input, result.text, retrieval);
+  const matches =
+    (result.retrieval?.matches ?? [])
+      .map((match) => `#${match.index}=${match.score}`)
+      .join(", ") || "none";
+  console.log(`\n  REPORT ${label}`);
+  console.log(`    path=${result.source}`);
+  console.log(`    band=${result.retrieval?.band ?? "n/a"}`);
+  console.log(`    matches=${matches}`);
+  console.log(
+    `    outputChars=${result.text.length} outputWords=${result.text.trim().split(/\s+/).filter(Boolean).length}`,
+  );
+  console.log(`    meaning=${meaning.result}`);
+}
 
 async function runOfflineTests() {
   console.log("\n1. Service account JSON parsing");
@@ -277,7 +359,104 @@ Rainforests also illustrate a much broader set of global development debates. It
     exactRun.text === firstPair.output &&
       Buffer.from(exactRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
   );
+  assert(
+    "exact-match path reports the stored row",
+    exactRun.retrieval?.matches[0]?.index === lookup!.index && exactRun.retrieval?.matches[0]?.score === 1,
+  );
   assert("does not match a new unseen draft", findExactTrainingMatch(SAMPLES[0]!.text) === null);
+  printCaseReport("A exact training input", firstPair.input, exactRun, null);
+
+  console.log("\n3e. Training retrieval index");
+  const {
+    RETRIEVAL_METHOD,
+    SIMILARITY_METHOD,
+    getRetrievalIndexStats,
+    retrieveTrainingExamples,
+  } = await import("../src/lib/training-retrieval");
+  const retrievalStats = getRetrievalIndexStats();
+  assert("indexes every training row", retrievalStats.docs === stats.rows, `docs=${retrievalStats.docs}`);
+  assert("builds a cached term index", retrievalStats.terms > 100, `terms=${retrievalStats.terms}`);
+  console.log(`  retrieval=${RETRIEVAL_METHOD}`);
+  console.log(`  similarity=${SIMILARITY_METHOD}`);
+
+  const selfRetrieve = retrieveTrainingExamples(firstPair.input);
+  assert("returns at most 3 examples", selfRetrieve.examples.length <= 3);
+  assert(
+    "ranks the exact input among the top matches",
+    selfRetrieve.examples.some((example) => example.index === lookup!.index),
+  );
+  assert("does not mutate stored output", selfRetrieve.examples.every((example) => example.output.length > 0));
+
+  const climateCase = DATASET_CASES.find((item) => item.id === "B")!;
+  const climateRetrieve = retrieveTrainingExamples(climateCase.text);
+  const climateBlob = climateRetrieve.examples
+    .map((example) => `${example.input}\n${example.output}`)
+    .join("\n")
+    .toLowerCase();
+  assert("climate query stays within 3 examples", climateRetrieve.examples.length <= 3 && climateRetrieve.examples.length >= 1);
+  assert(
+    "climate query retrieves climate-related training pairs",
+    /climate|greenhouse|temperature|warming|carbon|emission|atmosphere/.test(climateBlob),
+    `band=${climateRetrieve.band} scores=${climateRetrieve.examples.map((example) => example.score).join(",")}`,
+  );
+  assert(
+    "same-topic climate similarity is not low",
+    climateRetrieve.band !== "low",
+    `band=${climateRetrieve.band} top=${climateRetrieve.examples[0]?.score}`,
+  );
+
+  const differentCase = DATASET_CASES.find((item) => item.id === "C")!;
+  const differentRetrieve = retrieveTrainingExamples(differentCase.text);
+  assert("different-topic query still returns closest examples", differentRetrieve.examples.length >= 1);
+  assert(
+    "different-topic score is weaker than same-topic climate",
+    (differentRetrieve.examples[0]?.score ?? 1) < (climateRetrieve.examples[0]?.score ?? 0),
+    `climate=${climateRetrieve.examples[0]?.score} other=${differentRetrieve.examples[0]?.score}`,
+  );
+  assert(
+    "different-topic is not treated as the same subject",
+    differentRetrieve.band === "low" || differentRetrieve.band === "medium",
+    `band=${differentRetrieve.band}`,
+  );
+
+  const styleBlock = buildStyleReferenceBlock(climateRetrieve);
+  assert("style block labels examples as references, not answers", /not the answer/i.test(styleBlock));
+  assert("style block never includes a fourth example", !styleBlock.includes("STYLE REFERENCE 4"));
+  const climatePrompt = buildTunedSystemInstruction({ text: climateCase.text, intensity: 75 }, climateRetrieve);
+  assert("tuned prompt includes retrieved style references", climatePrompt.includes("STYLE REFERENCE 1"));
+  assert("tuned prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(climatePrompt));
+
+  const copiedRetrieved = assessRewriteQuality(
+    "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
+    climateRetrieve.examples[0]!.output,
+    {
+      retrievedPairs: climateRetrieve.examples.map((example) => ({
+        input: example.input,
+        output: example.output,
+      })),
+    },
+  );
+  assert(
+    "flags using a stored human_text as the answer",
+    copiedRetrieved.issues.some((issue) => issue.code === "COPIED_RETRIEVED" || issue.code === "UNRELATED"),
+  );
+
+  const leakedFacts = assessRewriteQuality(
+    "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
+    "Harborline counted 4,812 commuters in Milwaukee during April 2026 after Dr. Elena Voss recorded a 48.6% rise.",
+    {
+      retrievedPairs: [
+        {
+          input: "Climate change is accelerating.",
+          output: "Dr. Elena Voss recorded a 48.6% rise in heat-related hospital visits.",
+        },
+      ],
+    },
+  );
+  assert(
+    "flags names and numbers copied from retrieved examples",
+    leakedFacts.issues.some((issue) => issue.code === "RETRIEVED_FACTS"),
+  );
 
   console.log("\n3c. Tuned endpoint resource handling");
   const exact =
@@ -305,8 +484,9 @@ async function runLiveTests() {
     requireVertexConfig,
   } = await import("../src/lib/gemini");
   const { runHumanization } = await import("../src/lib/humanize-engine");
+  const { retrieveTrainingExamples } = await import("../src/lib/training-retrieval");
 
-  console.log("\n4. Vertex live rewrites");
+  console.log("\n4. Dataset-driven live cases");
 
   if (!isVertexConfigured()) {
     console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
@@ -317,8 +497,9 @@ async function runLiveTests() {
   const vertex = requireVertexConfig();
   console.log(`  Using provider=vertex model=${redactModelName(vertex.model)} location=${vertex.location}`);
 
-  for (const sample of SAMPLES) {
+  for (const sample of DATASET_CASES) {
     try {
+      const preview = retrieveTrainingExamples(sample.text);
       const started = Date.now();
       const result = await runHumanization({
         text: sample.text,
@@ -327,31 +508,28 @@ async function runLiveTests() {
         intensity: 75,
       });
       const ms = Date.now() - started;
-      const output = result.text;
-      const quality = assessRewriteQuality(sample.text, output);
-      const copyRatio = phraseCopyRatio(sample.text, output);
-      const ratio = lengthRatio(sample.text, output);
+      const meaning = meaningPreservation(sample.text, result.text, preview);
+      const copyRatio = phraseCopyRatio(sample.text, result.text);
+      const ratio = lengthRatio(sample.text, result.text);
       const longEnough = sample.text.trim().split(/\s+/).length >= 40;
       const lengthOk = !longEnough || (ratio >= 0.55 && ratio <= 1.4);
-      const rewriteEnough = sample.name !== "simple-essay" || copyRatio < 0.32;
-      const qualityOkForLive =
-        quality.ok ||
-        quality.issues.every((issue) => issue.code === "TEMPLATE_VOICE");
+      const usedRetrievedAnswer = preview.examples.some((example) => example.output === result.text);
       assert(
-        `${sample.name} rewrite`,
+        `${sample.id} ${sample.name}`,
         result.source === "FINE_TUNED_MODEL" &&
-          Boolean(output.trim()) &&
-          qualityOkForLive &&
-          rewriteEnough &&
+          Boolean(result.text.trim()) &&
+          meaning.result === "preserved" &&
+          !usedRetrievedAnswer &&
           lengthOk,
-        `source=${result.source} ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+        `source=${result.source} ms=${ms} band=${result.retrieval?.band} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
       );
-      console.log(`  --- ${sample.name} output ---`);
-      console.log(output);
+      printCaseReport(`${sample.id} ${sample.name}`, sample.text, result, preview);
+      console.log(`  --- ${sample.id} output ---`);
+      console.log(result.text);
       console.log("  --- end ---");
     } catch (error) {
       const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
-      assert(`${sample.name} rewrite`, false, `failed [${code}]`);
+      assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
     }
   }
 

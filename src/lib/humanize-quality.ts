@@ -140,6 +140,10 @@ export type QualityResult = {
   issues: QualityIssue[];
 };
 
+export type QualityContext = {
+  retrievedPairs?: Array<{ input: string; output: string }>;
+};
+
 function uniqueWords(text: string): string[] {
   const words = text
     .toLowerCase()
@@ -168,11 +172,12 @@ export function extractProperNames(text: string): string[] {
 }
 
 export function extractQuotedPhrases(text: string): string[] {
+  const normalized = text.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
   const matches = [
-    ...(text.match(/"([^"]{3,})"/g) ?? []),
-    ...(text.match(/“([^”]{3,})”/g) ?? []),
+    ...(normalized.match(/"([^"]{3,})"/g) ?? []),
+    ...(normalized.match(/'([^']{8,})'/g) ?? []),
   ];
-  return [...new Set(matches.map((item) => item.replace(/^["“]|["”]$/g, "").trim()))];
+  return [...new Set(matches.map((item) => item.replace(/^["']|["']$/g, "").trim()))];
 }
 
 function isHighlyRepetitive(text: string): boolean {
@@ -252,7 +257,66 @@ export function stripModelChrome(text: string): string {
   return output.trim();
 }
 
-export function assessRewriteQuality(input: string, rawOutput: string): QualityResult {
+function retrievedFactIssues(
+  input: string,
+  output: string,
+  retrievedPairs: Array<{ input: string; output: string }>,
+): QualityIssue[] {
+  const issues: QualityIssue[] = [];
+  const sourceNumbers = new Set(significantNumbers(input));
+  const outputNumbers = new Set(significantNumbers(output));
+  const sourceNames = new Set(extractProperNames(input).map((name) => name.toLowerCase()));
+
+  for (const pair of retrievedPairs) {
+    if (pair.output === output) {
+      issues.push({
+        code: "COPIED_RETRIEVED",
+        message: "The model returned a stored training rewrite instead of rewriting the user draft.",
+      });
+      break;
+    }
+    if (phraseCopyRatio(pair.output, output) >= 0.28 && phraseCopyRatio(input, output) < 0.5) {
+      issues.push({
+        code: "COPIED_RETRIEVED",
+        message: "The rewrite copied too much wording from a retrieved training example.",
+      });
+      break;
+    }
+  }
+
+  const leakedNumbers: string[] = [];
+  const leakedNames: string[] = [];
+  const userLower = input.toLowerCase();
+  for (const pair of retrievedPairs) {
+    for (const value of significantNumbers(pair.output)) {
+      if (sourceNumbers.has(value)) continue;
+      if (outputNumbers.has(value)) leakedNumbers.push(value);
+    }
+    for (const name of extractProperNames(pair.output)) {
+      if (name.split(/\s+/).length < 2) continue;
+      if (sourceNames.has(name.toLowerCase())) continue;
+      if (name.toLowerCase().split(/\s+/).every((token) => token.length >= 4 && userLower.includes(token))) {
+        continue;
+      }
+      if (output.includes(name)) leakedNames.push(name);
+    }
+  }
+
+  if (leakedNumbers.length > 0 || leakedNames.length > 0) {
+    issues.push({
+      code: "RETRIEVED_FACTS",
+      message: "The rewrite imported names or numbers from retrieved training examples.",
+    });
+  }
+
+  return issues;
+}
+
+export function assessRewriteQuality(
+  input: string,
+  rawOutput: string,
+  context?: QualityContext,
+): QualityResult {
   const output = stripModelChrome(rawOutput);
   const issues: QualityIssue[] = [];
 
@@ -306,7 +370,10 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
     });
   }
 
-  const missingQuotes = extractQuotedPhrases(input).filter((phrase) => !output.includes(phrase));
+  const missingQuotes = extractQuotedPhrases(input).filter((phrase) => {
+    const haystack = output.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+    return !haystack.includes(phrase) && !output.includes(phrase);
+  });
   if (missingQuotes.length > 0) {
     issues.push({
       code: "MISSING_QUOTES",
@@ -365,6 +432,10 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
     });
   }
 
+  if (context?.retrievedPairs?.length) {
+    issues.push(...retrievedFactIssues(input, output, context.retrievedPairs));
+  }
+
   const blocking = issues.filter((issue) =>
     [
       "EMPTY",
@@ -376,6 +447,7 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
       "MISSING_NAMES",
       "MISSING_QUOTES",
       "INVENTED_FACTS",
+      "COPIED_RETRIEVED",
     ].includes(issue.code),
   );
 
@@ -383,7 +455,14 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
     ok:
       blocking.length === 0 &&
       issues.filter((issue) =>
-        ["TOO_SHORT", "TOO_SIMILAR", "TOO_LONG", "PARAGRAPH_DRIFT", "TEMPLATE_VOICE"].includes(issue.code),
+        [
+          "TOO_SHORT",
+          "TOO_SIMILAR",
+          "TOO_LONG",
+          "PARAGRAPH_DRIFT",
+          "TEMPLATE_VOICE",
+          "RETRIEVED_FACTS",
+        ].includes(issue.code),
       ).length === 0,
     output,
     issues,
@@ -404,6 +483,14 @@ export function missingFactsForRetry(input: string, output: string): string[] {
 
 export function isBlockingQualityFailure(result: QualityResult): boolean {
   return result.issues.some((issue) =>
-    ["EMPTY", "REFUSAL", "GENERIC", "LEAK", "UNRELATED", "INVENTED_FACTS"].includes(issue.code),
+    [
+      "EMPTY",
+      "REFUSAL",
+      "GENERIC",
+      "LEAK",
+      "UNRELATED",
+      "INVENTED_FACTS",
+      "COPIED_RETRIEVED",
+    ].includes(issue.code),
   );
 }

@@ -113,6 +113,10 @@ export function getTrainingRowCount(): number {
   return getIndex().rows.length;
 }
 
+export function getTrainingPairs(): readonly TrainingPair[] {
+  return getIndex().rows;
+}
+
 export function getTrainingLookupStats(): {
   rows: number;
   lookupKeys: number;
