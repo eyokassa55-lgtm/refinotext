@@ -1,10 +1,9 @@
 /**
- * Dataset contract for Humanize exact lookup.
+ * Dataset contract for Humanize lookup.
  *
- * The 715-pair corpus lives in `data/training_data.jsonl`. At inference the
- * pairs are already in the fine-tuned Vertex endpoint weights. The JSONL is
- * used only for exact ai_text → human_text returns. Neon stores user requests
- * in `humanizations`, not the training pairs.
+ * The 715-pair corpus lives in `data/training_data.jsonl` and is indexed in
+ * memory. Exact and same-draft hits return stored human_text. New drafts go
+ * to the fine-tuned Vertex endpoint. Neon stores user requests, not pairs.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
@@ -20,8 +19,11 @@ export type TrainingExampleRecord = {
 
 export const TRAINING_EXAMPLE_COLUMNS = {
   id: "integer primary key (row index in training_data.jsonl)",
-  ai_text: "text not null — original AI draft used as the exact lookup key",
-  human_text: "text not null — stored rewrite, returned unchanged on an exact ai_text match",
+  ai_text: "text not null — original AI draft used as the lookup key",
+  human_text:
+    "text not null — stored rewrite; returned unchanged on an exact or near-exact hit",
 } as const;
+
+export const DATABASE_MATCH_THRESHOLD = 0.85;
 
 export type HumanizeApiSource = "database" | "model";

@@ -16,12 +16,15 @@ import {
 } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
+  entitiesNeedMerge,
   isBlockingQualityFailure,
   lengthRatio,
   missingFactsForRetry,
   phraseCopyRatio,
+  tryDeterministicEntityMerge,
 } from "@/lib/humanize-quality";
-import { findExactTrainingMatch, getTrainingRowCount } from "@/lib/training-lookup";
+import { getTrainingRowCount } from "@/lib/training-lookup";
+import { findDatabaseMatch, peekClosestTrainingScore } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -32,7 +35,11 @@ export type HumanizeRequest = {
   intensity?: number;
 };
 
-export type HumanizeSource = "EXACT_TRAINING_MATCH" | "FINE_TUNED_MODEL";
+export type HumanizeSource =
+  | "EXACT_TRAINING_MATCH"
+  | "DATABASE_SIMILARITY_MATCH"
+  | "DATABASE_ENTITY_MERGE"
+  | "FINE_TUNED_MODEL";
 
 export type HumanizeRetrievalMatch = {
   index: number;
@@ -40,7 +47,7 @@ export type HumanizeRetrievalMatch = {
 };
 
 export type HumanizeRetrievalSummary = {
-  band: "exact";
+  band: "exact" | "high";
   matches: HumanizeRetrievalMatch[];
 };
 
@@ -154,29 +161,67 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const exact = findExactTrainingMatch(request.text);
-  if (exact) {
+  const databaseHit = findDatabaseMatch(request.text);
+  const databaseRetrieval = databaseHit
+    ? {
+        band: databaseHit.kind === "exact" ? ("exact" as const) : ("high" as const),
+        matches: [{ index: databaseHit.index, score: databaseHit.score }],
+      }
+    : null;
+
+  const needsEntityMerge =
+    databaseHit?.kind === "similarity" && entitiesNeedMerge(request.text, databaseHit.input);
+
+  if (databaseHit && !needsEntityMerge) {
     console.info("[humanize] [DATABASE_EXACT_MATCH]", {
-      row: exact.index,
-      kind: "exact",
-      score: 1,
+      row: databaseHit.index,
+      kind: databaseHit.kind,
+      score: databaseHit.score,
       rows: getTrainingRowCount(),
     });
     return {
-      text: exact.output,
-      source: "EXACT_TRAINING_MATCH",
-      retrieval: {
-        band: "exact",
-        matches: [{ index: exact.index, score: 1 }],
-      },
+      text: databaseHit.output,
+      source: databaseHit.kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH",
+      retrieval: databaseRetrieval,
     };
   }
+
+  if (databaseHit && needsEntityMerge) {
+    const merged = tryDeterministicEntityMerge(
+      request.text,
+      databaseHit.input,
+      databaseHit.output,
+    );
+    if (merged) {
+      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
+        row: databaseHit.index,
+        score: databaseHit.score,
+        rows: getTrainingRowCount(),
+        mode: "deterministic",
+      });
+      return {
+        text: merged,
+        source: "DATABASE_ENTITY_MERGE",
+        retrieval: databaseRetrieval,
+      };
+    }
+    console.info("[humanize] entity merge skipped; rewriting user draft", {
+      row: databaseHit.index,
+      score: databaseHit.score,
+    });
+  }
+
+  const closest = peekClosestTrainingScore(request.text);
+  const modelRetrieval = closest
+    ? { band: "high" as const, matches: [{ index: closest.index, score: closest.score }] }
+    : null;
 
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
       console.info("[humanize] [MODEL_GENERATED]", {
         rows: getTrainingRowCount(),
         tone: request.tone ?? "standard",
+        closest: closest ?? undefined,
       });
       const first = await rewriteWithModel(request, {
         tuned: true,
@@ -187,7 +232,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
         return {
           text: firstQuality.output,
           source: "FINE_TUNED_MODEL",
-          retrieval: null,
+          retrieval: modelRetrieval,
         };
       }
 
@@ -220,7 +265,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       return {
         text: finalizeOutput(request.text, chosen),
         source: "FINE_TUNED_MODEL",
-        retrieval: null,
+        retrieval: modelRetrieval,
       };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
@@ -237,7 +282,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       return {
         text: finalizeOutput(request.text, text),
         source: "FINE_TUNED_MODEL",
-        retrieval: null,
+        retrieval: modelRetrieval,
       };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;

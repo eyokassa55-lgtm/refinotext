@@ -1,13 +1,15 @@
 import "server-only";
 
-import { findExactTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
+import { paragraphCount, phraseCopyRatio } from "@/lib/humanize-quality";
+import { findExactTrainingMatch, findNormalizedTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
+import { DATABASE_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
- * Offline TF-IDF index. Humanize inference no longer retrieves or returns
- * nearest neighbors; new drafts go to the tuned Vertex endpoint.
+ * Indexed search over stored ai_text. Humanize uses this to return stored
+ * human_text for the same underlying draft, then falls back to Vertex.
  */
 
-export const DATABASE_MATCH_THRESHOLD = 0.85;
+export { DATABASE_MATCH_THRESHOLD };
 
 export const RETRIEVAL_METHOD =
   "cached inverted TF-IDF with dataset co-occurrence expansion, character n-grams, and structure affinity";
@@ -235,13 +237,6 @@ function writingType(text: string): WritingType {
   const questions = (trimmed.match(/\?/g) ?? []).length;
   if (questions >= 3) return "qa";
   return "essay";
-}
-
-function paragraphCount(text: string): number {
-  return text
-    .split(/\n\s*\n/)
-    .map((part) => part.trim())
-    .filter(Boolean).length;
 }
 
 function wordCount(text: string): number {
@@ -519,7 +514,7 @@ export type DatabaseTrainingMatch = {
   score: number;
   input: string;
   output: string;
-  kind: "exact" | "similarity";
+  kind: "exact" | "near_exact" | "similarity";
 };
 
 function lengthRatioOk(queryWords: number, docWords: number): boolean {
@@ -528,12 +523,28 @@ function lengthRatioOk(queryWords: number, docWords: number): boolean {
   return ratio >= 0.82 && ratio <= 1.22;
 }
 
+function isSameUnderlyingDraft(query: string, doc: string, overlap: number): boolean {
+  if (overlap < 0.75) return false;
+  const qWords = wordCount(query);
+  if (qWords >= 80) {
+    const copy = phraseCopyRatio(query, doc, 5);
+    if (copy < 0.42) return false;
+  }
+  const queryParas = paragraphCount(query);
+  const docParas = paragraphCount(doc);
+  if (Math.max(queryParas, docParas) >= 3) {
+    const ratio = queryParas / docParas;
+    if (ratio < 0.55 || ratio > 1.8) return false;
+  }
+  return true;
+}
+
 /**
- * Vector similarity search against stored ai_text.
+ * Vector + lexical search against stored ai_text.
  *
- * Exact string match, or TF-IDF cosine + Jaccard + char 4-grams >= 0.85
- * (same role as pgvector `<=>` against an ai_text embedding column).
- * Same-topic but different drafts stay below the threshold.
+ * Exact string, insignificant spacing/punctuation/capitalization, or
+ * TF-IDF cosine + Jaccard + char 4-grams >= 0.85 with a same-draft gate.
+ * A related topic without the same sentences is not a hit.
  */
 export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | null {
   const exact = findExactTrainingMatch(userText);
@@ -544,6 +555,17 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
       input: exact.input,
       output: exact.output,
       kind: "exact",
+    };
+  }
+
+  const nearExact = findNormalizedTrainingMatch(userText);
+  if (nearExact) {
+    return {
+      index: nearExact.index,
+      score: 0.999,
+      input: nearExact.input,
+      output: nearExact.output,
+      kind: "near_exact",
     };
   }
 
@@ -580,7 +602,11 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
     }
   }
 
-  if (!best || best.score < DATABASE_MATCH_THRESHOLD || best.overlap < 0.75) {
+  if (
+    !best ||
+    best.score < DATABASE_MATCH_THRESHOLD ||
+    !isSameUnderlyingDraft(userText, best.doc.pair.input, best.overlap)
+  ) {
     return null;
   }
 
@@ -591,4 +617,13 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
     output: best.doc.pair.output,
     kind: "similarity",
   };
+}
+
+export function peekClosestTrainingScore(userText: string): { index: number; score: number } | null {
+  const hit = findDatabaseMatch(userText);
+  if (hit) return { index: hit.index, score: hit.score };
+  const retrieval = retrieveTrainingExamples(userText, 1);
+  const top = retrieval.examples[0];
+  if (!top) return null;
+  return { index: top.index, score: top.score };
 }

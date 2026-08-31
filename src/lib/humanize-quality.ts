@@ -495,3 +495,168 @@ export function isBlockingQualityFailure(result: QualityResult): boolean {
   );
 }
 
+function sortedUnique(values: string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+export function entitiesNeedMerge(userText: string, matchedAiText: string): boolean {
+  const userNumbers = sortedUnique(extractNumbers(userText));
+  const matchedNumbers = sortedUnique(extractNumbers(matchedAiText));
+  if (userNumbers.join("\0") !== matchedNumbers.join("\0")) return true;
+
+  const userNames = sortedUnique(extractProperNames(userText).map((name) => name.toLowerCase()));
+  const matchedNames = sortedUnique(extractProperNames(matchedAiText).map((name) => name.toLowerCase()));
+  return userNames.join("\0") !== matchedNames.join("\0");
+}
+
+export function assessMergeQuality(userInput: string, template: string, rawOutput: string): QualityResult {
+  const output = stripModelChrome(rawOutput);
+  const issues: QualityIssue[] = [];
+
+  if (!output) {
+    issues.push({ code: "EMPTY", message: "The merger returned an empty template." });
+    return { ok: false, output, issues };
+  }
+
+  if (REFUSAL_PATTERNS.some((pattern) => pattern.test(output))) {
+    issues.push({ code: "REFUSAL", message: "The merger refused instead of updating values." });
+  }
+
+  if (LEAK_PATTERNS.some((pattern) => pattern.test(output))) {
+    issues.push({ code: "LEAK", message: "The output included internal instructions." });
+  }
+
+  const copy = phraseCopyRatio(template, output, 4);
+  if (template.trim().split(/\s+/).length >= 40 && copy < 0.55) {
+    issues.push({
+      code: "TEMPLATE_DRIFT",
+      message: "The merger rewrote the stored template instead of updating values.",
+    });
+  }
+
+  const missingNumbers = extractNumbers(userInput).filter((value) => {
+    if (extractNumbers(output).includes(value)) return false;
+    return !output.replace(/[$,€£\s]/g, "").toLowerCase().includes(value);
+  });
+  if (missingNumbers.length > 0) {
+    issues.push({ code: "MISSING_FACTS", message: "The merger dropped numbers from the user draft." });
+  }
+
+  const missingNames = extractProperNames(userInput).filter((name) => {
+    const re = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    return !re.test(output);
+  });
+  if (missingNames.length > 0) {
+    issues.push({ code: "MISSING_NAMES", message: "The merger dropped names from the user draft." });
+  }
+
+  const blocking = issues.filter((issue) =>
+    ["EMPTY", "REFUSAL", "LEAK", "TEMPLATE_DRIFT", "MISSING_FACTS", "MISSING_NAMES"].includes(issue.code),
+  );
+
+  return { ok: blocking.length === 0, output, issues };
+}
+
+function setDiff(left: string[], right: string[]): string[] {
+  const rightSet = new Set(right);
+  return left.filter((value) => !rightSet.has(value));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function withThousands(value: string): string {
+  const [whole, fraction] = value.split(".");
+  if (!whole) return value;
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return fraction != null ? `${grouped}.${fraction}` : grouped;
+}
+
+function replaceNumberToken(text: string, fromNormalized: string, toNormalized: string): string | null {
+  if (!fromNormalized || fromNormalized === toNormalized) return text;
+
+  const fromCore = fromNormalized.endsWith("%") ? fromNormalized.slice(0, -1) : fromNormalized;
+  const toCore = toNormalized.endsWith("%") ? toNormalized.slice(0, -1) : toNormalized;
+  const toIsPercent = toNormalized.endsWith("%") || fromNormalized.endsWith("%");
+  const variants = [...new Set([fromCore, withThousands(fromCore)].filter(Boolean))];
+  let next = text;
+  let replaced = false;
+
+  for (const variant of variants) {
+    const pattern = toIsPercent
+      ? new RegExp(`\\b${escapeRegExp(variant)}\\s*%`, "g")
+      : new RegExp(`\\b${escapeRegExp(variant)}\\b`, "g");
+    if (!pattern.test(next)) continue;
+    const replacement = toIsPercent ? (toNormalized.endsWith("%") ? toNormalized : `${toCore}%`) : toNormalized;
+    const display = variant.includes(",") && !toIsPercent ? withThousands(toCore) : replacement;
+    next = next.replace(
+      toIsPercent
+        ? new RegExp(`\\b${escapeRegExp(variant)}\\s*%`, "g")
+        : new RegExp(`\\b${escapeRegExp(variant)}\\b`, "g"),
+      display,
+    );
+    replaced = true;
+  }
+
+  return replaced ? next : null;
+}
+
+function replaceNameToken(text: string, from: string, to: string): string | null {
+  if (!from || from.toLowerCase() === to.toLowerCase()) return text;
+  const pattern = new RegExp(escapeRegExp(from), "gi");
+  if (!pattern.test(text)) return null;
+  return text.replace(new RegExp(escapeRegExp(from), "gi"), to);
+}
+
+/**
+ * Swap a 1:1 number or name difference into the stored human_text without
+ * paraphrasing. Returns null when the mapping is ambiguous.
+ */
+export function tryDeterministicEntityMerge(
+  userText: string,
+  matchedAiText: string,
+  template: string,
+): string | null {
+  const userNumbers = extractNumbers(userText);
+  const matchedNumbers = extractNumbers(matchedAiText);
+  const extraUserNumbers = setDiff(userNumbers, matchedNumbers);
+  const extraMatchedNumbers = setDiff(matchedNumbers, userNumbers);
+  if (extraUserNumbers.length !== extraMatchedNumbers.length) return null;
+  if (extraUserNumbers.length > 1) return null;
+
+  const userNames = extractProperNames(userText);
+  const matchedNames = extractProperNames(matchedAiText);
+  const extraUserNames = setDiff(
+    userNames.map((name) => name.toLowerCase()),
+    matchedNames.map((name) => name.toLowerCase()),
+  );
+  const extraMatchedNames = setDiff(
+    matchedNames.map((name) => name.toLowerCase()),
+    userNames.map((name) => name.toLowerCase()),
+  );
+  if (extraUserNames.length !== extraMatchedNames.length) return null;
+  if (extraUserNames.length > 1) return null;
+  if (extraUserNumbers.length === 0 && extraUserNames.length === 0) return null;
+
+  let next = template;
+  if (extraUserNumbers.length === 1) {
+    const replaced = replaceNumberToken(next, extraMatchedNumbers[0]!, extraUserNumbers[0]!);
+    if (!replaced) return null;
+    next = replaced;
+  }
+
+  if (extraUserNames.length === 1) {
+    const from = matchedNames.find((name) => name.toLowerCase() === extraMatchedNames[0]);
+    const to = userNames.find((name) => name.toLowerCase() === extraUserNames[0]);
+    if (!from || !to) return null;
+    const replaced = replaceNameToken(next, from, to);
+    if (!replaced) return null;
+    next = replaced;
+  }
+
+  const quality = assessMergeQuality(userText, template, next);
+  return quality.ok ? next : null;
+}
+
+

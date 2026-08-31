@@ -1,7 +1,6 @@
 /**
  * Humanizer quality tests.
- * Offline checks never call a model. Live checks use the Vertex tuned endpoint only.
- * Sample texts are new and are not from the 720-pair training set.
+ * Offline checks never call a model. Live checks D/E use the Vertex tuned endpoint.
  *
  * Run with: npm run test:humanize
  */
@@ -24,6 +23,7 @@ import {
   lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
+  tryDeterministicEntityMerge,
 } from "../src/lib/humanize-quality";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
 
@@ -113,32 +113,32 @@ Schools can teach students why forests matter. Families can reduce waste. Govern
   },
 ];
 
-const DATASET_CASES: { id: "B" | "C" | "D" | "E"; name: string; text: string }[] = [
-  {
-    id: "B",
-    name: "new essay",
-    text: `Rising temperatures are already changing how cities plan for heat waves and flooding. Burning coal, oil, and gas still puts greenhouse gases into the air, and those gases hold heat around the planet.
+const SAME_TOPIC_DIFFERENT_ESSAY = `Rising temperatures are already changing how cities plan for heat waves and flooding. Burning coal, oil, and gas still puts greenhouse gases into the air, and those gases hold heat around the planet.
 
 Coastal towns see higher tides more often. Farmers notice longer dry spells, then sudden storms that wash soil away. Coral reefs bleach when the water stays too warm for too many weeks.
 
-Cutting emissions, protecting forests, and using cleaner energy will not reverse every loss, but they can slow the damage. Local governments can also prepare hospitals, cooling centers, and storm drains so people are less exposed while the atmosphere is still warming.`,
-  },
-  {
-    id: "C",
-    name: "new email",
-    text: SAMPLES.find((sample) => sample.name === "email")!.text,
-  },
-  {
-    id: "D",
-    name: "new business",
-    text: SAMPLES.find((sample) => sample.name === "business")!.text,
-  },
-  {
-    id: "E",
-    name: "different-topic harborline",
-    text: SAMPLES.find((sample) => sample.name === "essay")!.text,
-  },
-];
+Cutting emissions, protecting forests, and using cleaner energy will not reverse every loss, but they can slow the damage. Local governments can also prepare hospitals, cooling centers, and storm drains so people are less exposed while the atmosphere is still warming.`;
+
+const NEW_TOPIC = SAMPLES.find((sample) => sample.name === "essay")!.text;
+
+function withInsignificantNoise(text: string): string {
+  return text.replace(/\s+/, (match) => `${match}${match}`).toLowerCase();
+}
+
+function findYearSwapFixture(
+  pairs: readonly { index: number; input: string; output: string }[],
+) {
+  for (const pair of pairs) {
+    const years = [...new Set(pair.input.match(/\b(?:19|20)\d{2}\b/g) ?? [])];
+    if (years.length !== 1) continue;
+    const year = years[0]!;
+    if (!pair.output.includes(year)) continue;
+    const nextYear = String(Number(year) + 1);
+    if (pair.input.includes(nextYear) || pair.output.includes(nextYear)) continue;
+    return { pair, year, nextYear };
+  }
+  throw new Error("No year-swap fixture in training_data.jsonl");
+}
 
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
@@ -323,13 +323,16 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("repair does not embed the full source draft", !repaired.includes("invoice 8831"));
 
-  console.log("\n3d. Training dataset exact lookup");
+  console.log("\n3d. Training-data match first (cases A–E, offline)");
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
-  const { findExactTrainingMatch, getTrainingLookupStats } = await import(
+  const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
     "../src/lib/training-lookup"
   );
-  const { runHumanization: runExactHumanization } = await import("../src/lib/humanize-engine");
+  const { findDatabaseMatch, peekClosestTrainingScore, DATABASE_MATCH_THRESHOLD } = await import(
+    "../src/lib/training-retrieval"
+  );
+  const { runHumanization, toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 715, `rows=${stats.rows}`);
   assert(
@@ -348,36 +351,94 @@ Rainforests also illustrate a much broader set of global development debates. It
       Buffer.from(lookup!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
     `chars=${firstPair.output.length}`,
   );
-  const exactRun = await runExactHumanization({ text: firstPair.input, intensity: 75 });
-  assert("humanize source is EXACT TRAINING MATCH", exactRun.source === "EXACT_TRAINING_MATCH");
+
+  const exactRun = await runHumanization({ text: firstPair.input, intensity: 75 });
+  assert("A path is EXACT_TRAINING_MATCH", exactRun.source === "EXACT_TRAINING_MATCH");
   assert(
-    "humanize output is character-for-character identical",
+    "A output is character-for-character identical",
     exactRun.text === firstPair.output &&
       Buffer.from(exactRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
   );
   assert(
-    "exact-match path reports the stored row",
+    "A similarity score is 1",
     exactRun.retrieval?.matches[0]?.index === lookup!.index && exactRun.retrieval?.matches[0]?.score === 1,
   );
-  assert("does not match a new unseen draft", findExactTrainingMatch(SAMPLES[0]!.text) === null);
   printCaseReport("A exact training input", firstPair.input, exactRun);
 
-  console.log("\n3e. New inputs skip dataset return");
-  const { toApiSource } = await import("../src/lib/humanize-engine");
-  const doubledSpace = firstPair.input.replace(" is ", "  is ");
-  assert("tiny spacing change is not an exact training match", findExactTrainingMatch(doubledSpace) === null);
-  assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
-  for (const sample of DATASET_CASES) {
-    assert(
-      `${sample.id} ${sample.name} is not an exact training match`,
-      findExactTrainingMatch(sample.text) === null,
-    );
-  }
-  const newPrompt = buildTunedSystemInstruction({ text: DATASET_CASES[0]!.text, intensity: 75 });
+  const noisy = withInsignificantNoise(firstPair.input);
+  assert("B is not a raw exact match", findExactTrainingMatch(noisy) === null);
+  const nearHit = findDatabaseMatch(noisy);
+  assert("B is a near-exact database hit", nearHit?.kind === "near_exact");
+  const nearRun = await runHumanization({ text: noisy, intensity: 75 });
+  assert("B path is DATABASE_SIMILARITY_MATCH", nearRun.source === "DATABASE_SIMILARITY_MATCH");
+  assert(
+    "B returns stored human_text unchanged",
+    nearRun.text === firstPair.output &&
+      Buffer.from(nearRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+  );
+  assert("B similarity score is 0.999", nearRun.retrieval?.matches[0]?.score === 0.999);
+  printCaseReport("B spacing/capitalization", noisy, nearRun);
+
+  const yearCase = findYearSwapFixture(getTrainingPairs());
+  const yearSwapped = yearCase.pair.input.replaceAll(yearCase.year, yearCase.nextYear);
+  const yearHit = findDatabaseMatch(yearSwapped);
+  assert(
+    "C is a same-draft similarity hit",
+    yearHit?.kind === "similarity" && (yearHit.score ?? 0) >= DATABASE_MATCH_THRESHOLD,
+    `kind=${yearHit?.kind ?? "none"} score=${yearHit?.score ?? "n/a"}`,
+  );
+  const expectedMerged = yearCase.pair.output.replaceAll(yearCase.year, yearCase.nextYear);
+  const merged = tryDeterministicEntityMerge(
+    yearSwapped,
+    yearHit!.input,
+    yearHit!.output,
+  );
+  assert("C deterministic merge succeeds", Boolean(merged));
+  assert("C keeps stored wording except the swapped year", merged === expectedMerged);
+  const mergeRun = await runHumanization({ text: yearSwapped, intensity: 75 });
+  assert("C path is DATABASE_ENTITY_MERGE", mergeRun.source === "DATABASE_ENTITY_MERGE");
+  assert("C output equals stored human_text with only the year changed", mergeRun.text === expectedMerged);
+  assert("C does not keep the old year", !mergeRun.text.includes(yearCase.year));
+  assert("C inserts the user year", mergeRun.text.includes(yearCase.nextYear));
+  assert(
+    "C preserves template phrasing",
+    phraseCopyRatio(yearCase.pair.output, mergeRun.text, 4) >= 0.9,
+    `copy=${phraseCopyRatio(yearCase.pair.output, mergeRun.text, 4).toFixed(4)}`,
+  );
+  printCaseReport("C same draft, changed year", yearSwapped, mergeRun);
+
+  const climateHit = findDatabaseMatch(SAME_TOPIC_DIFFERENT_ESSAY);
+  const climateClosest = peekClosestTrainingScore(SAME_TOPIC_DIFFERENT_ESSAY);
+  assert("D is not a database hit", climateHit === null);
+  assert(
+    "D closest score stays below the same-draft threshold",
+    (climateClosest?.score ?? 0) < DATABASE_MATCH_THRESHOLD,
+    `score=${climateClosest?.score ?? "n/a"}`,
+  );
+  console.log(
+    `  REPORT D same-topic different essay (offline)\n    path=FINE_TUNED_MODEL (no database hit)\n    closest=#${climateClosest?.index}=${climateClosest?.score}`,
+  );
+
+  const newTopicHit = findDatabaseMatch(NEW_TOPIC);
+  const newTopicClosest = peekClosestTrainingScore(NEW_TOPIC);
+  assert("E is not a database hit", newTopicHit === null);
+  assert(
+    "E closest score stays below the same-draft threshold",
+    (newTopicClosest?.score ?? 0) < DATABASE_MATCH_THRESHOLD,
+    `score=${newTopicClosest?.score ?? "n/a"}`,
+  );
+  console.log(
+    `  REPORT E new topic (offline)\n    path=FINE_TUNED_MODEL (no database hit)\n    closest=#${newTopicClosest?.index}=${newTopicClosest?.score}`,
+  );
+
+  const newPrompt = buildTunedSystemInstruction({ text: SAME_TOPIC_DIFFERENT_ESSAY, intensity: 75 });
   assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
   assert("new-input prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(newPrompt));
   assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
+  assert("near-exact API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
+  assert("entity merge API source is database", toApiSource("DATABASE_ENTITY_MERGE") === "database");
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+  assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
   const copiedRetrieved = assessRewriteQuality(
     "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
@@ -452,8 +513,12 @@ async function runLiveTests() {
   const vertex = requireVertexConfig();
   console.log(`  Using provider=vertex model=${redactModelName(vertex.model)} location=${vertex.location}`);
   const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
+  const liveCases = [
+    { id: "D", name: "same-topic different essay", text: SAME_TOPIC_DIFFERENT_ESSAY },
+    { id: "E", name: "new topic", text: NEW_TOPIC },
+  ] as const;
 
-  for (const sample of DATASET_CASES) {
+  for (const sample of liveCases) {
     try {
       const started = Date.now();
       const result = await runHumanization({
@@ -472,12 +537,11 @@ async function runLiveTests() {
       assert(
         `${sample.id} ${sample.name}`,
         result.source === "FINE_TUNED_MODEL" &&
-          result.retrieval === null &&
           Boolean(result.text.trim()) &&
           meaning.result === "preserved" &&
           !usedStoredEssay &&
           lengthOk,
-        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)} score=${result.retrieval?.matches[0]?.score ?? "n/a"}`,
       );
       printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
       console.log(`  --- ${sample.id} output ---`);

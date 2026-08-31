@@ -21,6 +21,7 @@ type TrainingIndex = {
   path: string;
   rows: TrainingPair[];
   byInput: Map<string, TrainingMatch>;
+  byNormalized: Map<string, TrainingMatch>;
   malformedLines: number;
   duplicateInputs: number;
 };
@@ -62,6 +63,7 @@ function loadIndex(): TrainingIndex {
 
   const rows: TrainingPair[] = [];
   const byInput = new Map<string, TrainingMatch>();
+  const byNormalized = new Map<string, TrainingMatch>();
   let malformedLines = 0;
   let duplicateInputs = 0;
   let index = 0;
@@ -84,10 +86,15 @@ function loadIndex(): TrainingIndex {
     }
 
     rows.push(pair);
+    const match = { index: pair.index, input: pair.input, output: pair.output };
     if (byInput.has(pair.input)) {
       duplicateInputs += 1;
     } else {
-      byInput.set(pair.input, { index: pair.index, input: pair.input, output: pair.output });
+      byInput.set(pair.input, match);
+    }
+    const normalized = normalizeInsignificant(pair.input);
+    if (normalized && !byNormalized.has(normalized)) {
+      byNormalized.set(normalized, match);
     }
     index += 1;
   }
@@ -100,7 +107,7 @@ function loadIndex(): TrainingIndex {
     duplicateInputs,
   });
 
-  return { path: datasetPath, rows, byInput, malformedLines, duplicateInputs };
+  return { path: datasetPath, rows, byInput, byNormalized, malformedLines, duplicateInputs };
 }
 
 let cached: TrainingIndex | null = null;
@@ -138,6 +145,23 @@ function normalizeLookupKey(text: string): string {
 }
 
 /**
+ * Collapse spacing, line breaks, punctuation, and capitalization so the same
+ * draft still matches when those details differ.
+ */
+export function normalizeInsignificant(text: string): string {
+  return text
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[“”«»]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Return the stored human_text for an exact ai_text/input match.
  * The stored output is returned unchanged.
  */
@@ -155,4 +179,14 @@ export function findExactTrainingMatch(userText: string): TrainingMatch | null {
   }
 
   return null;
+}
+
+/**
+ * Same draft after ignoring spacing, punctuation, and capitalization.
+ */
+export function findNormalizedTrainingMatch(userText: string): TrainingMatch | null {
+  if (typeof userText !== "string" || userText.length === 0) return null;
+  const normalized = normalizeInsignificant(userText);
+  if (!normalized) return null;
+  return getIndex().byNormalized.get(normalized) ?? null;
 }
