@@ -58,8 +58,8 @@ function extractResourceFromUrl(endpoint: string): string | undefined {
 }
 
 /**
- * Build the SDK model name from VERTEX_AI_TUNED_ENDPOINT without inventing an ID.
- * Full resource names are used exactly as provided.
+ * Build the SDK model name from TUNED_MODEL_ENDPOINT (or VERTEX_AI_TUNED_ENDPOINT)
+ * without inventing an ID. Full resource names are used exactly as provided.
  */
 export function resolveTunedModelName(
   project: string,
@@ -76,20 +76,25 @@ export function resolveTunedModelName(
   return `projects/${project}/locations/${location}/endpoints/${trimmed}`;
 }
 
+export function getTunedEndpointEnv(): string | undefined {
+  return cleanEnv(process.env.TUNED_MODEL_ENDPOINT) || cleanEnv(process.env.VERTEX_AI_TUNED_ENDPOINT);
+}
+
 export function hasVertexEndpointEnv(): boolean {
-  return Boolean(cleanEnv(process.env.VERTEX_AI_TUNED_ENDPOINT));
+  return Boolean(getTunedEndpointEnv());
 }
 
 function isInvalidEndpointValue(endpoint: string): boolean {
   return (
     /^gemini-/i.test(endpoint) ||
+    /\/publishers\/google\/models\/gemini-/i.test(endpoint) ||
     endpoint.includes("generativelanguage.googleapis.com") ||
     endpoint.includes("gemini-api")
   );
 }
 
 function resolveVertexConfig(): VertexConfig {
-  const endpoint = cleanEnv(process.env.VERTEX_AI_TUNED_ENDPOINT);
+  const endpoint = getTunedEndpointEnv();
   if (!endpoint) {
     throw new GeminiError(
       "The writing service is not configured. Please try again later.",
@@ -253,6 +258,13 @@ function sleep(ms: number) {
 function modelsToTry(): { provider: "vertex" | "gemini-api"; model: string }[] {
   if (hasVertexEndpointEnv()) {
     const vertex = requireVertexConfig();
+    if (isInvalidEndpointValue(vertex.model) || /^gemini-/i.test(vertex.model)) {
+      throw new GeminiError(
+        "The writing service is not configured. Please try again later.",
+        "INVALID_VERTEX_ENDPOINT",
+        503,
+      );
+    }
     return [{ provider: "vertex", model: vertex.model }];
   }
 
@@ -384,6 +396,14 @@ async function generateOnce(
   userText: string,
   options: GenerateTextOptions,
 ): Promise<string> {
+  if (provider === "vertex" && (isInvalidEndpointValue(model) || /^gemini-/i.test(model))) {
+    throw new GeminiError(
+      "The writing service is not configured. Please try again later.",
+      "INVALID_VERTEX_ENDPOINT",
+      503,
+    );
+  }
+
   const client =
     provider === "vertex"
       ? getVertexClient(requireVertexConfig())
@@ -424,7 +444,8 @@ async function generateOnce(
 
 /**
  * Server-side text generation with retries.
- * When VERTEX_AI_TUNED_ENDPOINT is set, only that tuned resource is called.
+ * When TUNED_MODEL_ENDPOINT (or VERTEX_AI_TUNED_ENDPOINT) is set, only that
+ * tuned Vertex resource is called — never gemini-2.5-flash-lite as a base model.
  */
 export async function generateText(
   prompt: string,
@@ -444,6 +465,7 @@ export async function generateText(
           provider: target.provider,
           model: redactModelName(target.model),
           location: target.provider === "vertex" ? getVertexConfig()?.location : undefined,
+          baseGemini: target.provider !== "vertex",
           attempt,
         });
         return await generateOnce(target.provider, target.model, trimmed, options);

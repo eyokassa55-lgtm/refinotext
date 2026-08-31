@@ -2,14 +2,14 @@ import "server-only";
 
 import { paragraphCount, phraseCopyRatio } from "@/lib/humanize-quality";
 import { findExactTrainingMatch, findNormalizedTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
-import { DATABASE_MATCH_THRESHOLD } from "@/lib/training-schema";
+import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
  * Indexed search over stored ai_text. Humanize uses this to return stored
  * human_text for the same underlying draft, then falls back to Vertex.
  */
 
-export { DATABASE_MATCH_THRESHOLD };
+export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
 
 export const RETRIEVAL_METHOD =
   "cached inverted TF-IDF with dataset co-occurrence expansion, character n-grams, and structure affinity";
@@ -142,9 +142,58 @@ const STOPWORDS = new Set([
   "own",
 ]);
 
+const SHORT_TOPIC_TERMS = new Set(["ai", "ml", "vr", "ar", "gpu", "iot"]);
+
+const TOPIC_SYNONYMS: Record<string, string[]> = {
+  ai: ["artificial", "intelligence"],
+  artificial: ["ai"],
+  intelligence: ["ai"],
+  tech: ["technology", "technological"],
+  technology: ["technological", "tech"],
+  technological: ["technology", "tech"],
+  computer: ["computing", "computers"],
+  computers: ["computer", "computing"],
+  computing: ["computer", "computers"],
+  smartphone: ["smartphones", "mobile", "phones"],
+  smartphones: ["smartphone", "mobile"],
+};
+
+const TECHNOLOGY_TERMS = new Set([
+  "ai",
+  "algorithm",
+  "algorithms",
+  "artificial",
+  "automation",
+  "computer",
+  "computers",
+  "computing",
+  "cyber",
+  "device",
+  "devices",
+  "digital",
+  "electronics",
+  "gpu",
+  "intelligence",
+  "internet",
+  "machine",
+  "nvidia",
+  "online",
+  "robot",
+  "robotics",
+  "semiconductor",
+  "smartphone",
+  "smartphones",
+  "software",
+  "tech",
+  "technology",
+  "technological",
+]);
+
 type WritingType = "email" | "list" | "qa" | "essay";
 
 type SparseTerm = { term: string; weight: number };
+
+type TopicCategory = "technology" | "general";
 
 type IndexedDoc = {
   pair: TrainingPair;
@@ -156,6 +205,8 @@ type IndexedDoc = {
   type: WritingType;
   wordCount: number;
   paragraphCount: number;
+  category: TopicCategory;
+  titleUnigrams: Set<string>;
 };
 
 type RetrievalIndex = {
@@ -172,6 +223,37 @@ function tokenize(text: string): string[] {
     .split(/\s+/)
     .map((token) => token.replace(/^['’-]+|['’-]+$/g, ""))
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
+}
+
+function tokenizeTopic(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
+    .split(/\s+/)
+    .map((token) => token.replace(/^['’-]+|['’-]+$/g, ""))
+    .filter((token) => {
+      if (!token || STOPWORDS.has(token)) return false;
+      if (SHORT_TOPIC_TERMS.has(token)) return true;
+      return token.length >= 3;
+    });
+}
+
+function topicCategory(tokens: Iterable<string>): TopicCategory {
+  const hits = new Set<string>();
+  for (const token of tokens) {
+    if (TECHNOLOGY_TERMS.has(token)) hits.add(token);
+  }
+  return hits.size >= 2 ? "technology" : "general";
+}
+
+function expandTopicTerms(terms: Set<string>): Set<string> {
+  const expanded = new Set(terms);
+  for (const term of terms) {
+    const synonyms = TOPIC_SYNONYMS[term];
+    if (!synonyms) continue;
+    for (const synonym of synonyms) expanded.add(synonym);
+  }
+  return expanded;
 }
 
 function withBigrams(tokens: string[]): string[] {
@@ -366,6 +448,8 @@ function buildIndex(): RetrievalIndex {
       type: writingType(pair.input),
       wordCount: wordCount(pair.input),
       paragraphCount: paragraphCount(pair.input),
+      category: topicCategory(unigrams[docIndex] ?? []),
+      titleUnigrams: new Set(tokenizeTopic(pair.input.slice(0, 420))),
     };
   });
 
@@ -514,8 +598,25 @@ export type DatabaseTrainingMatch = {
   score: number;
   input: string;
   output: string;
-  kind: "exact" | "near_exact" | "similarity";
+  kind: "exact" | "near_exact" | "similarity" | "topic";
 };
+
+function lockedPair(
+  pair: TrainingPair,
+  score: number,
+  kind: DatabaseTrainingMatch["kind"],
+): DatabaseTrainingMatch {
+  if (pair.index < 0 || !pair.input || !pair.output) {
+    throw new Error("Training pair is missing a connected input/output row.");
+  }
+  return {
+    index: pair.index,
+    score,
+    input: pair.input,
+    output: pair.output,
+    kind,
+  };
+}
 
 function lengthRatioOk(queryWords: number, docWords: number): boolean {
   if (queryWords <= 0 || docWords <= 0) return false;
@@ -548,26 +649,10 @@ function isSameUnderlyingDraft(query: string, doc: string, overlap: number): boo
  */
 export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | null {
   const exact = findExactTrainingMatch(userText);
-  if (exact) {
-    return {
-      index: exact.index,
-      score: 1,
-      input: exact.input,
-      output: exact.output,
-      kind: "exact",
-    };
-  }
+  if (exact) return lockedPair(exact, 1, "exact");
 
   const nearExact = findNormalizedTrainingMatch(userText);
-  if (nearExact) {
-    return {
-      index: nearExact.index,
-      score: 0.999,
-      input: nearExact.input,
-      output: nearExact.output,
-      kind: "near_exact",
-    };
-  }
+  if (nearExact) return lockedPair(nearExact, 0.999, "near_exact");
 
   const index = getRetrievalIndex();
   const queryTokens = tokenize(userText);
@@ -610,20 +695,127 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
     return null;
   }
 
-  return {
-    index: best.doc.pair.index,
-    score: Number(best.score.toFixed(4)),
-    input: best.doc.pair.input,
-    output: best.doc.pair.output,
-    kind: "similarity",
-  };
+  return lockedPair(best.doc.pair, Number(best.score.toFixed(4)), "similarity");
 }
 
 export function peekClosestTrainingScore(userText: string): { index: number; score: number } | null {
-  const hit = findDatabaseMatch(userText);
+  const hit = findDatabaseMatch(userText) ?? findTopicMatch(userText);
   if (hit) return { index: hit.index, score: hit.score };
   const retrieval = retrieveTrainingExamples(userText, 1);
   const top = retrieval.examples[0];
   if (!top) return null;
   return { index: top.index, score: top.score };
+}
+
+function queryTermCoverage(queryTerms: Set<string>, docTerms: Set<string>): number {
+  if (queryTerms.size === 0) return 0;
+  let matched = 0;
+  for (const term of queryTerms) {
+    if (docTerms.has(term)) {
+      matched += 1;
+      continue;
+    }
+    const synonyms = TOPIC_SYNONYMS[term] ?? [];
+    if (synonyms.some((synonym) => docTerms.has(synonym))) matched += 1;
+  }
+  return matched / queryTerms.size;
+}
+
+function termPresent(term: string, docTerms: Set<string>): boolean {
+  if (docTerms.has(term)) return true;
+  return (TOPIC_SYNONYMS[term] ?? []).some((synonym) => docTerms.has(synonym));
+}
+
+function idfCoverage(
+  queryTerms: Set<string>,
+  docTerms: Set<string>,
+  idf: Map<string, number>,
+): number {
+  let matchedWeight = 0;
+  let totalWeight = 0;
+  for (const term of queryTerms) {
+    const weight = idf.get(term) ?? (SHORT_TOPIC_TERMS.has(term) ? 2.6 : 1.15);
+    totalWeight += weight;
+    if (termPresent(term, docTerms)) matchedWeight += weight;
+  }
+  return totalWeight === 0 ? 0 : matchedWeight / totalWeight;
+}
+
+function strongestQueryTerms(queryTerms: Set<string>, idf: Map<string, number>, n = 2): string[] {
+  return [...queryTerms]
+    .map((term) => ({
+      term,
+      weight: idf.get(term) ?? (SHORT_TOPIC_TERMS.has(term) ? 2.6 : 1.15),
+    }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, n)
+    .map((item) => item.term);
+}
+
+export function isTopicQuery(text: string): boolean {
+  const words = wordCount(text);
+  if (words <= 24) return true;
+  if (words > 40) return false;
+  return paragraphCount(text) <= 1;
+}
+
+/**
+ * Semantic topic search over stored ai_text. Returns the paired human_text
+ * from the same row only. Weak or unrelated matches are rejected.
+ */
+export function findTopicMatch(userText: string): DatabaseTrainingMatch | null {
+  const index = getRetrievalIndex();
+  const queryTokens = tokenizeTopic(userText);
+  const queryTerms = new Set(queryTokens);
+  if (queryTerms.size < 2) return null;
+
+  const queryCategory = topicCategory(expandTopicTerms(queryTerms));
+  const querySparse = sparseFromCounts(termCounts(withBigrams(queryTokens)), index.idf);
+  const queryNorm = sparseNorm(querySparse) || 1;
+  const requiredTerms =
+    queryTerms.size <= 10 ? strongestQueryTerms(queryTerms, index.idf, 2) : [];
+
+  const tfidfScores = new Float64Array(index.docs.length);
+  for (const item of querySparse) {
+    const posting = index.inverted.get(item.term);
+    if (!posting) continue;
+    for (const hit of posting) {
+      tfidfScores[hit.doc] += item.weight * hit.weight;
+    }
+  }
+
+  let best: { doc: IndexedDoc; score: number; coverage: number } | null = null;
+  for (let docIndex = 0; docIndex < index.docs.length; docIndex += 1) {
+    const doc = index.docs[docIndex]!;
+    if (requiredTerms.length > 0 && !requiredTerms.some((term) => termPresent(term, doc.unigrams))) {
+      continue;
+    }
+
+    const coverage = idfCoverage(queryTerms, doc.unigrams, index.idf);
+    if (coverage < 0.5) continue;
+
+    const titleCoverage = queryTermCoverage(queryTerms, doc.titleUnigrams);
+    const tfidf = (tfidfScores[docIndex] ?? 0) / (queryNorm * doc.norm);
+    const satTfidf = Math.max(0, Math.min(1, tfidf / 0.22));
+    const techAlign =
+      queryCategory === "technology" ? (doc.category === "technology" ? 1 : 0) : 0.5;
+    const score =
+      queryCategory === "technology"
+        ? 0.42 * coverage + 0.28 * titleCoverage + 0.15 * satTfidf + 0.15 * techAlign
+        : 0.55 * coverage + 0.3 * titleCoverage + 0.15 * satTfidf;
+
+    if (!best || score > best.score) {
+      best = { doc, score, coverage };
+    }
+  }
+
+  if (!best || best.score < TOPIC_MATCH_THRESHOLD || best.coverage < 0.5) {
+    return null;
+  }
+
+  const match = lockedPair(best.doc.pair, Number(best.score.toFixed(4)), "topic");
+  if (match.index !== best.doc.pair.index || match.output !== best.doc.pair.output) {
+    return null;
+  }
+  return match;
 }

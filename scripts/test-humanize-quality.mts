@@ -1,6 +1,7 @@
 /**
  * Humanizer quality tests.
- * Offline checks never call a model. Live checks D/E use the Vertex tuned endpoint.
+ * Offline checks never call a model. Live checks use TUNED_MODEL_ENDPOINT
+ * (the succeeded "refino correct" Vertex endpoint).
  *
  * Run with: npm run test:humanize
  */
@@ -23,7 +24,6 @@ import {
   lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
-  tryDeterministicEntityMerge,
 } from "../src/lib/humanize-quality";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
 
@@ -119,26 +119,38 @@ Coastal towns see higher tides more often. Farmers notice longer dry spells, the
 
 Cutting emissions, protecting forests, and using cleaner energy will not reverse every loss, but they can slow the damage. Local governments can also prepare hospitals, cooling centers, and storm drains so people are less exposed while the atmosphere is still warming.`;
 
+const NEW_ESSAY = SAMPLES.find((sample) => sample.name === "simple-essay")!.text;
 const NEW_TOPIC = SAMPLES.find((sample) => sample.name === "essay")!.text;
 
-function withInsignificantNoise(text: string): string {
-  return text.replace(/\s+/, (match) => `${match}${match}`).toLowerCase();
-}
+const AI_TECH_ESSAY = `The development of artificial intelligence is changing modern technology in schools, hospitals, and workplaces. Machine learning systems now sort images, draft messages, and flag unusual patterns in large datasets.
 
-function findYearSwapFixture(
-  pairs: readonly { index: number; input: string; output: string }[],
-) {
-  for (const pair of pairs) {
-    const years = [...new Set(pair.input.match(/\b(?:19|20)\d{2}\b/g) ?? [])];
-    if (years.length !== 1) continue;
-    const year = years[0]!;
-    if (!pair.output.includes(year)) continue;
-    const nextYear = String(Number(year) + 1);
-    if (pair.input.includes(nextYear) || pair.output.includes(nextYear)) continue;
-    return { pair, year, nextYear };
-  }
-  throw new Error("No year-swap fixture in training_data.jsonl");
-}
+These tools can save time, but they also raise questions about privacy, bias, and who is accountable when a model is wrong. Teams that adopt AI still need clear review steps, accurate training data, and people who understand the limits of automation.
+
+Used carefully, AI can support research and customer service. Used carelessly, it can spread errors faster than a person would. The practical task is to keep human judgment in the loop while taking advantage of faster analysis.`;
+
+const EDUCATION_ESSAY = `Education remains one of the strongest paths to opportunity. Classrooms that mix discussion, practice, and feedback help students remember ideas longer than lectures alone.
+
+Access still varies. Some schools have reliable internet, current books, and enough teachers. Others do not. Closing that gap matters because skills in reading, writing, and problem-solving affect later work and civic life.
+
+Lifelong learning also matters. Adults change jobs more often than earlier generations, so short courses, libraries, and online lessons can keep knowledge from stopping at graduation.`;
+
+const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
+
+Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
+
+Young people often lead cleanup projects and ask for clearer rules. Those efforts count, especially when they are paired with measurements that show whether air and water are actually improving.`;
+
+const BUSINESS_ESSAY = `A small business grows when it understands its customers, controls costs, and keeps a reputation for reliable work. Fancy branding cannot replace on-time delivery and honest pricing.
+
+Digital tools help with invoices, inventory, and marketing, yet they do not remove the need for a simple plan. Owners still have to decide which products to keep, which to drop, and how much cash to hold for slow months.
+
+Hiring is another turning point. One skilled employee can raise quality, but payroll must match real revenue. Firms that expand too fast often discover that unpaid invoices, not a lack of ideas, are the real limit.`;
+
+const GENERAL_ESSAY = `Routine is easy to dismiss, but daily habits shape most of a person's results. Sleep, reading, and a short walk do not look dramatic, yet they compound over months.
+
+People often wait for a perfect schedule before they start. A smaller plan that actually happens is usually better. Ten pages a night beats an ambitious list that is abandoned in a week.
+
+Friends and family also influence habits. It is easier to keep a promise when someone else expects you to show up. That is why study groups, training partners, and shared deadlines still matter in an age of solo apps.`;
 
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
@@ -293,8 +305,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     "starts from the training system line",
     tunedCue.startsWith(TUNED_TRAINING_SYSTEM_INSTRUCTION),
   );
-  assert("asks for a real rewrite, not a copy", /do not copy/i.test(tunedCue));
-  assert("asks to keep source length and paragraphs", /same length/i.test(tunedCue) && /paragraph/i.test(tunedCue));
+  assert("asks for rewritten text only", /return only the rewritten text/i.test(tunedCue));
+  assert("does not ask for analysis", /do not add explanations or analysis/i.test(tunedCue));
   assert(
     "does not send University readability into the tuned model",
     !/university/i.test(tunedCue),
@@ -323,14 +335,11 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("repair does not embed the full source draft", !repaired.includes("invoice 8831"));
 
-  console.log("\n3d. Training-data match first (cases A–E, offline)");
+  console.log("\n3d. Exact match vs fine-tuned model (cases A–D)");
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
-  const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
+  const { findExactTrainingMatch, getTrainingLookupStats } = await import(
     "../src/lib/training-lookup"
-  );
-  const { findDatabaseMatch, peekClosestTrainingScore, DATABASE_MATCH_THRESHOLD } = await import(
-    "../src/lib/training-retrieval"
   );
   const { runHumanization, toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
@@ -360,85 +369,34 @@ Rainforests also illustrate a much broader set of global development debates. It
       Buffer.from(exactRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
   );
   assert(
-    "A similarity score is 1",
+    "A reports the stored row with score 1",
     exactRun.retrieval?.matches[0]?.index === lookup!.index && exactRun.retrieval?.matches[0]?.score === 1,
   );
   printCaseReport("A exact training input", firstPair.input, exactRun);
 
-  const noisy = withInsignificantNoise(firstPair.input);
-  assert("B is not a raw exact match", findExactTrainingMatch(noisy) === null);
-  const nearHit = findDatabaseMatch(noisy);
-  assert("B is a near-exact database hit", nearHit?.kind === "near_exact");
-  const nearRun = await runHumanization({ text: noisy, intensity: 75 });
-  assert("B path is DATABASE_SIMILARITY_MATCH", nearRun.source === "DATABASE_SIMILARITY_MATCH");
+  assert("B new essay is not an exact training match", findExactTrainingMatch(NEW_ESSAY) === null);
   assert(
-    "B returns stored human_text unchanged",
-    nearRun.text === firstPair.output &&
-      Buffer.from(nearRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+    "C same-topic different essay is not an exact training match",
+    findExactTrainingMatch(SAME_TOPIC_DIFFERENT_ESSAY) === null,
   );
-  assert("B similarity score is 0.999", nearRun.retrieval?.matches[0]?.score === 0.999);
-  printCaseReport("B spacing/capitalization", noisy, nearRun);
-
-  const yearCase = findYearSwapFixture(getTrainingPairs());
-  const yearSwapped = yearCase.pair.input.replaceAll(yearCase.year, yearCase.nextYear);
-  const yearHit = findDatabaseMatch(yearSwapped);
-  assert(
-    "C is a same-draft similarity hit",
-    yearHit?.kind === "similarity" && (yearHit.score ?? 0) >= DATABASE_MATCH_THRESHOLD,
-    `kind=${yearHit?.kind ?? "none"} score=${yearHit?.score ?? "n/a"}`,
-  );
-  const expectedMerged = yearCase.pair.output.replaceAll(yearCase.year, yearCase.nextYear);
-  const merged = tryDeterministicEntityMerge(
-    yearSwapped,
-    yearHit!.input,
-    yearHit!.output,
-  );
-  assert("C deterministic merge succeeds", Boolean(merged));
-  assert("C keeps stored wording except the swapped year", merged === expectedMerged);
-  const mergeRun = await runHumanization({ text: yearSwapped, intensity: 75 });
-  assert("C path is DATABASE_ENTITY_MERGE", mergeRun.source === "DATABASE_ENTITY_MERGE");
-  assert("C output equals stored human_text with only the year changed", mergeRun.text === expectedMerged);
-  assert("C does not keep the old year", !mergeRun.text.includes(yearCase.year));
-  assert("C inserts the user year", mergeRun.text.includes(yearCase.nextYear));
-  assert(
-    "C preserves template phrasing",
-    phraseCopyRatio(yearCase.pair.output, mergeRun.text, 4) >= 0.9,
-    `copy=${phraseCopyRatio(yearCase.pair.output, mergeRun.text, 4).toFixed(4)}`,
-  );
-  printCaseReport("C same draft, changed year", yearSwapped, mergeRun);
-
-  const climateHit = findDatabaseMatch(SAME_TOPIC_DIFFERENT_ESSAY);
-  const climateClosest = peekClosestTrainingScore(SAME_TOPIC_DIFFERENT_ESSAY);
-  assert("D is not a database hit", climateHit === null);
-  assert(
-    "D closest score stays below the same-draft threshold",
-    (climateClosest?.score ?? 0) < DATABASE_MATCH_THRESHOLD,
-    `score=${climateClosest?.score ?? "n/a"}`,
-  );
-  console.log(
-    `  REPORT D same-topic different essay (offline)\n    path=FINE_TUNED_MODEL (no database hit)\n    closest=#${climateClosest?.index}=${climateClosest?.score}`,
-  );
-
-  const newTopicHit = findDatabaseMatch(NEW_TOPIC);
-  const newTopicClosest = peekClosestTrainingScore(NEW_TOPIC);
-  assert("E is not a database hit", newTopicHit === null);
-  assert(
-    "E closest score stays below the same-draft threshold",
-    (newTopicClosest?.score ?? 0) < DATABASE_MATCH_THRESHOLD,
-    `score=${newTopicClosest?.score ?? "n/a"}`,
-  );
-  console.log(
-    `  REPORT E new topic (offline)\n    path=FINE_TUNED_MODEL (no database hit)\n    closest=#${newTopicClosest?.index}=${newTopicClosest?.score}`,
-  );
-
-  const newPrompt = buildTunedSystemInstruction({ text: SAME_TOPIC_DIFFERENT_ESSAY, intensity: 75 });
-  assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
-  assert("new-input prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(newPrompt));
-  assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
-  assert("near-exact API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
-  assert("entity merge API source is database", toApiSource("DATABASE_ENTITY_MERGE") === "database");
-  assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+  assert("D new topic is not an exact training match", findExactTrainingMatch(NEW_TOPIC) === null);
+  assert("T1 AI essay is not an exact training match", findExactTrainingMatch(AI_TECH_ESSAY) === null);
+  assert("T2 education essay is not an exact training match", findExactTrainingMatch(EDUCATION_ESSAY) === null);
+  assert("T3 environment essay is not an exact training match", findExactTrainingMatch(ENVIRONMENT_ESSAY) === null);
+  assert("T4 business essay is not an exact training match", findExactTrainingMatch(BUSINESS_ESSAY) === null);
+  assert("T5 general essay is not an exact training match", findExactTrainingMatch(GENERAL_ESSAY) === null);
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
+
+  const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
+  assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
+  assert("new-input prompt asks for rewritten text only", /return only the rewritten text/i.test(newPrompt));
+  assert(
+    "standard tone does not add extra register instructions",
+    !/academic register|conversational register|executive register/i.test(newPrompt),
+  );
+  assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
+  assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+
 
   const copiedRetrieved = assessRewriteQuality(
     "Harborline counted 4,812 commuters in Milwaukee during April 2026.",
@@ -502,20 +460,39 @@ async function runLiveTests() {
   const { runHumanization } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
 
-  console.log("\n4. Dataset-driven live cases");
+  console.log("\n4. Live fine-tuned Vertex cases");
 
   if (!isVertexConfigured()) {
     console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
-    console.log("         Add GOOGLE_CLOUD_PROJECT, VERTEX_AI_TUNED_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON to .env.local.");
+    console.log("         Add GOOGLE_CLOUD_PROJECT, TUNED_MODEL_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON to .env.local.");
     return;
   }
 
   const vertex = requireVertexConfig();
-  console.log(`  Using provider=vertex model=${redactModelName(vertex.model)} location=${vertex.location}`);
+  const tunedModel = redactModelName(vertex.model);
+  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
+  assert(
+    "live path targets TUNED_MODEL_ENDPOINT",
+    tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
+    tunedModel,
+  );
+  assert(
+    "live path does not call gemini-2.5-flash-lite",
+    !/gemini-/i.test(tunedModel) && !/gemini-/i.test(vertex.model),
+    tunedModel,
+  );
+  assert(
+    "live path does not use the failed refino text endpoint",
+    !tunedModel.includes("8870143481071271936"),
+    tunedModel,
+  );
   const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
   const liveCases = [
-    { id: "D", name: "same-topic different essay", text: SAME_TOPIC_DIFFERENT_ESSAY },
-    { id: "E", name: "new topic", text: NEW_TOPIC },
+    { id: "T1", name: "AI and technology", text: AI_TECH_ESSAY },
+    { id: "T2", name: "education", text: EDUCATION_ESSAY },
+    { id: "T3", name: "environment", text: ENVIRONMENT_ESSAY },
+    { id: "T4", name: "business", text: BUSINESS_ESSAY },
+    { id: "T5", name: "general essay", text: GENERAL_ESSAY },
   ] as const;
 
   for (const sample of liveCases) {
@@ -532,16 +509,17 @@ async function runLiveTests() {
       const copyRatio = phraseCopyRatio(sample.text, result.text);
       const ratio = lengthRatio(sample.text, result.text);
       const longEnough = sample.text.trim().split(/\s+/).length >= 40;
-      const lengthOk = !longEnough || (ratio >= 0.55 && ratio <= 1.4);
+      const lengthOk = !longEnough || (ratio >= 0.45 && ratio <= 2.0);
       const usedStoredEssay = storedOutputs.has(result.text);
       assert(
         `${sample.id} ${sample.name}`,
         result.source === "FINE_TUNED_MODEL" &&
+          result.retrieval === null &&
           Boolean(result.text.trim()) &&
           meaning.result === "preserved" &&
           !usedStoredEssay &&
           lengthOk,
-        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)} score=${result.retrieval?.matches[0]?.score ?? "n/a"}`,
+        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
       );
       printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
       console.log(`  --- ${sample.id} output ---`);

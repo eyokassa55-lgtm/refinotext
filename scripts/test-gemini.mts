@@ -33,7 +33,7 @@ async function main() {
 
   if (!isVertexConfigured()) {
     console.error(
-      "Vertex AI is not configured. Set GOOGLE_CLOUD_PROJECT, VERTEX_AI_TUNED_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON. GOOGLE_CLOUD_LOCATION is optional when the endpoint resource already includes a location. This test will not call the old base Gemini model.",
+      "Vertex AI is not configured. Set GOOGLE_CLOUD_PROJECT, TUNED_MODEL_ENDPOINT (or VERTEX_AI_TUNED_ENDPOINT), and GOOGLE_SERVICE_ACCOUNT_JSON. GOOGLE_CLOUD_LOCATION is optional when the endpoint resource already includes a location. This test will not call gemini-2.5-flash-lite.",
     );
     process.exitCode = 1;
     return;

@@ -42,7 +42,7 @@ export const env = {
   vertex: {
     project: getEnv("GOOGLE_CLOUD_PROJECT"),
     location: getEnv("GOOGLE_CLOUD_LOCATION") ?? getEnv("VERTEX_AI_LOCATION"),
-    tunedEndpoint: getEnv("VERTEX_AI_TUNED_ENDPOINT"),
+    tunedEndpoint: getEnv("TUNED_MODEL_ENDPOINT") ?? getEnv("VERTEX_AI_TUNED_ENDPOINT"),
   },
 
   fireworks: {

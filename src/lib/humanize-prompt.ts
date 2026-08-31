@@ -41,20 +41,17 @@ export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
-  const intensity = request?.intensity ?? 75;
-  const strength =
-    intensity <= 33
-      ? "Keep most of the original rhythm. Smooth stiff phrasing only."
-      : "Rewrite naturally with mixed sentence length. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
-
-  return [
+  const lines = [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
-    strength,
-    tunedToneGuidance(request?.tone),
-    "The user message is the only source of meaning. Keep that topic, claims, terminology, names, numbers, dates, quotations, and intent.",
-    "Keep about the same length and the same paragraph breaks. Do not summarize, pad, invent examples, add arguments, or answer the topic.",
-    "Vary sentence openings and length. Do not add phrases such as \"a wide range of\" or extra background. Return only one rewritten draft.",
-  ].join("\n");
+    "Return only the rewritten text. Do not add explanations or analysis.",
+  ];
+
+  const tone = request?.tone;
+  if (tone && tone !== "standard") {
+    lines.splice(1, 0, tunedToneGuidance(tone));
+  }
+
+  return lines.join("\n");
 }
 
 /**

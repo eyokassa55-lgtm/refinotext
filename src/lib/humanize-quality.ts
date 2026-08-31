@@ -118,6 +118,7 @@ const TEMPLATE_VOICE_PATTERNS = [
 const LEAK_PATTERNS = [
   /professional editor and reviser for RefinoText/i,
   /VERTEX_AI_TUNED_ENDPOINT/i,
+  /TUNED_MODEL_ENDPOINT/i,
   /GOOGLE_SERVICE_ACCOUNT/i,
   /GOOGLE_APPLICATION_CREDENTIALS/i,
   /<<<USER_TEXT>>>/i,
