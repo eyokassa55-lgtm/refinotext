@@ -21,6 +21,7 @@ import {
   assessRewriteQuality,
   extractNumbers,
   extractProperNames,
+  phraseCopyRatio,
   stripModelChrome,
 } from "../src/lib/humanize-quality";
 
@@ -98,6 +99,16 @@ Paragraph two keeps the names. Dr. Priya Nandakumar and Jordan Hale disagreed ab
 
 Paragraph three keeps the money. The follow-up contract is €2,047.50, due 3 September 2026, and should not be described as a "small tweak" if the yard gate is the real bottleneck.`,
   },
+  {
+    name: "simple-essay",
+    text: `Rainforests are important places on Earth. They give us oxygen, food, medicine, and wood. Many animals and plants live in rainforests, and some of them cannot live anywhere else.
+
+People cut down rainforests to make space for farms, roads, and towns. When trees are removed, the soil can wash away, rivers can flood, and the climate can change. Animals lose their homes, and some species may disappear forever.
+
+Although rainforests are far from many cities, the choices people make still matter. Buying products that do not destroy forests, supporting local conservation, and planting trees can help. If we protect rainforests now, future generations will still be able to enjoy their beauty and the resources they provide.
+
+Schools can teach students why forests matter. Families can reduce waste. Governments can make rules that stop illegal logging. These actions are simple, but they can keep rainforests alive for a long time.`,
+  },
 ];
 
 async function runOfflineTests() {
@@ -159,6 +170,19 @@ async function runOfflineTests() {
   const empty = assessRewriteQuality(source, "   ");
   assert("flags empty output", empty.issues.some((issue) => issue.code === "EMPTY"));
 
+  const nearCopySource = SAMPLES.find((sample) => sample.name === "simple-essay")!.text;
+  const nearCopy = assessRewriteQuality(
+    nearCopySource,
+    nearCopySource
+      .replace("Rainforests are important places on Earth.", "Rainforests are important places on Earth today.")
+      .replace("give us oxygen, food, medicine, and wood", "give us oxygen, food, medicine, and timber"),
+  );
+  assert("flags a near-copy rewrite", nearCopy.issues.some((issue) => issue.code === "TOO_SIMILAR"));
+  assert(
+    "phrase copy is high for a near-copy",
+    phraseCopyRatio(nearCopySource, nearCopy.output) >= 0.32,
+  );
+
   assert("extracts 4812 from 4,812", extractNumbers("4,812 commuters").includes("4812"));
   assert("extracts Priya Nandakumar", extractProperNames(source).includes("Priya Nandakumar"));
 
@@ -176,11 +200,17 @@ async function runOfflineTests() {
 
   console.log("\n3b. Tuned inference matches training format");
   const { preserveSourceText, resolveTunedModelName } = await import("../src/lib/gemini");
-  const tunedCue = buildTunedSystemInstruction();
+  const tunedCue = buildTunedSystemInstruction({
+    text: source,
+    tone: "academic",
+    readability: "University / Academic",
+    intensity: 75,
+  });
   assert(
-    "uses the training system line, not a longer editor brief",
-    tunedCue === TUNED_TRAINING_SYSTEM_INSTRUCTION,
+    "starts from the training system line",
+    tunedCue.startsWith(TUNED_TRAINING_SYSTEM_INSTRUCTION),
   );
+  assert("asks for a real rewrite, not a copy", /do not copy/i.test(tunedCue));
   assert(
     "does not mention detectors or the 720-pair dataset",
     !/detector|gptzero|turnitin|720/i.test(tunedCue),
@@ -238,16 +268,19 @@ async function runLiveTests() {
       const started = Date.now();
       const output = await runHumanization({
         text: sample.text,
-        tone: "standard",
-        readability: "General Audience",
+        tone: sample.name === "simple-essay" ? "academic" : "standard",
+        readability: sample.name === "simple-essay" ? "University / Academic" : "General Audience",
         intensity: 75,
       });
       const ms = Date.now() - started;
       const quality = assessRewriteQuality(sample.text, output);
+      const copyRatio = phraseCopyRatio(sample.text, output);
+      const rewriteEnough =
+        sample.name !== "simple-essay" || copyRatio < 0.32;
       assert(
         `${sample.name} rewrite`,
-        Boolean(output.trim()) && quality.ok,
-        `ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length}`,
+        Boolean(output.trim()) && quality.ok && rewriteEnough,
+        `ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)}`,
       );
       console.log(`  --- ${sample.name} output ---`);
       console.log(output);

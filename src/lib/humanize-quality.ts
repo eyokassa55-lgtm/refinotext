@@ -170,6 +170,38 @@ function isHighlyRepetitive(text: string): boolean {
   return unique.size / tokens.length < 0.35;
 }
 
+function normalizedTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Fraction of source n-grams that also appear in the rewrite.
+ * Training human_text almost never copies long phrases from ai_text.
+ */
+export function phraseCopyRatio(input: string, output: string, n = 5): number {
+  const source = normalizedTokens(input);
+  const rewritten = normalizedTokens(output);
+  if (source.length < n + 12) return 0;
+
+  const rewrittenPhrases = new Set<string>();
+  for (let i = 0; i <= rewritten.length - n; i += 1) {
+    rewrittenPhrases.add(rewritten.slice(i, i + n).join(" "));
+  }
+
+  let copied = 0;
+  let total = 0;
+  for (let i = 0; i <= source.length - n; i += 1) {
+    total += 1;
+    if (rewrittenPhrases.has(source.slice(i, i + n).join(" "))) copied += 1;
+  }
+
+  return total === 0 ? 0 : copied / total;
+}
+
 export function stripModelChrome(text: string): string {
   let output = text.replace(/^\uFEFF/, "").trim();
   if (output.startsWith("```")) {
@@ -254,6 +286,13 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
     });
   }
 
+  if (inCount >= 80 && phraseCopyRatio(input, output) >= 0.32) {
+    issues.push({
+      code: "TOO_SIMILAR",
+      message: "The rewrite copied too much of the original wording.",
+    });
+  }
+
   const blocking = issues.filter((issue) =>
     [
       "EMPTY",
@@ -268,7 +307,9 @@ export function assessRewriteQuality(input: string, rawOutput: string): QualityR
   );
 
   return {
-    ok: blocking.length === 0 && issues.filter((issue) => issue.code === "TOO_SHORT").length === 0,
+    ok:
+      blocking.length === 0 &&
+      issues.filter((issue) => issue.code === "TOO_SHORT" || issue.code === "TOO_SIMILAR").length === 0,
     output,
     issues,
   };

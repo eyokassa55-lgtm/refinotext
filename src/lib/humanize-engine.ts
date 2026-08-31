@@ -10,12 +10,14 @@ import {
 import {
   buildEditorSystemInstruction,
   buildRepairSystemInstruction,
+  buildStrongerRewriteInstruction,
   buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
   isBlockingQualityFailure,
   missingFactsForRetry,
+  phraseCopyRatio,
 } from "@/lib/humanize-quality";
 import { countWords } from "@/lib/words";
 
@@ -38,16 +40,16 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-function generationOptions(request: HumanizeRequest, tuned: boolean) {
+function generationOptions(request: HumanizeRequest, tuned: boolean, extraTemperature = 0) {
   const intensity = request.intensity ?? 75;
   const temperature = tuned
-    ? 0.12 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.18
+    ? 0.48 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32
     : 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   const words = countWords(request.text);
   return {
-    temperature,
-    topP: tuned ? 0.9 : 0.95,
-    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160)),
+    temperature: Math.min(0.95, temperature + extraTemperature),
+    topP: 0.95,
+    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.4) + 200)),
   };
 }
 
@@ -63,14 +65,20 @@ function wrapAsError(error: unknown): HumanizationFailedError {
 
 async function rewriteWithModel(
   request: HumanizeRequest,
-  options: { systemInstruction?: string; tuned: boolean },
+  options: { systemInstruction?: string; tuned: boolean; extraTemperature?: number },
 ): Promise<string> {
   return generateText(request.text, {
     ...(options.systemInstruction
       ? { systemInstruction: options.systemInstruction }
       : {}),
-    ...generationOptions(request, options.tuned),
+    ...generationOptions(request, options.tuned, options.extraTemperature),
   });
+}
+
+function pickLessCopied(input: string, first: string, second: string): string {
+  const firstCopy = phraseCopyRatio(input, first);
+  const secondCopy = phraseCopyRatio(input, second);
+  return secondCopy <= firstCopy ? second : first;
 }
 
 function finalizeOutput(input: string, raw: string): string {
@@ -107,7 +115,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
     try {
       const first = await rewriteWithModel(request, {
         tuned: true,
-        systemInstruction: buildTunedSystemInstruction(),
+        systemInstruction: buildTunedSystemInstruction(request),
       });
       const firstQuality = assessRewriteQuality(request.text, first);
       if (firstQuality.ok) return firstQuality.output;
@@ -116,13 +124,24 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
         codes: firstQuality.issues.map((issue) => issue.code),
       });
 
+      const missing = missingFactsForRetry(request.text, firstQuality.output || first);
+      const copiedTooClosely = firstQuality.issues.some((issue) => issue.code === "TOO_SIMILAR");
       const repaired = await rewriteWithModel(request, {
         tuned: true,
-        systemInstruction: buildRepairSystemInstruction(
-          request,
-          missingFactsForRetry(request.text, firstQuality.output || first),
-        ),
+        extraTemperature: copiedTooClosely ? 0.12 : 0,
+        systemInstruction: copiedTooClosely
+          ? buildStrongerRewriteInstruction(request, missing)
+          : buildRepairSystemInstruction(request, missing),
       });
+      const repairedQuality = assessRewriteQuality(request.text, repaired);
+      if (copiedTooClosely && !isBlockingQualityFailure(repairedQuality)) {
+        const chosen = pickLessCopied(
+          request.text,
+          firstQuality.output || first,
+          repairedQuality.output || repaired,
+        );
+        return finalizeOutput(request.text, chosen);
+      }
       return finalizeOutput(request.text, repaired);
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;

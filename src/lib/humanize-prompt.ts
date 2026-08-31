@@ -18,14 +18,31 @@ function rewriteStrength(intensity?: number): string {
 }
 
 /**
- * Exact system line from the Vertex chat conversion of the ai_text → human_text
+ * Base system line from the Vertex chat conversion of the ai_text → human_text
  * pairs. Training lives in the endpoint weights; do not send those pairs.
  */
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
-export function buildTunedSystemInstruction(): string {
-  return TUNED_TRAINING_SYSTEM_INSTRUCTION;
+export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
+  const intensity = request?.intensity ?? 75;
+  const strength =
+    intensity <= 33
+      ? "Change stiff phrasing, but you may keep more of the original rhythm."
+      : "Do not copy the original sentences. Change the wording, sentence structure, and rhythm the way you were trained.";
+
+  const tone = request?.tone && request.tone !== "standard" ? `Prefer a ${formatTone(request.tone)} voice.` : "";
+  const readability = request?.readability ? `Aim for ${request.readability} readability.` : "";
+
+  return [
+    TUNED_TRAINING_SYSTEM_INSTRUCTION,
+    strength,
+    tone,
+    readability,
+    "Return only one rewritten draft. No options, titles, or commentary.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**
@@ -87,6 +104,23 @@ export function buildRepairSystemInstruction(
       : "Restore any names, numbers, dates, and quotations from the source.";
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
-Return only one rewritten version of the same draft.
-${facts}`;
+Do not copy the original sentences. Write a new version with different wording and structure.
+${facts}
+Return only one rewritten draft.`;
+}
+
+export function buildStrongerRewriteInstruction(
+  request: HumanizePromptRequest,
+  missingFacts: string[],
+): string {
+  const facts =
+    missingFacts.length > 0
+      ? `Keep these source details: ${missingFacts.join("; ")}.`
+      : "Keep names, numbers, dates, and quotations if they appear in the draft.";
+
+  return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
+The last version was too close to the original. Rewrite it more thoroughly.
+Change sentence openings, structure, and word choice. Do not paraphrase one word at a time.
+${facts}
+Return only one rewritten draft.`;
 }
