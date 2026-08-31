@@ -450,6 +450,11 @@ Rainforests also illustrate a much broader set of global development debates. It
   const climatePrompt = buildTunedSystemInstruction({ text: climateCase.text, intensity: 75 }, climateRetrieve);
   assert("tuned prompt includes retrieved style references", climatePrompt.includes("STYLE REFERENCE 1"));
   assert("tuned prompt keeps the user draft as the only meaning source", /only source of meaning/i.test(climatePrompt));
+  const lowPrompt = buildTunedSystemInstruction({ text: differentCase.text, intensity: 75 }, differentRetrieve);
+  assert(
+    "low-similarity drafts do not receive unrelated training essays as style",
+    !lowPrompt.includes("STYLE REFERENCE 1"),
+  );
 
   const copiedRetrieved = assessRewriteQuality(
     "Harborline counted 4,812 commuters in Milwaukee during April 2026.",

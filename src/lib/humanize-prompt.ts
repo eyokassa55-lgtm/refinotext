@@ -70,25 +70,34 @@ function rewriteStrength(intensity?: number): string {
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
+export function shouldAttachStyleReferences(retrieval?: TrainingRetrieval): boolean {
+  return Boolean(retrieval && retrieval.examples.length > 0 && retrieval.band !== "low");
+}
+
 export function buildTunedSystemInstruction(
   request?: HumanizePromptRequest,
   retrieval?: TrainingRetrieval,
 ): string {
   const intensity = request?.intensity ?? 75;
+  const useStyleRefs = shouldAttachStyleReferences(retrieval);
   const strength =
     intensity <= 33
       ? "Keep most of the original rhythm. Smooth stiff phrasing only."
-      : "Rewrite with the sentence rhythm, wording, and paragraph flow shown by the retrieved training rewrites. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
+      : useStyleRefs
+        ? "Rewrite with the sentence rhythm, wording, and paragraph flow shown by the retrieved training rewrites. Do not copy the draft sentence by sentence, and do not switch into a generic template voice."
+        : "Rewrite naturally with mixed sentence length. Do not copy the draft sentence by sentence, and do not switch into a generic template voice.";
 
   const parts = [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
     strength,
     "The user message is the only source of meaning. Keep that topic, claims, terminology, names, numbers, dates, quotations, and intent.",
     "Keep about the same length and the same paragraph breaks. Do not summarize, pad, invent examples, add arguments, or answer the topic.",
-    "Vary sentence openings and length according to the retrieved rewrite patterns. Return only one rewritten draft.",
+    useStyleRefs
+      ? "Vary sentence openings and length according to the retrieved rewrite patterns. Return only one rewritten draft."
+      : "Vary sentence openings and length. Do not add phrases such as \"a wide range of\" or extra background. Return only one rewritten draft.",
   ];
 
-  if (retrieval && retrieval.examples.length > 0) {
+  if (useStyleRefs && retrieval) {
     parts.push("", buildStyleReferenceBlock(retrieval));
   }
 
@@ -145,7 +154,7 @@ Return only the rewritten source text. No labels, no markdown fences, no preface
 }
 
 function repairSuffix(retrieval?: TrainingRetrieval): string {
-  if (!retrieval || retrieval.examples.length === 0) return "";
+  if (!shouldAttachStyleReferences(retrieval) || !retrieval) return "";
   return `\n${buildStyleReferenceBlock(retrieval)}`;
 }
 
