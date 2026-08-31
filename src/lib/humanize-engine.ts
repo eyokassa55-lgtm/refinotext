@@ -41,7 +41,7 @@ export class HumanizationFailedError extends Error {
 function generationOptions(request: HumanizeRequest, tuned: boolean) {
   const intensity = request.intensity ?? 75;
   const temperature = tuned
-    ? 0.18 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.22
+    ? 0.12 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.18
     : 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   const words = countWords(request.text);
   return {

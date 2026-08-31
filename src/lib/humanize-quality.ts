@@ -95,6 +95,7 @@ const REFUSAL_PATTERNS = [
 
 const GENERIC_PATTERNS = [
   /here is (your )?(the )?(rewritten|humanized|revised|refined) text/i,
+  /here are the rewritten (paragraphs|versions|options|drafts)/i,
   /sure,?\s+(here('s| is)|i've)/i,
   /below is the (rewritten|revised) version/i,
   /here are (a few|several|some) (ways|options|versions)/i,
@@ -112,6 +113,7 @@ const LEAK_PATTERNS = [
 
 const PREFIX_PATTERNS = [
   /^(here is|here's) (your )?(the )?(rewritten|humanized|revised|refined) text:?\s*/i,
+  /^here are the rewritten (paragraphs|versions|options|drafts)[^\n]{0,160}:\s*/i,
   /^(rewritten|revised|refined|humanized) text:?\s*/i,
 ];
 

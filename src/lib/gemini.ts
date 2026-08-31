@@ -370,6 +370,14 @@ function maxOutputTokensFor(text: string, requested?: number): number {
   return Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160));
 }
 
+/**
+ * Keep the live draft as close as possible to training `ai_text`:
+ * BOM/CRLF cleanup only. Do not wrap, prefix, or collapse paragraphs.
+ */
+export function preserveSourceText(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
 async function generateOnce(
   provider: "vertex" | "gemini-api",
   model: string,
@@ -391,9 +399,10 @@ async function generateOnce(
     ],
     config: {
       httpOptions: { timeout: GEMINI_TIMEOUT_MS },
-      temperature: options.temperature ?? (provider === "vertex" ? 0.55 : 0.7),
-      topP: options.topP ?? 0.95,
+      temperature: options.temperature ?? (provider === "vertex" ? 0.2 : 0.7),
+      topP: options.topP ?? (provider === "vertex" ? 0.9 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
+      candidateCount: 1,
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     },
   });
@@ -421,7 +430,7 @@ export async function generateText(
   prompt: string,
   options: GenerateTextOptions = {},
 ): Promise<string> {
-  const trimmed = prompt.trim();
+  const trimmed = preserveSourceText(prompt);
   if (!trimmed) {
     throw new GeminiError("Prompt cannot be empty.", "EMPTY_PROMPT");
   }

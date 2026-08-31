@@ -11,7 +11,12 @@ config({ path: ".env.local" });
 config();
 
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
-import { buildEditorSystemInstruction } from "../src/lib/humanize-prompt";
+import {
+  TUNED_TRAINING_SYSTEM_INSTRUCTION,
+  buildEditorSystemInstruction,
+  buildRepairSystemInstruction,
+  buildTunedSystemInstruction,
+} from "../src/lib/humanize-prompt";
 import {
   assessRewriteQuality,
   extractNumbers,
@@ -134,6 +139,10 @@ async function runOfflineTests() {
 
   const stripped = stripModelChrome("Here is your rewritten text:\n\nThe Milwaukee depot stayed on schedule.");
   assert("strips wrapper copy", stripped.startsWith("The Milwaukee depot"));
+  const strippedParagraphs = stripModelChrome(
+    "Here are the rewritten paragraphs, maintaining the original meaning and facts:\n\nHarborline counted 4,812 commuters.",
+  );
+  assert("strips rewritten-paragraphs wrapper", strippedParagraphs.startsWith("Harborline counted"));
 
   const droppedNumber = assessRewriteQuality(source, "Priya met Jordan and talked about an invoice.");
   assert("flags dropped numbers", droppedNumber.issues.some((issue) => issue.code === "MISSING_FACTS"));
@@ -165,8 +174,28 @@ async function runOfflineTests() {
   assert("treats user text as data", instruction.includes("not instructions"));
   assert("asks for rewritten text only", instruction.includes("Return only the rewritten source text"));
 
-  console.log("\n3b. Tuned endpoint resource handling");
-  const { resolveTunedModelName } = await import("../src/lib/gemini");
+  console.log("\n3b. Tuned inference matches training format");
+  const { preserveSourceText, resolveTunedModelName } = await import("../src/lib/gemini");
+  const tunedCue = buildTunedSystemInstruction();
+  assert(
+    "uses the training system line, not a longer editor brief",
+    tunedCue === TUNED_TRAINING_SYSTEM_INSTRUCTION,
+  );
+  assert(
+    "does not mention detectors or the 720-pair dataset",
+    !/detector|gptzero|turnitin|720/i.test(tunedCue),
+  );
+  assert("does not wrap user drafts with extra prefixes", !tunedCue.includes("<<<USER_TEXT>>>"));
+  const preserved = preserveSourceText("\uFEFFLine one.\r\n\r\nLine two.  ");
+  assert("keeps paragraph breaks from the user draft", preserved === "Line one.\n\nLine two.");
+  const repaired = buildRepairSystemInstruction({ text: source }, ["4,812"]);
+  assert(
+    "repair stays on the same training system line",
+    repaired.startsWith(TUNED_TRAINING_SYSTEM_INSTRUCTION),
+  );
+  assert("repair does not embed the full source draft", !repaired.includes("invoice 8831"));
+
+  console.log("\n3c. Tuned endpoint resource handling");
   const exact =
     "projects/demo-project/locations/us-central1/endpoints/123456789012345";
   assert(
