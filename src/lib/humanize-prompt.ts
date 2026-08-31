@@ -43,7 +43,8 @@ export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
   const lines = [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
-    "Return only the rewritten text. Do not add explanations or analysis.",
+    "Rewrite with new sentence openings and wording, the way a human would revise a stiff draft. Changing one or two words is not enough. Do not copy sentences.",
+    "Keep the same meaning, facts, names, numbers, and paragraph breaks. Return only the rewritten text. Do not add explanations or analysis.",
   ];
 
   const tone = request?.tone;
@@ -131,8 +132,8 @@ export function buildStrongerRewriteInstruction(
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
 ${tunedToneGuidance(request.tone)}
-The last version copied the draft or used a generic template. Rewrite it.
-Change sentence openings and rhythm. Keep the same length, paragraphs, and claims. Do not expand.
+The last version copied the draft. Changing one or two words is not enough.
+Rewrite with new sentence openings and rhythm. Keep the same meaning, facts, length, and paragraph breaks.
 ${facts}
 Return only one rewritten draft.`;
 }

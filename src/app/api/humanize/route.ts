@@ -12,7 +12,6 @@ import {
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
-import { findDatabaseMatch } from "@/lib/training-retrieval";
 import { ensureCurrentUser } from "@/lib/users";
 import type { ApiErrorResponse } from "@/types";
 
@@ -66,7 +65,15 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
       return 502;
     case "INVALID_SERVICE_ACCOUNT":
       return 401;
+    case "TEXT_TOO_SHORT":
+    case "GRUBBY_LIMIT":
+      return 400;
+    case "GRUBBY_QUOTA":
+      return 429;
+    case "TIMEOUT":
+      return 504;
     case "UNAVAILABLE":
+    case "MISSING_GRUBBY_CONFIG":
     case "MISSING_VERTEX_CONFIG":
     case "INVALID_VERTEX_ENDPOINT":
       return 503;
@@ -151,7 +158,7 @@ export async function POST(req: NextRequest) {
     return humanizeSuccess({
       id: previous.id,
       output: previous.outputText,
-      source: findDatabaseMatch(text) ? "database" : "model",
+      source: "model",
       wordCount: previous.inputWordCount,
       creditsCharged: 0,
       creditsRemaining: check.balance,
@@ -226,7 +233,7 @@ export async function POST(req: NextRequest) {
         return humanizeSuccess({
           id: saved.id,
           output: saved.outputText,
-          source: findDatabaseMatch(text) ? "database" : "model",
+          source: "model",
           wordCount: saved.inputWordCount,
           creditsCharged: 0,
           creditsRemaining: account?.balance ?? check.balance,

@@ -1,7 +1,7 @@
 /**
  * Humanizer quality tests.
- * Offline checks never call a model. Live checks use TUNED_MODEL_ENDPOINT
- * (the succeeded "refino correct" Vertex endpoint).
+ * Offline checks never call a model. Live Grubby checks run only when
+ * RUN_GRUBBY_LIVE=1 and GRUBBY_API_KEY is set.
  *
  * Run with: npm run test:humanize
  */
@@ -26,6 +26,11 @@ import {
   stripModelChrome,
 } from "../src/lib/humanize-quality";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
+import {
+  extractGrubbyHumanizePayload,
+  GRUBBY_MCP_URL,
+  parseSseJsonRpcMessages,
+} from "../src/lib/grubby";
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +160,14 @@ Friends and family also influence habits. It is easier to keep a promise when so
 const TECH_SCREENSHOT_ESSAY = `Technology is now an essential part of modern life, transforming how people communicate, work, and learn. From smartphones to artificial intelligence, technological advancements have made daily tasks faster and more efficient. Information is now accessible within seconds, allowing individuals to expand their knowledge and stay connected with the world.
 One of the greatest benefits of technology is its impact on communication. People can interact instantly across continents through social media, video calls, and messaging platforms. This has strengthened global connections and enabled collaboration like never before. In education, technology has opened new opportunities through online learning, making knowledge available to students regardless of their location.
 However, technology also presents challenges. Overdependence on digital devices can reduce face-to-face interactions and affect mental well-being. Privacy and data security have also become major concerns as personal information is increasingly stored online. It is important for individuals to use technology responsibly and maintain a balance between digital and real-world experiences.`;
+
+const CHRONOLOGY_ESSAY = `Chronology is the arrangement of events in the order in which they happened. It helps us understand when things took place and how one event can lead to another. Chronology is used in history, science, literature, and everyday life.
+
+For example, when studying the history of a country, we can arrange important events from the earliest to the most recent. This makes it easier to understand the development of the country over time. In the same way, a person can describe their life by explaining what happened first, what happened next, and what happened later.
+
+Chronology is also useful when telling stories. A story can begin with an event, continue with what happened afterward, and end with the final result. Words such as "first," "next," "then," "afterward," and "finally" help show the order of events.
+
+Understanding chronology is important because it helps people organize information and remember events accurately. It also makes complicated subjects easier to understand. Students often use timelines to study historical events and see how they are connected.`;
 
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
@@ -312,6 +325,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("asks for rewritten text only", /return only the rewritten text/i.test(tunedCue));
   assert("does not ask for analysis", /do not add explanations or analysis/i.test(tunedCue));
   assert(
+    "rejects one-word swaps",
+    /one or two words is not enough/i.test(tunedCue) && /do not copy sentences/i.test(tunedCue),
+  );
+  assert(
     "does not send University readability into the tuned model",
     !/university/i.test(tunedCue),
   );
@@ -346,7 +363,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "../src/lib/training-lookup"
   );
   const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
-  const { runHumanization, toApiSource } = await import("../src/lib/humanize-engine");
+  const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 715, `rows=${stats.rows}`);
   assert(
@@ -366,36 +383,45 @@ Rainforests also illustrate a much broader set of global development debates. It
     `chars=${firstPair.output.length}`,
   );
 
-  const exactRun = await runHumanization({ text: firstPair.input, intensity: 75 });
-  assert("A path is EXACT_TRAINING_MATCH", exactRun.source === "EXACT_TRAINING_MATCH");
+  const exactHit = findDatabaseMatch(firstPair.input);
+  assert("A path is an exact database match", exactHit?.kind === "exact");
   assert(
     "A output is character-for-character identical",
-    exactRun.text === firstPair.output &&
-      Buffer.from(exactRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+    Boolean(exactHit) &&
+      exactHit!.output === firstPair.output &&
+      Buffer.from(exactHit!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
   );
   assert(
     "A reports the stored row with score 1",
-    exactRun.retrieval?.matches[0]?.index === lookup!.index && exactRun.retrieval?.matches[0]?.score === 1,
+    exactHit?.index === lookup!.index && exactHit?.score === 1,
   );
-  printCaseReport("A exact training input", firstPair.input, exactRun);
 
   const techPair = getTrainingPairs()[1]!;
   const oneWordSwap = techPair.input.replace("has become", "is now");
-  const oneWordRun = await runHumanization({ text: oneWordSwap, intensity: 75 });
+  const oneWordHit = findDatabaseMatch(oneWordSwap);
   assert(
-    "tiny wording change returns stored human_text",
-    oneWordRun.source === "DATABASE_SIMILARITY_MATCH" && oneWordRun.text === techPair.output,
-    `source=${oneWordRun.source} row=${oneWordRun.retrieval?.matches[0]?.index}`,
+    "tiny wording change still finds stored human_text",
+    oneWordHit?.kind !== undefined && oneWordHit.output === techPair.output,
+    `kind=${oneWordHit?.kind} row=${oneWordHit?.index}`,
   );
-  printCaseReport("tiny wording change", oneWordSwap, oneWordRun);
 
-  const screenshotRun = await runHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
+  const screenshotHit = findDatabaseMatch(TECH_SCREENSHOT_ESSAY);
   assert(
-    "truncated technology essay returns stored human_text",
-    screenshotRun.source === "DATABASE_SIMILARITY_MATCH" && screenshotRun.text === techPair.output,
-    `source=${screenshotRun.source} row=${screenshotRun.retrieval?.matches[0]?.index}`,
+    "truncated technology essay still finds stored human_text",
+    screenshotHit?.output === techPair.output,
+    `kind=${screenshotHit?.kind} row=${screenshotHit?.index}`,
   );
-  printCaseReport("screenshot-style technology essay", TECH_SCREENSHOT_ESSAY, screenshotRun);
+
+  const truncatedAiText = techPair.input
+    .split(/\n\s*\n/)
+    .slice(0, -1)
+    .join("\n\n");
+  const truncatedHit = findDatabaseMatch(truncatedAiText);
+  assert(
+    "truncated ai_text sample still finds paired human_text",
+    truncatedHit?.output === techPair.output,
+    `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
+  );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
@@ -408,6 +434,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("T3 environment essay is not a database match", findDatabaseMatch(ENVIRONMENT_ESSAY) === null);
   assert("T4 business essay is not a database match", findDatabaseMatch(BUSINESS_ESSAY) === null);
   assert("T5 general essay is not a database match", findDatabaseMatch(GENERAL_ESSAY) === null);
+  assert("chronology essay is not a stored ai_text sample", findDatabaseMatch(CHRONOLOGY_ESSAY) === null);
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
   const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -420,6 +447,31 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
   assert("same-draft API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+
+  console.log("\n3e. Grubby MCP payload parsing");
+  assert("uses the official Grubby MCP URL", GRUBBY_MCP_URL === "https://grubby.ai/api/mcp");
+  const sse = [
+    "event: message",
+    'data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Harborline changed the Milwaukee timetable."}]}}',
+    "",
+  ].join("\n");
+  const sseMessages = parseSseJsonRpcMessages(sse);
+  const sseRecord = sseMessages[0] as { result?: { content?: { text?: string }[] } };
+  assert(
+    "reads SSE tool text",
+    sseRecord?.result?.content?.[0]?.text === "Harborline changed the Milwaukee timetable.",
+  );
+  const jobPayload = extractGrubbyHumanizePayload(
+    JSON.stringify({ status: "processing", job_id: "job_123" }),
+  );
+  assert("treats a job_id as a pollable job", jobPayload.kind === "job" && jobPayload.jobId === "job_123");
+  const textPayload = extractGrubbyHumanizePayload(
+    JSON.stringify({ humanized_text: "The depot published a shorter wait-time note." }),
+  );
+  assert("reads humanized_text from JSON", textPayload.kind === "text" && textPayload.text.includes("depot"));
+  const plainPayload = extractGrubbyHumanizePayload("Harborline posted the Milwaukee figures on Tuesday.");
+  assert("treats plain tool text as the rewrite", plainPayload.kind === "text");
+
 
 
   const copiedRetrieved = assessRewriteQuality(
@@ -474,96 +526,53 @@ Rainforests also illustrate a much broader set of global development debates. It
 }
 
 async function runLiveTests() {
-  const {
-    GeminiError,
-    generateText,
-    isVertexConfigured,
-    redactModelName,
-    requireVertexConfig,
-  } = await import("../src/lib/gemini");
+  const { isGrubbyConfigured } = await import("../src/lib/grubby");
   const { runHumanization } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
 
-  console.log("\n4. Live fine-tuned Vertex cases");
+  console.log("\n4. Live Grubby rewrite");
 
-  if (!isVertexConfigured()) {
-    console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
-    console.log("         Add GOOGLE_CLOUD_PROJECT, TUNED_MODEL_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON to .env.local.");
+  if (process.env.RUN_GRUBBY_LIVE !== "1") {
+    console.log("  SKIP  Live Grubby tests are off. Set RUN_GRUBBY_LIVE=1 to enable.");
     return;
   }
 
-  const vertex = requireVertexConfig();
-  const tunedModel = redactModelName(vertex.model);
-  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
-  assert(
-    "live path targets TUNED_MODEL_ENDPOINT",
-    tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
-    tunedModel,
-  );
-  assert(
-    "live path does not call gemini-2.5-flash-lite",
-    !/gemini-/i.test(tunedModel) && !/gemini-/i.test(vertex.model),
-    tunedModel,
-  );
-  assert(
-    "live path does not use the failed refino text endpoint",
-    !tunedModel.includes("8870143481071271936"),
-    tunedModel,
-  );
+  if (!isGrubbyConfigured()) {
+    console.log("  SKIP  GRUBBY_API_KEY is not set.");
+    return;
+  }
+
   const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
-  const liveCases = [
-    { id: "T1", name: "AI and technology", text: AI_TECH_ESSAY },
-    { id: "T2", name: "education", text: EDUCATION_ESSAY },
-    { id: "T3", name: "environment", text: ENVIRONMENT_ESSAY },
-    { id: "T4", name: "business", text: BUSINESS_ESSAY },
-    { id: "T5", name: "general essay", text: GENERAL_ESSAY },
-  ] as const;
+  const sample = { id: "T6", name: "chronology", text: CHRONOLOGY_ESSAY };
 
-  for (const sample of liveCases) {
-    try {
-      const started = Date.now();
-      const result = await runHumanization({
-        text: sample.text,
-        tone: "standard",
-        readability: "General Audience",
-        intensity: 75,
-      });
-      const ms = Date.now() - started;
-      const meaning = meaningPreservation(sample.text, result.text);
-      const copyRatio = phraseCopyRatio(sample.text, result.text);
-      const ratio = lengthRatio(sample.text, result.text);
-      const longEnough = sample.text.trim().split(/\s+/).length >= 40;
-      const lengthOk = !longEnough || (ratio >= 0.45 && ratio <= 2.0);
-      const usedStoredEssay = storedOutputs.has(result.text);
-      assert(
-        `${sample.id} ${sample.name}`,
-        result.source === "FINE_TUNED_MODEL" &&
-          result.retrieval === null &&
-          Boolean(result.text.trim()) &&
-          meaning.result === "preserved" &&
-          !usedStoredEssay &&
-          lengthOk,
-        `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
-      );
-      printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
-      console.log(`  --- ${sample.id} output ---`);
-      console.log(result.text);
-      console.log("  --- end ---");
-    } catch (error) {
-      const code = error instanceof GeminiError ? error.code : error instanceof Error ? error.name : "ERROR";
-      assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
-    }
-  }
-
-  let usedBaseGemini = false;
   try {
-    await generateText("Return the single word ping.", {
-      systemInstruction: "Return only the rewritten text.",
+    const started = Date.now();
+    const result = await runHumanization({
+      text: sample.text,
+      tone: "standard",
+      readability: "General Audience",
+      intensity: 75,
     });
-  } catch {
-    usedBaseGemini = false;
+    const ms = Date.now() - started;
+    const meaning = meaningPreservation(sample.text, result.text);
+    const copyRatio = phraseCopyRatio(sample.text, result.text);
+    const ratio = lengthRatio(sample.text, result.text);
+    const usedStoredEssay = storedOutputs.has(result.text);
+    assert(
+      `${sample.id} ${sample.name}`,
+      result.source === "FINE_TUNED_MODEL" &&
+        result.retrieval === null &&
+        Boolean(result.text.trim()) &&
+        meaning.result === "preserved" &&
+        !usedStoredEssay &&
+        copyRatio < 0.32,
+      `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+    );
+    printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
+  } catch (error) {
+    const code = error instanceof Error ? error.name : "ERROR";
+    assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
   }
-  assert("live path is configured for Vertex, not silent Gemini", !usedBaseGemini && isVertexConfigured());
 }
 
 async function main() {

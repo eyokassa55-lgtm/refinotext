@@ -39,6 +39,10 @@ export const env = {
     allowBaseFallback: getEnv("ALLOW_BASE_GEMINI_FALLBACK") === "true",
   },
 
+  grubby: {
+    apiKey: getEnv("GRUBBY_API_KEY"),
+  },
+
   vertex: {
     project: getEnv("GOOGLE_CLOUD_PROJECT"),
     location: getEnv("GOOGLE_CLOUD_LOCATION") ?? getEnv("VERTEX_AI_LOCATION"),

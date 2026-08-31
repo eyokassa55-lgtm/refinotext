@@ -1,7 +1,7 @@
 import "server-only";
 
 import { paragraphCount, phraseCopyRatio } from "@/lib/humanize-quality";
-import { findExactTrainingMatch, findNormalizedTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
+import { findExactTrainingMatch, findNormalizedTrainingMatch, getTrainingPairs, normalizeInsignificant, type TrainingPair } from "@/lib/training-lookup";
 import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
@@ -640,11 +640,51 @@ function isSameUnderlyingDraft(query: string, doc: string, overlap: number): boo
 }
 
 /**
+ * ai_text is the lookup sample. If the user pasted that draft, or a truncated /
+ * lightly edited copy of it, return the paired human_text from the same row.
+ */
+function findAiTextSampleMatch(userText: string): DatabaseTrainingMatch | null {
+  const queryWords = wordCount(userText);
+  if (queryWords < 50) return null;
+
+  const queryNorm = normalizeInsignificant(userText);
+  if (queryNorm.length < 80) return null;
+
+  let best: { pair: TrainingPair; score: number } | null = null;
+
+  for (const pair of getTrainingPairs()) {
+    const docWords = wordCount(pair.input);
+    const ratio = queryWords / docWords;
+    if (ratio < 0.58 || ratio > 1.55) continue;
+
+    const docNorm = normalizeInsignificant(pair.input);
+    const prefixLen = Math.min(queryNorm.length, docNorm.length, 900);
+    const prefixHit =
+      prefixLen >= 80 &&
+      (docNorm.startsWith(queryNorm.slice(0, prefixLen)) ||
+        queryNorm.startsWith(docNorm.slice(0, prefixLen)) ||
+        docNorm.includes(queryNorm) ||
+        queryNorm.includes(docNorm));
+    const copy = phraseCopyRatio(userText, pair.input, 5);
+    if (!prefixHit && copy < 0.58) continue;
+    if (prefixHit && copy < 0.22 && ratio < 0.72) continue;
+
+    const score = Math.max(copy, prefixHit ? 0.93 : 0);
+    if (!best || score > best.score) {
+      best = { pair, score };
+    }
+  }
+
+  if (!best) return null;
+  return lockedPair(best.pair, Number(best.score.toFixed(4)), "near_exact");
+}
+
+/**
  * Vector + lexical search against stored ai_text.
  *
- * Exact string, insignificant spacing/punctuation/capitalization, or
- * TF-IDF cosine + Jaccard + char 4-grams >= 0.85 with a same-draft gate.
- * A related topic without the same sentences is not a hit.
+ * Exact string, insignificant spacing/punctuation/capitalization, truncated
+ * ai_text samples, or TF-IDF cosine + Jaccard + char 4-grams >= 0.85 with a
+ * same-draft gate. A related topic without the same sentences is not a hit.
  */
 export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | null {
   const exact = findExactTrainingMatch(userText);
@@ -652,6 +692,9 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
 
   const nearExact = findNormalizedTrainingMatch(userText);
   if (nearExact) return lockedPair(nearExact, 0.999, "near_exact");
+
+  const sample = findAiTextSampleMatch(userText);
+  if (sample) return sample;
 
   const index = getRetrievalIndex();
   const queryTokens = tokenize(userText);
