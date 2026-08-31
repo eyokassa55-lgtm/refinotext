@@ -132,6 +132,10 @@ export function getTrainingLookupStats(): {
   };
 }
 
+function normalizeLookupKey(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
 /**
  * Return the stored human_text for an exact ai_text/input match.
  * The stored output is returned unchanged.
@@ -143,12 +147,10 @@ export function findExactTrainingMatch(userText: string): TrainingMatch | null {
   const direct = byInput.get(userText);
   if (direct) return direct;
 
-  if (userText.includes("\r")) {
-    const normalized = userText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    if (normalized !== userText) {
-      const match = byInput.get(normalized);
-      if (match) return match;
-    }
+  const normalized = normalizeLookupKey(userText);
+  if (normalized !== userText) {
+    const match = byInput.get(normalized);
+    if (match) return match;
   }
 
   return null;

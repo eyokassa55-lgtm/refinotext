@@ -370,9 +370,11 @@ Rainforests also illustrate a much broader set of global development debates. It
   const {
     RETRIEVAL_METHOD,
     SIMILARITY_METHOD,
+    findDatabaseMatch,
     getRetrievalIndexStats,
     retrieveTrainingExamples,
   } = await import("../src/lib/training-retrieval");
+  const { DATABASE_MATCH_THRESHOLD } = await import("../src/lib/training-schema");
   const retrievalStats = getRetrievalIndexStats();
   assert("indexes every training row", retrievalStats.docs === stats.rows, `docs=${retrievalStats.docs}`);
   assert("builds a cached term index", retrievalStats.terms > 100, `terms=${retrievalStats.terms}`);
@@ -386,6 +388,25 @@ Rainforests also illustrate a much broader set of global development debates. It
     selfRetrieve.examples.some((example) => example.index === lookup!.index),
   );
   assert("does not mutate stored output", selfRetrieve.examples.every((example) => example.output.length > 0));
+
+  const dbExact = findDatabaseMatch(firstPair.input);
+  assert("database match uses the 0.85 threshold constant", DATABASE_MATCH_THRESHOLD === 0.85);
+  assert("exact ai_text is a database hit", dbExact?.kind === "exact" && dbExact.score === 1);
+  assert(
+    "database hit returns stored human_text unchanged",
+    Boolean(dbExact) &&
+      Buffer.from(dbExact!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+  );
+  const trimmedExact = findDatabaseMatch(`\n${firstPair.input}\n`);
+  assert("trimmed exact paste still hits the dataset", trimmedExact?.kind === "exact");
+  const doubledSpace = findDatabaseMatch(firstPair.input.replace(" is ", "  is "));
+  assert(
+    "tiny spacing change at or above 0.85 returns stored human_text",
+    Boolean(doubledSpace) &&
+      doubledSpace!.score >= DATABASE_MATCH_THRESHOLD &&
+      doubledSpace!.output === firstPair.output,
+    `score=${doubledSpace?.score ?? "none"} kind=${doubledSpace?.kind ?? "none"}`,
+  );
 
   const climateCase = DATASET_CASES.find((item) => item.id === "B")!;
   const climateRetrieve = retrieveTrainingExamples(climateCase.text);
@@ -403,6 +424,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     "same-topic climate similarity is not low",
     climateRetrieve.band !== "low",
     `band=${climateRetrieve.band} top=${climateRetrieve.examples[0]?.score}`,
+  );
+  assert(
+    "new climate draft stays below the 0.85 database-return threshold",
+    findDatabaseMatch(climateCase.text) === null,
   );
 
   const differentCase = DATASET_CASES.find((item) => item.id === "C")!;

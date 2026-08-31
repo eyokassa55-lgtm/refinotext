@@ -19,6 +19,8 @@ export type CreditBalanceResponse = {
 export type HumanizeResponse = {
   id?: string;
   output: string;
+  humanizedText: string;
+  source: "database" | "model";
   wordCount: number;
   creditsCharged: number;
   creditsRemaining: number;

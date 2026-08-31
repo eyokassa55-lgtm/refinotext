@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
+import { findExactTrainingMatch, getTrainingPairs, type TrainingPair } from "@/lib/training-lookup";
+import { DATABASE_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 export const RETRIEVAL_METHOD =
   "cached inverted TF-IDF with dataset co-occurrence expansion, character n-grams, and structure affinity";
@@ -504,5 +505,79 @@ export function getRetrievalIndexStats(): {
     docs: index.docs.length,
     terms: index.idf.size,
     neighbors: index.neighbors.size,
+  };
+}
+
+export type DatabaseTrainingMatch = {
+  index: number;
+  score: number;
+  output: string;
+  kind: "exact" | "similarity";
+};
+
+function lengthRatioOk(queryWords: number, docWords: number): boolean {
+  if (queryWords <= 0 || docWords <= 0) return false;
+  const ratio = queryWords / docWords;
+  return ratio >= 0.82 && ratio <= 1.22;
+}
+
+/**
+ * Dataset-first hit: exact ai_text, or cosine/Jaccard near-duplicate >= 0.85.
+ * On a hit, callers must return stored human_text unchanged and skip the model.
+ * Same-topic but different drafts stay below the threshold and go to the tuned model.
+ */
+export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | null {
+  const exact = findExactTrainingMatch(userText);
+  if (exact) {
+    return {
+      index: exact.index,
+      score: 1,
+      output: exact.output,
+      kind: "exact",
+    };
+  }
+
+  const index = getRetrievalIndex();
+  const queryTokens = tokenize(userText);
+  if (queryTokens.length === 0) return null;
+
+  const queryUnigrams = new Set(queryTokens);
+  const queryTerms = sparseFromCounts(termCounts(withBigrams(queryTokens)), index.idf);
+  const queryNorm = sparseNorm(queryTerms) || 1;
+  const queryGrams = charGramVector(userText);
+  const queryGramNorm = l2(queryGrams) || 1;
+  const queryWords = wordCount(userText);
+
+  const tfidfScores = new Float64Array(index.docs.length);
+  for (const item of queryTerms) {
+    const posting = index.inverted.get(item.term);
+    if (!posting) continue;
+    for (const hit of posting) {
+      tfidfScores[hit.doc] += item.weight * hit.weight;
+    }
+  }
+
+  let best: { doc: IndexedDoc; score: number; overlap: number } | null = null;
+  for (let docIndex = 0; docIndex < index.docs.length; docIndex += 1) {
+    const doc = index.docs[docIndex]!;
+    if (!lengthRatioOk(queryWords, doc.wordCount)) continue;
+    const tfidf = (tfidfScores[docIndex] ?? 0) / (queryNorm * doc.norm);
+    const overlap = jaccard(queryUnigrams, doc.unigrams);
+    const grams = dotGrams(queryGrams, doc.charVec) / (queryGramNorm * doc.charNorm);
+    const score = Math.max(0, Math.min(1, 0.55 * tfidf + 0.3 * overlap + 0.15 * grams));
+    if (!best || score > best.score) {
+      best = { doc, score, overlap };
+    }
+  }
+
+  if (!best || best.score < DATABASE_MATCH_THRESHOLD || best.overlap < 0.75) {
+    return null;
+  }
+
+  return {
+    index: best.doc.pair.index,
+    score: Number(best.score.toFixed(4)),
+    output: best.doc.pair.output,
+    kind: "similarity",
   };
 }

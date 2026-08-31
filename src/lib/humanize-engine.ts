@@ -22,12 +22,14 @@ import {
   phraseCopyRatio,
   type QualityContext,
 } from "@/lib/humanize-quality";
-import { findExactTrainingMatch, getTrainingRowCount } from "@/lib/training-lookup";
+import { getTrainingRowCount } from "@/lib/training-lookup";
 import {
+  findDatabaseMatch,
   retrieveTrainingExamples,
   type SimilarityBand,
   type TrainingRetrieval,
 } from "@/lib/training-retrieval";
+import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
 export type HumanizeRequest = {
@@ -37,7 +39,7 @@ export type HumanizeRequest = {
   intensity?: number;
 };
 
-export type HumanizeSource = "EXACT_TRAINING_MATCH" | "FINE_TUNED_MODEL";
+export type HumanizeSource = "EXACT_TRAINING_MATCH" | "DATABASE_SIMILARITY_MATCH" | "FINE_TUNED_MODEL";
 
 export type HumanizeRetrievalMatch = {
   index: number;
@@ -179,19 +181,25 @@ function finalizeOutput(input: string, raw: string, context?: QualityContext): s
   return quality.output;
 }
 
+export function toApiSource(source: HumanizeSource): HumanizeApiSource {
+  return source === "FINE_TUNED_MODEL" ? "model" : "database";
+}
+
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const trainingHit = findExactTrainingMatch(request.text);
-  if (trainingHit) {
-    console.info("[humanize] EXACT TRAINING MATCH", {
-      row: trainingHit.index,
+  const databaseHit = findDatabaseMatch(request.text);
+  if (databaseHit) {
+    console.info("[humanize] [DATABASE_EXACT_MATCH]", {
+      row: databaseHit.index,
+      kind: databaseHit.kind,
+      score: databaseHit.score,
       rows: getTrainingRowCount(),
     });
     return {
-      text: trainingHit.output,
-      source: "EXACT_TRAINING_MATCH",
+      text: databaseHit.output,
+      source: databaseHit.kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH",
       retrieval: {
         band: "high",
-        matches: [{ index: trainingHit.index, score: 1 }],
+        matches: [{ index: databaseHit.index, score: databaseHit.score }],
       },
     };
   }
@@ -202,7 +210,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
 
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
-      console.info("[humanize] NEW INPUT → FINE-TUNED MODEL", {
+      console.info("[humanize] [MODEL_GENERATED]", {
         rows: getTrainingRowCount(),
         band: retrieval.band,
         matches: retrievalSummary.matches,
