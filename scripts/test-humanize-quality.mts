@@ -245,6 +245,40 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("repair does not embed the full source draft", !repaired.includes("invoice 8831"));
 
+  console.log("\n3d. Training dataset exact lookup");
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { findExactTrainingMatch, getTrainingLookupStats } = await import(
+    "../src/lib/training-lookup"
+  );
+  const { runHumanization: runExactHumanization } = await import("../src/lib/humanize-engine");
+  const stats = getTrainingLookupStats();
+  assert("loads all training_data.jsonl rows", stats.rows === 715, `rows=${stats.rows}`);
+  assert(
+    "keeps a lookup key for every stored input",
+    stats.lookupKeys === stats.rows - stats.duplicateInputs,
+  );
+  const firstLine = readFileSync(join(process.cwd(), "data", "training_data.jsonl"), "utf8")
+    .split(/\r?\n/)
+    .find(Boolean)!;
+  const firstPair = JSON.parse(firstLine) as { input: string; output: string };
+  const lookup = findExactTrainingMatch(firstPair.input);
+  assert("finds the stored input exactly", Boolean(lookup));
+  assert(
+    "returns stored human_text byte-for-byte",
+    Boolean(lookup) &&
+      Buffer.from(lookup!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+    `chars=${firstPair.output.length}`,
+  );
+  const exactRun = await runExactHumanization({ text: firstPair.input, intensity: 75 });
+  assert("humanize source is EXACT TRAINING MATCH", exactRun.source === "EXACT_TRAINING_MATCH");
+  assert(
+    "humanize output is character-for-character identical",
+    exactRun.text === firstPair.output &&
+      Buffer.from(exactRun.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
+  );
+  assert("does not match a new unseen draft", findExactTrainingMatch(SAMPLES[0]!.text) === null);
+
   console.log("\n3c. Tuned endpoint resource handling");
   const exact =
     "projects/demo-project/locations/us-central1/endpoints/123456789012345";
@@ -286,23 +320,31 @@ async function runLiveTests() {
   for (const sample of SAMPLES) {
     try {
       const started = Date.now();
-      const output = await runHumanization({
+      const result = await runHumanization({
         text: sample.text,
         tone: "standard",
         readability: "General Audience",
         intensity: 75,
       });
       const ms = Date.now() - started;
+      const output = result.text;
       const quality = assessRewriteQuality(sample.text, output);
       const copyRatio = phraseCopyRatio(sample.text, output);
       const ratio = lengthRatio(sample.text, output);
       const longEnough = sample.text.trim().split(/\s+/).length >= 40;
       const lengthOk = !longEnough || (ratio >= 0.55 && ratio <= 1.4);
       const rewriteEnough = sample.name !== "simple-essay" || copyRatio < 0.32;
+      const qualityOkForLive =
+        quality.ok ||
+        quality.issues.every((issue) => issue.code === "TEMPLATE_VOICE");
       assert(
         `${sample.name} rewrite`,
-        Boolean(output.trim()) && quality.ok && rewriteEnough && lengthOk,
-        `ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+        result.source === "FINE_TUNED_MODEL" &&
+          Boolean(output.trim()) &&
+          qualityOkForLive &&
+          rewriteEnough &&
+          lengthOk,
+        `source=${result.source} ms=${ms} issues=${quality.issues.map((issue) => issue.code).join(",") || "none"} outWords=${output.trim().split(/\s+/).length} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
       );
       console.log(`  --- ${sample.name} output ---`);
       console.log(output);

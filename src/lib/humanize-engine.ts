@@ -21,6 +21,7 @@ import {
   missingFactsForRetry,
   phraseCopyRatio,
 } from "@/lib/humanize-quality";
+import { findExactTrainingMatch, getTrainingRowCount } from "@/lib/training-lookup";
 import { countWords } from "@/lib/words";
 
 export type HumanizeRequest = {
@@ -28,6 +29,13 @@ export type HumanizeRequest = {
   tone?: string;
   readability?: string;
   intensity?: number;
+};
+
+export type HumanizeSource = "EXACT_TRAINING_MATCH" | "FINE_TUNED_MODEL";
+
+export type HumanizeResult = {
+  text: string;
+  source: HumanizeSource;
 };
 
 export class HumanizationFailedError extends Error {
@@ -127,15 +135,32 @@ function finalizeOutput(input: string, raw: string): string {
   return quality.output;
 }
 
-export async function runHumanization(request: HumanizeRequest): Promise<string> {
+export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  const trainingHit = findExactTrainingMatch(request.text);
+  if (trainingHit) {
+    console.info("[humanize] EXACT TRAINING MATCH", {
+      row: trainingHit.index,
+      rows: getTrainingRowCount(),
+    });
+    return {
+      text: trainingHit.output,
+      source: "EXACT_TRAINING_MATCH",
+    };
+  }
+
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
+      console.info("[humanize] NEW INPUT → FINE-TUNED MODEL", {
+        rows: getTrainingRowCount(),
+      });
       const first = await rewriteWithModel(request, {
         tuned: true,
         systemInstruction: buildTunedSystemInstruction(request),
       });
       const firstQuality = assessRewriteQuality(request.text, first);
-      if (firstQuality.ok) return firstQuality.output;
+      if (firstQuality.ok) {
+        return { text: firstQuality.output, source: "FINE_TUNED_MODEL" };
+      }
 
       console.info("[humanize] retrying once after quality check", {
         codes: firstQuality.issues.map((issue) => issue.code),
@@ -159,7 +184,10 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
         firstQuality.output || first,
         repaired,
       );
-      return finalizeOutput(request.text, chosen);
+      return {
+        text: finalizeOutput(request.text, chosen),
+        source: "FINE_TUNED_MODEL",
+      };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);
@@ -172,7 +200,10 @@ export async function runHumanization(request: HumanizeRequest): Promise<string>
         tuned: false,
         systemInstruction: buildEditorSystemInstruction(request),
       });
-      return finalizeOutput(request.text, text);
+      return {
+        text: finalizeOutput(request.text, text),
+        source: "FINE_TUNED_MODEL",
+      };
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);

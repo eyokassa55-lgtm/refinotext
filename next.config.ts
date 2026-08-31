@@ -7,6 +7,9 @@ const noindexRobots = [{ key: "X-Robots-Tag", value: "noindex, nofollow" }];
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   outputFileTracingRoot: path.join(__dirname),
+  outputFileTracingIncludes: {
+    "/api/humanize": ["./data/training_data.jsonl"],
+  },
   serverExternalPackages: [
     "@prisma/client",
     "@prisma/adapter-neon",

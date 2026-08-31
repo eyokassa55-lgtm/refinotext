@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
 
   let output: string;
   try {
-    output = await runHumanization({ text, tone, readability, intensity });
+    output = (await runHumanization({ text, tone, readability, intensity })).text;
   } catch (error) {
     const code =
       error instanceof HumanizationFailedError ? error.code : "HUMANIZATION_FAILED";
