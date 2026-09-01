@@ -1,6 +1,7 @@
 /**
  * Humanizer quality tests.
- * Humanize returns stored human_text from training_data.jsonl only.
+ * Offline checks never call a model. Live Vertex checks run when
+ * TUNED_MODEL_ENDPOINT is set. Full rewrite samples require RUN_VERTEX_LIVE=1.
  *
  * Run with: npm run test:humanize
  */
@@ -422,18 +423,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const { runHumanization, HumanizationFailedError } = await import("../src/lib/humanize-engine");
+  const { runHumanization } = await import("../src/lib/humanize-engine");
   const exactRun = await runHumanization({ text: firstPair.input, intensity: 75 });
-  assert("Humanize uses the stored pair, not a rewrite", exactRun.source === "EXACT_TRAINING_MATCH");
+  assert("Humanize uses the stored pair for an exact draft", exactRun.source === "EXACT_TRAINING_MATCH");
   assert("Humanize returns stored human_text", exactRun.text === firstPair.output);
-
-  let unmatchedCode = "";
-  try {
-    await runHumanization({ text: NEW_ESSAY, intensity: 75 });
-  } catch (error) {
-    unmatchedCode = error instanceof HumanizationFailedError ? error.code : error instanceof Error ? error.name : "ERROR";
-  }
-  assert("Humanize rejects drafts that are not in the dataset", unmatchedCode === "NO_TRAINING_MATCH");
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
@@ -538,20 +531,60 @@ Rainforests also illustrate a much broader set of global development debates. It
 }
 
 async function runLiveTests() {
-  console.log("\n4. Dataset-only Humanize");
-  const { runHumanization, HumanizationFailedError } = await import("../src/lib/humanize-engine");
+  const {
+    isVertexConfigured,
+    redactModelName,
+    requireVertexConfig,
+  } = await import("../src/lib/gemini");
+  const { runHumanization } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
-  const first = getTrainingPairs()[0]!;
-  const hit = await runHumanization({ text: first.input });
-  assert("live Humanize returns the paired human_text", hit.text === first.output && hit.source !== "FINE_TUNED_MODEL");
 
-  let code = "";
-  try {
-    await runHumanization({ text: CHRONOLOGY_ESSAY });
-  } catch (error) {
-    code = error instanceof HumanizationFailedError ? error.code : "ERROR";
+  console.log("\n4. Live fine-tuned Vertex cases");
+
+  if (!isVertexConfigured()) {
+    console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
+    return;
   }
-  assert("live Humanize does not rewrite unseen drafts", code === "NO_TRAINING_MATCH");
+
+  const vertex = requireVertexConfig();
+  const tunedModel = redactModelName(vertex.model);
+  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
+  assert(
+    "live path targets TUNED_MODEL_ENDPOINT",
+    tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
+    tunedModel,
+  );
+
+  if (process.env.RUN_VERTEX_LIVE !== "1") {
+    console.log("  SKIP  Live rewrite samples are off. Set RUN_VERTEX_LIVE=1 to enable.");
+    return;
+  }
+
+  const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
+  const sample = { id: "T6", name: "chronology", text: CHRONOLOGY_ESSAY };
+
+  try {
+    const result = await runHumanization({
+      text: sample.text,
+      tone: "standard",
+      readability: "General Audience",
+      intensity: 75,
+    });
+    const copyRatio = phraseCopyRatio(sample.text, result.text);
+    const usedStoredEssay = storedOutputs.has(result.text);
+    assert(
+      `${sample.id} ${sample.name}`,
+      result.source === "FINE_TUNED_MODEL" &&
+        result.retrieval === null &&
+        Boolean(result.text.trim()) &&
+        !usedStoredEssay &&
+        copyRatio < 0.32,
+      `source=${result.source} copy=${copyRatio.toFixed(2)}`,
+    );
+  } catch (error) {
+    const code = error instanceof Error ? error.name : "ERROR";
+    assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
+  }
 }
 
 async function main() {
