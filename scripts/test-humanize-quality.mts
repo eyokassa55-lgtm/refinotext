@@ -342,8 +342,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "includes clarity swap guidance",
     /clarity swaps/i.test(tunedCue) &&
-      /dominates or shapes/i.test(tunedCue) &&
-      /can lead to a loss of/i.test(tunedCue),
+      /woven into the fabric|dominates or shapes/i.test(tunedCue) &&
+      /people rely on/i.test(tunedCue),
+  );
+  assert(
+    "includes editorial quality priorities",
+    /top editorial priorities/i.test(tunedCue) &&
+      /vary sentence openings/i.test(tunedCue) &&
+      /do not invent a new opposing view/i.test(tunedCue),
   );
   assert("identifies as RefinoText", /you are refinotext/i.test(tunedCue));
   assert(
@@ -379,7 +385,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
   const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
-  assert("loads all training_data.jsonl rows", stats.rows === 715, `rows=${stats.rows}`);
+  assert("loads all training_data.jsonl rows", stats.rows === 716, `rows=${stats.rows}`);
   assert(
     "keeps a lookup key for every stored input",
     stats.lookupKeys === stats.rows - stats.duplicateInputs,
