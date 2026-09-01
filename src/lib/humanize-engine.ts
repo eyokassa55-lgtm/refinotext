@@ -28,7 +28,6 @@ import {
   isTemplateLikeOutput,
   rewriteArtificialityScore,
 } from "@/lib/humanize-voice";
-import { GrubbyError, humanizeWithGrubby, isGrubbyConfigured } from "@/lib/grubby";
 import { getTrainingRowCount } from "@/lib/training-lookup";
 import {
   findDatabaseMatch,
@@ -113,9 +112,6 @@ function wrapAsError(error: unknown): HumanizationFailedError {
   if (error instanceof GeminiError) {
     return new HumanizationFailedError(error.message, error.code, error.status);
   }
-  if (error instanceof GrubbyError) {
-    return new HumanizationFailedError(error.message, error.code, error.status);
-  }
 
   return new HumanizationFailedError(
     "Humanization failed. Please try again.",
@@ -190,46 +186,6 @@ function resolveDatabaseHit(request: HumanizeRequest, hit: DatabaseTrainingMatch
     source: databaseSource(hit.kind),
     retrieval,
   };
-}
-
-async function runGrubbyHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  console.info("[humanize] [GRUBBY]", {
-    rows: getTrainingRowCount(),
-    tone: request.tone ?? "standard",
-    intensity: request.intensity ?? 75,
-  });
-
-  const output = extractTunedOutput(await humanizeWithGrubby(request.text));
-  if (!output) {
-    throw new HumanizationFailedError(
-      "The writing service returned an empty response.",
-      "EMPTY_RESPONSE",
-      502,
-    );
-  }
-
-  const quality = assessRewriteQuality(request.text, output);
-  if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
-    throw new HumanizationFailedError(
-      "Humanization failed. Please try again.",
-      "QUALITY_CHECK_FAILED",
-      502,
-    );
-  }
-
-  return {
-    text: quality.output || output,
-    source: "FINE_TUNED_MODEL",
-    retrieval: null,
-  };
-}
-
-function shouldFallbackFromGrubby(error: unknown): boolean {
-  if (!(error instanceof GrubbyError) && !(error instanceof HumanizationFailedError)) {
-    return true;
-  }
-  const code = error instanceof GrubbyError || error instanceof HumanizationFailedError ? error.code : "";
-  return !["TEXT_TOO_SHORT", "GRUBBY_LIMIT"].includes(code);
 }
 
 async function runModelHumanization(
@@ -359,17 +315,6 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
 
   const styleExamples = retrieveTrainingExamples(request.text, 3).examples;
 
-  if (isGrubbyConfigured()) {
-    try {
-      return await runGrubbyHumanization(request);
-    } catch (error) {
-      if (!shouldFallbackFromGrubby(error)) throw wrapAsError(error);
-      console.error("[humanize] Grubby rewrite failed; using base model", {
-        code: error instanceof GrubbyError || error instanceof HumanizationFailedError ? error.code : "ERROR",
-      });
-    }
-  }
-
   if (hasVertexEndpointEnv() || isVertexConfigured() || isGeminiApiConfigured()) {
     try {
       return await runModelHumanization(request, { backend: "base", styleExamples });
@@ -393,7 +338,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     }
   }
 
-  console.error("[humanize] No Vertex endpoint, Gemini API key, or Grubby key is configured");
+  console.error("[humanize] No Vertex endpoint or Gemini API key is configured");
   throw new HumanizationFailedError(
     "The writing service is not configured. Please try again later.",
     "MISSING_API_KEY",

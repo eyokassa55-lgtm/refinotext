@@ -504,7 +504,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("unseen drafts get stored human_text as style references", stylePrompt.includes("STYLE REFERENCE 1"));
   assert("style prompt forbids copying reference essays", /do not replace the user's draft/i.test(stylePrompt));
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
-  assert("unseen drafts use Grubby before the lookup-tuned endpoint", engineSource.includes("humanizeWithGrubby"));
+  assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
   assert("unseen drafts use a base Gemini backend", engineSource.includes('backend: "base"'));
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
