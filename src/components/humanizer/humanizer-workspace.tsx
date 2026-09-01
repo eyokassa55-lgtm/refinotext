@@ -77,11 +77,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     isProcessingRef.current = true;
     setIsProcessing(true);
 
-    const attemptKey = `${text}\0${tone}\0${readability}\0${intensity}`;
-    if (requestKeyRef.current !== attemptKey || !requestIdRef.current) {
-      requestKeyRef.current = attemptKey;
-      requestIdRef.current = crypto.randomUUID();
-    }
+    // Fresh id on every click so Humanize always uses the current tone/level/intensity.
+    requestIdRef.current = crypto.randomUUID();
+    requestKeyRef.current = `${text}\0${tone}\0${readability}\0${intensity}`;
 
     try {
       const res = await fetch("/api/humanize", {
@@ -113,7 +111,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       notifyStatus(
         result.creditsCharged > 0
           ? `Humanized ${result.wordCount} words. ${result.creditsCharged} credits used.`
-          : "Loaded previous result for this request.",
+          : "Humanized (no extra credits charged).",
       );
       window.dispatchEvent(new Event("refinotext:credits-updated"));
     } catch {

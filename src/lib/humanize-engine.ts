@@ -162,13 +162,13 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
         );
       }
 
-      const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.32;
+      const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
       if (copiedTooClosely) {
         console.info("[humanize] retrying once because the tuned model copied the draft");
         const repaired = extractTunedOutput(
           await rewriteWithModel(request, {
             tuned: true,
-            extraTemperature: 0.1,
+            extraTemperature: 0.12,
             systemInstruction: buildStrongerRewriteInstruction(request, []),
           }),
         );

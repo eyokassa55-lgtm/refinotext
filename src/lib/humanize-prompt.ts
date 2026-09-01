@@ -41,16 +41,25 @@ export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
   "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
-  const lines = [
-    TUNED_TRAINING_SYSTEM_INSTRUCTION,
-    "Rewrite with new sentence openings and wording, the way a human would revise a stiff draft. Changing one or two words is not enough. Do not copy sentences.",
-    "Keep the same meaning, facts, names, numbers, and paragraph breaks. Return only the rewritten text. Do not add explanations or analysis.",
-  ];
+  const lines = [TUNED_TRAINING_SYSTEM_INSTRUCTION];
 
   const tone = request?.tone;
   if (tone && tone !== "standard") {
-    lines.splice(1, 0, tunedToneGuidance(tone));
+    lines.push(tunedToneGuidance(tone));
   }
+
+  const readability = request?.readability?.trim();
+  if (readability && readability !== "General Audience") {
+    lines.push(`Match a ${readability} reading level while keeping the same claims.`);
+  }
+
+  lines.push(`Rewrite strength: ${rewriteStrength(request?.intensity)}.`);
+  lines.push(
+    "Rewrite with new sentence openings and wording, the way a human would revise a stiff draft. Changing one or two words is not enough. Do not copy sentences.",
+  );
+  lines.push(
+    "Keep the same meaning, facts, names, numbers, and paragraph breaks. Return only the rewritten text. Do not add explanations or analysis.",
+  );
 
   return lines.join("\n");
 }

@@ -157,7 +157,13 @@ export async function POST(req: NextRequest) {
     where: { requestId },
   });
 
-  if (previous) {
+  if (
+    previous &&
+    previous.inputText === text &&
+    (previous.tone ?? null) === (tone ?? null) &&
+    (previous.readability ?? null) === (readability ?? null) &&
+    (previous.intensity ?? null) === (intensity ?? null)
+  ) {
     return humanizeSuccess({
       id: previous.id,
       output: previous.outputText,
