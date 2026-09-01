@@ -1,6 +1,6 @@
 /**
- * Copies the succeeded "REFINO TEXT" tuning job's endpoint into .env.local.
- * Ignores the failed lowercase "refino text" job. Does not create a tuning job.
+ * Binds Humanize to the latest succeeded Vertex tuning job endpoint in .env.local.
+ * Prefers OG REFINO by default (override with TUNED_MODEL_JOB_NAME).
  * Never prints private keys.
  */
 import { config } from "dotenv";
@@ -12,8 +12,7 @@ config();
 
 const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 
-const SUCCESS_JOB_NAME = "REFINO TEXT";
-const FAILED_JOB_NAME = "refino text";
+const DEFAULT_JOB_NAME = "OG REFINO";
 
 type TuningJob = {
   displayName?: string;
@@ -47,12 +46,34 @@ function upsertLine(text: string, key: string, value: string): string {
   return `${text.trimEnd()}\n${line}\n`;
 }
 
+function pickSucceededJob(jobs: TuningJob[], preferredName: string): TuningJob | undefined {
+  const succeeded = jobs.filter(
+    (job) =>
+      job.state === "JOB_STATE_SUCCEEDED" && Boolean(job.tunedModel?.endpoint?.trim()),
+  );
+
+  const preferredPattern = new RegExp(
+    `^${preferredName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*")}$`,
+    "i",
+  );
+
+  const preferred = succeeded
+    .filter((job) => preferredPattern.test(jobName(job)))
+    .sort((a, b) => String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")))[0];
+  if (preferred) return preferred;
+
+  return succeeded.sort((a, b) =>
+    String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")),
+  )[0];
+}
+
 async function main() {
   const project = cleanEnv(process.env.GOOGLE_CLOUD_PROJECT);
   const location =
     cleanEnv(process.env.GOOGLE_CLOUD_LOCATION) ??
     cleanEnv(process.env.VERTEX_AI_LOCATION) ??
     "us-central1";
+  const preferredName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? DEFAULT_JOB_NAME;
 
   if (!project) {
     console.error("GOOGLE_CLOUD_PROJECT is missing.");
@@ -88,33 +109,19 @@ async function main() {
   }
 
   const jobs = body.tuningJobs ?? [];
-  console.log(`Listed ${jobs.length} tuning job(s).`);
+  console.log(`Listed ${jobs.length} tuning job(s). Preferred name: "${preferredName}"`);
   for (const job of jobs) {
     console.log(
-      `  ${jobName(job) || "(unnamed)"} state=${job.state ?? "unknown"} endpoint=${job.tunedModel?.endpoint ? "yes" : "no"}`,
+      `  ${jobName(job) || "(unnamed)"} state=${job.state ?? "unknown"} endpoint=${job.tunedModel?.endpoint ? redact(job.tunedModel.endpoint) : "no"}`,
     );
   }
 
-  const failed = jobs.find(
-    (job) => /^refino\s*text$/i.test(jobName(job)) && job.state !== "JOB_STATE_SUCCEEDED",
-  );
-  const succeeded = jobs
-    .filter(
-      (job) =>
-        /^refino\s*text$/i.test(jobName(job)) &&
-        job.state === "JOB_STATE_SUCCEEDED" &&
-        Boolean(job.tunedModel?.endpoint?.trim()),
-    )
-    .sort((a, b) => String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")))[0];
-  const endpoint = succeeded?.tunedModel?.endpoint?.trim();
-
-  if (failed) {
-    console.log(`Ignoring failed job "${FAILED_JOB_NAME}" (${failed.state}).`);
-  }
+  const selected = pickSucceededJob(jobs, preferredName);
+  const endpoint = selected?.tunedModel?.endpoint?.trim();
 
   if (!endpoint) {
     console.error(
-      `Succeeded job "${SUCCESS_JOB_NAME}" was not found, or it has no endpoint. Copy the endpoint from Vertex AI → Tuning → ${SUCCESS_JOB_NAME}.`,
+      `No succeeded tuning job with an endpoint was found (looked for "${preferredName}" first).`,
     );
     process.exitCode = 1;
     return;
@@ -126,7 +133,7 @@ async function main() {
   text = upsertLine(text, "VERTEX_AI_TUNED_ENDPOINT", endpoint);
   await fs.writeFile(envPath, text, "utf8");
 
-  console.log(`Bound Humanize to "${SUCCESS_JOB_NAME}" ${redact(endpoint)}`);
+  console.log(`Bound Humanize to "${jobName(selected!)}" ${redact(endpoint)}`);
   console.log("Wrote TUNED_MODEL_ENDPOINT and VERTEX_AI_TUNED_ENDPOINT in .env.local");
 }
 
