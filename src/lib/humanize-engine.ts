@@ -16,7 +16,6 @@ import {
 } from "@/lib/humanize-prompt";
 import { assessRewriteQuality, phraseCopyRatio, stripModelChrome } from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
-import { findDatabaseMatch } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -125,29 +124,7 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-function databaseSource(kind: "exact" | "near_exact" | "similarity" | "topic"): HumanizeSource {
-  return kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH";
-}
-
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const databaseHit = findDatabaseMatch(request.text);
-  if (databaseHit) {
-    console.info("[humanize] [DATABASE_MATCH]", {
-      row: databaseHit.index,
-      kind: databaseHit.kind,
-      score: databaseHit.score,
-      rows: getTrainingRowCount(),
-    });
-    return {
-      text: databaseHit.output,
-      source: databaseSource(databaseHit.kind),
-      retrieval: {
-        band: databaseHit.kind === "exact" ? "exact" : "high",
-        matches: [{ index: databaseHit.index, score: databaseHit.score }],
-      },
-    };
-  }
-
   const vertex = getVertexConfig();
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {

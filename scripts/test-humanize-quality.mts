@@ -364,7 +364,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("repair does not embed the full source draft", !repaired.includes("invoice 8831"));
 
-  console.log("\n3d. Exact match vs fine-tuned model (cases A–D)");
+  console.log("\n3d. Dataset lookup vs Vertex-only Humanize path");
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
@@ -431,10 +431,11 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const { runHumanization } = await import("../src/lib/humanize-engine");
-  const exactRun = await runHumanization({ text: firstPair.input, intensity: 75 });
-  assert("Humanize uses the stored pair for an exact draft", exactRun.source === "EXACT_TRAINING_MATCH");
-  assert("Humanize returns stored human_text", exactRun.text === firstPair.output);
+  const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
+  assert(
+    "Humanize engine skips database short-circuit",
+    !engineSource.includes("findDatabaseMatch"),
+  );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
