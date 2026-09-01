@@ -13,6 +13,7 @@ import {
   buildEditorSystemInstruction,
   buildStrongerRewriteInstruction,
   buildTunedSystemInstruction,
+  buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
 import { assessRewriteQuality, phraseCopyRatio, stripModelChrome } from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
@@ -151,7 +152,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       });
       const raw = await rewriteWithModel(request, {
         tuned: true,
-        systemInstruction: buildTunedSystemInstruction(request),
+        systemInstruction: buildVertexSystemInstruction(request),
       });
       let output = extractTunedOutput(raw);
       if (!output) {

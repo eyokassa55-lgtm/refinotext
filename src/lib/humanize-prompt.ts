@@ -33,31 +33,55 @@ function formatTone(tone?: string): string {
   return tone.replace(/[-_]/g, " ");
 }
 
-function preservationDirectives(): string[] {
+const BANNED_AI_FILLER =
+  "delve, tapestry, testament, crucial, paramount, furthermore, moreover, in conclusion, underscore, pivotal, landscape, realm, unlock, unleash, intricate, dynamic, beacon, additionally, consequently";
+
+function rhythmDirectives(): string[] {
   return [
-    "Preserve the exact topic and intent.",
-    "Preserve all factual information.",
-    "Preserve names, dates, numbers, statistics, terminology, quotations, and references.",
-    "Never invent facts.",
-    "Never add unsupported information.",
-    "Never remove important information.",
-    "Never change the conclusion or argument.",
-    "Never turn the text into a summary unless explicitly requested.",
+    "Human writing is structurally unpredictable.",
+    "Drastically vary sentence lengths.",
+    "Mix very short, abrupt sentences (3-5 words) with longer, intricate, multi-clause sentences.",
+    "Never maintain a uniform, rhythmic cadence.",
+  ];
+}
+
+function phrasingDirectives(): string[] {
+  return [
+    "Use accurate but less predictable phrasing.",
+    "Avoid highly probable template word sequences.",
+    "Structure arguments organically rather than in rigid, formulaic lists unless strictly required by the input.",
+    "Use natural vocabulary appropriate to the subject.",
+    "Do not force odd words just to sound different.",
   ];
 }
 
 function naturalWritingDirectives(): string[] {
   return [
-    "Use varied sentence lengths and structures.",
+    ...rhythmDirectives(),
+    ...phrasingDirectives(),
     "Avoid repetitive sentence openings.",
-    "Avoid mechanical transitions and predictable template phrasing.",
+    "Replace robotic transitions with natural flow. Instead of \"Additionally\" or \"Consequently,\" use phrase-based transitions or let context connect the sentences.",
+    "Use active voice primarily.",
+    `Do NOT use common AI filler words or phrases: ${BANNED_AI_FILLER}.`,
     "Avoid unnecessary headings or bullet points.",
     "Avoid excessive formality unless the input is formal.",
     "Preserve appropriate tone and voice.",
     "Improve paragraph flow and readability.",
     "Use natural vocabulary appropriate to the subject.",
-    "Do not force unusual words just to sound different.",
     "Avoid repetitive templates across requests.",
+  ];
+}
+
+function preservationDirectives(): string[] {
+  return [
+    "Preserve the exact topic and intent.",
+    "Preserve all factual information and context.",
+    "Preserve names, dates, numbers, statistics, terminology, quotations, and references.",
+    "Never invent facts or hallucinate new information.",
+    "Never add unsupported information.",
+    "Never remove important information.",
+    "Never change the conclusion or argument.",
+    "Never summarize, omit details, or turn the text into a summary unless explicitly requested.",
   ];
 }
 
@@ -96,6 +120,8 @@ function outputDirectives(): string[] {
     "No explanation.",
     "No preamble.",
     "No analysis.",
+    "No introductory remarks such as \"Here is the text\".",
+    "No concluding summaries.",
     "Do not add explanations or analysis, and do not wrap the output in quotes.",
   ];
 }
@@ -116,30 +142,57 @@ function bulletBlock(title: string, items: string[]): string {
   return `${title}\n${items.map((item) => `- ${item}`).join("\n")}`;
 }
 
-function refinoTextSystemCore(): string[] {
+function vertexSystemPromptCore(): string[] {
   return [
     TUNED_TRAINING_SYSTEM_INSTRUCTION,
-    "PRIMARY GOAL: Transform the user's draft into clear, natural, fluent writing while preserving the user's original meaning and information.",
-    bulletBlock("STRICT PRESERVATION:", preservationDirectives()),
-    bulletBlock("NATURAL WRITING:", [
-      "Follow the natural revision style RefinoText was trained for.",
-      ...naturalWritingDirectives(),
+    "OBJECTIVE: Rewrite the provided input text so it reads naturally human while retaining 100% of the original facts, context, and intent.",
+    bulletBlock("MAXIMIZE BURSTINESS:", rhythmDirectives()),
+    bulletBlock("MAXIMIZE PHRASING VARIETY:", phrasingDirectives()),
+    bulletBlock("BANISH AI VOCABULARY:", [
+      `You are strictly forbidden from using common AI-generated filler words and phrases.`,
+      `Do NOT use: ${BANNED_AI_FILLER}.`,
     ]),
+    bulletBlock("HUMAN TRANSITIONS:", [
+      "Replace robotic transitions with natural flow.",
+      "Instead of \"Additionally\" or \"Consequently,\" use phrase-based transitions or let context connect the sentences naturally.",
+      "Use active voice primarily.",
+    ]),
+    bulletBlock("STRICT MEANING PRESERVATION:", preservationDirectives()),
     bulletBlock("STRUCTURE:", structureDirectives()),
     bulletBlock("EDITING:", editingDirectives()),
     bulletBlock("IMPORTANT:", draftBoundariesDirectives()),
   ];
 }
 
+function refinoTextSystemCore(): string[] {
+  return [
+    ...vertexSystemPromptCore(),
+    bulletBlock("NATURAL WRITING:", [
+      "Follow the natural revision style RefinoText was trained for.",
+      "Avoid repetitive sentence openings.",
+      "Avoid unnecessary headings or bullet points.",
+      "Preserve appropriate tone and voice.",
+      "Improve paragraph flow and readability.",
+      "Use natural vocabulary appropriate to the subject.",
+      "Avoid repetitive templates across requests.",
+    ]),
+  ];
+}
+
 /**
- * Base system line from the Vertex chat conversion of the ai_text → human_text
- * pairs. Endpoint weights hold the dataset. Inference does not send training rows.
+ * Base role line for the Vertex tuned endpoint.
+ * Endpoint weights hold the training pairs. Inference does not send training rows.
  */
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
-  "You are RefinoText, a professional AI-assisted writing refinement engine.";
+  "You are RefinoText, an elite professional editor and master copywriter.";
+
+/** System prompt sent to the Vertex tuned model on every Humanize request. */
+export function buildVertexSystemInstruction(request?: HumanizePromptRequest): string {
+  return buildTunedSystemInstruction(request);
+}
 
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
-  const lines = [...refinoTextSystemCore()];
+  const lines = [...vertexSystemPromptCore()];
 
   const tone = request?.tone;
   if (tone && tone !== "standard") {
@@ -155,7 +208,7 @@ export function buildTunedSystemInstruction(request?: HumanizePromptRequest): st
   lines.push(
     "Rewrite with new sentence openings and wording, the way a human would revise a stiff draft. Changing one or two words is not enough. Do not copy sentences.",
   );
-  lines.push(bulletBlock("OUTPUT:", outputDirectives()));
+  lines.push(bulletBlock("OUTPUT CONSTRAINT:", outputDirectives()));
   lines.push(
     bulletBlock(
       "QUALITY CHECK BEFORE RETURNING:",
