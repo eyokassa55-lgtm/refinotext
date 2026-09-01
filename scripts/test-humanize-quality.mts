@@ -353,8 +353,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("identifies as RefinoText", /you are refinotext/i.test(tunedCue));
   assert(
-    "does not mention detectors or the 720-pair dataset",
-    !/detector|gptzero|turnitin|720/i.test(tunedCue),
+    "does not mention detector bypass products or the 720-pair dataset",
+    !/gptzero|turnitin|originality\.ai|720/i.test(tunedCue) &&
+      !/bypass.*detector|beat.*detector|undetectable/i.test(tunedCue),
   );
   assert("does not wrap user drafts with extra prefixes", !tunedCue.includes("<<<USER_TEXT>>>"));
   assert("asks for an academic register when Academic is selected", /academic register/i.test(tunedCue));

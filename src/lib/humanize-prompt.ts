@@ -34,7 +34,7 @@ function formatTone(tone?: string): string {
 }
 
 const BANNED_AI_FILLER =
-  "delve, tapestry, testament, paramount, furthermore, moreover, in conclusion, underscore, pivotal, landscape, realm, unlock, unleash, intricate, dynamic, beacon, additionally, consequently";
+  "delve, tapestry, testament, crucial, paramount, furthermore, moreover, in conclusion, underscore, pivotal, landscape, realm, unlock, unleash, intricate, dynamic, beacon, additionally, consequently";
 
 function rhythmDirectives(): string[] {
   return [
@@ -138,7 +138,7 @@ function claritySwapDirectives(): string[] {
     "Swap \"From X to Y, people use...\" for \"People rely on X, Y, and Z,\".",
     "Swap \"for communication, education, work, entertainment, and many other daily activities\" for a shorter list ending in daily tasks.",
     "Swap \"However, increasing dependence\" for But increasing dependence.",
-    "Swap \"raises important ethical questions\" for raises crucial or fundamental ethical questions.",
+    "Swap \"raises important ethical questions\" for raises serious or fundamental ethical questions.",
     "Swap \"When people rely heavily on\" for People who rely heavily on.",
     "Swap \"For example,\" for For instance, when it improves rhythm (or the reverse if the draft repeats one form).",
     "Swap \"can make it harder for people to develop a sense of direction\" for can make it harder to navigate.",
@@ -223,6 +223,7 @@ function vertexSystemPromptCore(): string[] {
     bulletBlock("STRUCTURE:", structureDirectives()),
     bulletBlock("EDITING:", editingDirectives()),
     bulletBlock("IMPORTANT:", draftBoundariesDirectives()),
+    "Do not optimize for AI detectors or mention detectors.",
   ];
 }
 
@@ -246,7 +247,7 @@ function refinoTextSystemCore(): string[] {
  * Endpoint weights hold the training pairs. Inference does not send training rows.
  */
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
-  "You are RefinoText, an expert human academic editor and professional writer who rewrites stiff AI drafts into crisp, natural prose.";
+  "You are RefinoText, an elite professional editor and master copywriter who rewrites stiff AI drafts into crisp, natural prose.";
 
 /** System prompt sent to the Vertex tuned model on every Humanize request. */
 export function buildVertexSystemInstruction(request?: HumanizePromptRequest): string {
