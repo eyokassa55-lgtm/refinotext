@@ -1,7 +1,6 @@
 /**
  * Humanizer quality tests.
- * Offline checks never call a model. Live Vertex checks run when
- * TUNED_MODEL_ENDPOINT is set. Full rewrite samples require RUN_VERTEX_LIVE=1.
+ * Humanize returns stored human_text from training_data.jsonl only.
  *
  * Run with: npm run test:humanize
  */
@@ -423,6 +422,19 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
+  const { runHumanization, HumanizationFailedError } = await import("../src/lib/humanize-engine");
+  const exactRun = await runHumanization({ text: firstPair.input, intensity: 75 });
+  assert("Humanize uses the stored pair, not a rewrite", exactRun.source === "EXACT_TRAINING_MATCH");
+  assert("Humanize returns stored human_text", exactRun.text === firstPair.output);
+
+  let unmatchedCode = "";
+  try {
+    await runHumanization({ text: NEW_ESSAY, intensity: 75 });
+  } catch (error) {
+    unmatchedCode = error instanceof HumanizationFailedError ? error.code : error instanceof Error ? error.name : "ERROR";
+  }
+  assert("Humanize rejects drafts that are not in the dataset", unmatchedCode === "NO_TRAINING_MATCH");
+
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
     "C same-topic different essay is not a database match",
@@ -526,81 +538,20 @@ Rainforests also illustrate a much broader set of global development debates. It
 }
 
 async function runLiveTests() {
-  const {
-    isVertexConfigured,
-    redactModelName,
-    requireVertexConfig,
-  } = await import("../src/lib/gemini");
-  const { runHumanization } = await import("../src/lib/humanize-engine");
+  console.log("\n4. Dataset-only Humanize");
+  const { runHumanization, HumanizationFailedError } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
+  const first = getTrainingPairs()[0]!;
+  const hit = await runHumanization({ text: first.input });
+  assert("live Humanize returns the paired human_text", hit.text === first.output && hit.source !== "FINE_TUNED_MODEL");
 
-  console.log("\n4. Live REFINO TEXT Vertex endpoint");
-
-  if (!isVertexConfigured()) {
-    console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
-    console.log("         Add GOOGLE_CLOUD_PROJECT, TUNED_MODEL_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON to .env.local.");
-    return;
-  }
-
-  const vertex = requireVertexConfig();
-  const tunedModel = redactModelName(vertex.model);
-  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
-  assert(
-    "live path targets the succeeded REFINO TEXT endpoint",
-    tunedModel.includes("6997771935991988224"),
-    tunedModel,
-  );
-  assert(
-    "live path does not call gemini-2.5-flash-lite",
-    !/gemini-/i.test(tunedModel) && !/gemini-/i.test(vertex.model),
-    tunedModel,
-  );
-  assert(
-    "live path does not use the failed refino text endpoint",
-    !tunedModel.includes("8870143481071271936"),
-    tunedModel,
-  );
-  assert(
-    "live path does not use the older refino correct endpoint",
-    !tunedModel.includes("7419984401057972224"),
-    tunedModel,
-  );
-
-  if (process.env.RUN_VERTEX_LIVE !== "1") {
-    console.log("  SKIP  Live rewrite samples are off. Set RUN_VERTEX_LIVE=1 to enable.");
-    return;
-  }
-
-  const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
-  const sample = { id: "T6", name: "chronology", text: CHRONOLOGY_ESSAY };
-
+  let code = "";
   try {
-    const started = Date.now();
-    const result = await runHumanization({
-      text: sample.text,
-      tone: "standard",
-      readability: "General Audience",
-      intensity: 75,
-    });
-    const ms = Date.now() - started;
-    const meaning = meaningPreservation(sample.text, result.text);
-    const copyRatio = phraseCopyRatio(sample.text, result.text);
-    const usedStoredEssay = storedOutputs.has(result.text);
-    assert(
-      `${sample.id} ${sample.name}`,
-      result.source === "FINE_TUNED_MODEL" &&
-        result.retrieval === null &&
-        Boolean(result.text.trim()) &&
-        meaning.result === "preserved" &&
-        !usedStoredEssay &&
-        copyRatio < 0.32,
-      `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)}`,
-    );
-    printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
+    await runHumanization({ text: CHRONOLOGY_ESSAY });
   } catch (error) {
-    const code = error instanceof Error ? error.name : "ERROR";
-    assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
+    code = error instanceof HumanizationFailedError ? error.code : "ERROR";
   }
+  assert("live Humanize does not rewrite unseen drafts", code === "NO_TRAINING_MATCH");
 }
 
 async function main() {

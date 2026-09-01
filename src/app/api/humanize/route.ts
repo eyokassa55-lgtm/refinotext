@@ -12,7 +12,6 @@ import {
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
-import { findDatabaseMatch } from "@/lib/training-retrieval";
 import { ensureCurrentUser } from "@/lib/users";
 import type { ApiErrorResponse } from "@/types";
 
@@ -69,6 +68,8 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
     case "TEXT_TOO_SHORT":
     case "GRUBBY_LIMIT":
       return 400;
+    case "NO_TRAINING_MATCH":
+      return 404;
     case "GRUBBY_QUOTA":
       return 429;
     case "TIMEOUT":
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
     return humanizeSuccess({
       id: previous.id,
       output: previous.outputText,
-      source: findDatabaseMatch(text) ? "database" : "model",
+      source: "database",
       wordCount: previous.inputWordCount,
       creditsCharged: 0,
       creditsRemaining: check.balance,
@@ -234,7 +235,7 @@ export async function POST(req: NextRequest) {
         return humanizeSuccess({
           id: saved.id,
           output: saved.outputText,
-          source: findDatabaseMatch(text) ? "database" : "model",
+          source: "database",
           wordCount: saved.inputWordCount,
           creditsCharged: 0,
           creditsRemaining: account?.balance ?? check.balance,
