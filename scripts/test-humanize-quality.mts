@@ -12,9 +12,11 @@ config();
 
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
+  OG_REFINO_TRAINING_SYSTEM_INSTRUCTION,
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildAntiTemplateRewriteInstruction,
   buildEditorSystemInstruction,
+  buildOgRefinoInferenceInstruction,
   buildRepairSystemInstruction,
   buildStyleGuidedRewriteInstruction,
   buildTunedSystemInstruction,
@@ -481,6 +483,13 @@ Rainforests also illustrate a much broader set of global development debates. It
     `source=${engineNear.source}`,
   );
 
+  const engineHuman = await runEngineHumanization({ text: firstPair.output, intensity: 75 });
+  assert(
+    "pasting stored human_text returns it unchanged",
+    engineHuman.source === "EXACT_TRAINING_MATCH" && engineHuman.text === firstPair.output,
+    `source=${engineHuman.source}`,
+  );
+
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
     "C same-topic different essay is not a database match",
@@ -505,7 +514,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("style prompt forbids copying reference essays", /do not replace the user's draft/i.test(stylePrompt));
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
-  assert("unseen drafts use a base Gemini backend", engineSource.includes('backend: "base"'));
+  const ogCue = buildOgRefinoInferenceInstruction({ text: NEW_ESSAY, intensity: 75 });
+  assert(
+    "OG REFINO inference starts from the Vertex training system line",
+    ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
+  );
+  assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
+  assert("unseen drafts use the tuned Vertex endpoint", engineSource.includes('backend: "tuned"'));
+  assert("Humanize engine does not send style examples to OG REFINO", !engineSource.includes("retrieveTrainingExamples"));
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",

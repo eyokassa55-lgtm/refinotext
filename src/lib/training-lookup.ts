@@ -22,6 +22,8 @@ type TrainingIndex = {
   rows: TrainingPair[];
   byInput: Map<string, TrainingMatch>;
   byNormalized: Map<string, TrainingMatch>;
+  byOutput: Map<string, TrainingMatch>;
+  byNormalizedOutput: Map<string, TrainingMatch>;
   malformedLines: number;
   duplicateInputs: number;
 };
@@ -64,6 +66,8 @@ function loadIndex(): TrainingIndex {
   const rows: TrainingPair[] = [];
   const byInput = new Map<string, TrainingMatch>();
   const byNormalized = new Map<string, TrainingMatch>();
+  const byOutput = new Map<string, TrainingMatch>();
+  const byNormalizedOutput = new Map<string, TrainingMatch>();
   let malformedLines = 0;
   let duplicateInputs = 0;
   let index = 0;
@@ -96,6 +100,13 @@ function loadIndex(): TrainingIndex {
     if (normalized && !byNormalized.has(normalized)) {
       byNormalized.set(normalized, match);
     }
+    if (!byOutput.has(pair.output)) {
+      byOutput.set(pair.output, match);
+    }
+    const normalizedOutput = normalizeInsignificant(pair.output);
+    if (normalizedOutput && !byNormalizedOutput.has(normalizedOutput)) {
+      byNormalizedOutput.set(normalizedOutput, match);
+    }
     index += 1;
   }
 
@@ -107,7 +118,16 @@ function loadIndex(): TrainingIndex {
     duplicateInputs,
   });
 
-  return { path: datasetPath, rows, byInput, byNormalized, malformedLines, duplicateInputs };
+  return {
+    path: datasetPath,
+    rows,
+    byInput,
+    byNormalized,
+    byOutput,
+    byNormalizedOutput,
+    malformedLines,
+    duplicateInputs,
+  };
 }
 
 let cached: TrainingIndex | null = null;
@@ -189,4 +209,31 @@ export function findNormalizedTrainingMatch(userText: string): TrainingMatch | n
   const normalized = normalizeInsignificant(userText);
   if (!normalized) return null;
   return getIndex().byNormalized.get(normalized) ?? null;
+}
+
+/**
+ * Return the stored human_text when the user pasted that human_text itself.
+ * Do not send gold outputs through the model.
+ */
+export function findExactTrainingOutputMatch(userText: string): TrainingMatch | null {
+  if (typeof userText !== "string" || userText.length === 0) return null;
+
+  const { byOutput } = getIndex();
+  const direct = byOutput.get(userText);
+  if (direct) return direct;
+
+  const normalized = normalizeLookupKey(userText);
+  if (normalized !== userText) {
+    const match = byOutput.get(normalized);
+    if (match) return match;
+  }
+
+  return null;
+}
+
+export function findNormalizedTrainingOutputMatch(userText: string): TrainingMatch | null {
+  if (typeof userText !== "string" || userText.length === 0) return null;
+  const normalized = normalizeInsignificant(userText);
+  if (!normalized) return null;
+  return getIndex().byNormalizedOutput.get(normalized) ?? null;
 }

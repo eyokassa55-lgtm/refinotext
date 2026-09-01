@@ -250,6 +250,25 @@ function refinoTextSystemCore(): string[] {
 }
 
 /**
+ * Exact system line from OG REFINO Vertex training
+ * (`gs://ogrefinotext/humanizer_trainOG.jsonl`).
+ */
+export const OG_REFINO_TRAINING_SYSTEM_INSTRUCTION =
+  "You will be given an AI-generated text. Find the matching human-written version and output it exactly, word for word, with no changes, no rewriting, and no added commentary.";
+
+/**
+ * Inference prompt for the OG REFINO endpoint. Must stay aligned with training.
+ * Extra lines only cover unseen drafts: keep the full length, do not summarize.
+ */
+export function buildOgRefinoInferenceInstruction(_request?: HumanizePromptRequest): string {
+  return `${OG_REFINO_TRAINING_SYSTEM_INSTRUCTION}
+If no stored match exists, rewrite the whole draft into that same natural human style.
+Keep the same topic, meaning, facts, names, numbers, dates, paragraph breaks, and approximately the same length.
+Do not summarize. Do not drop paragraphs. Do not add a title or commentary.
+Return only the full text.`;
+}
+
+/**
  * Base role line for the Vertex tuned endpoint.
  * Endpoint weights hold the training pairs. Inference does not send training rows.
  */
@@ -258,7 +277,7 @@ export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
 
 /** System prompt sent to the Vertex tuned model on every Humanize request. */
 export function buildVertexSystemInstruction(request?: HumanizePromptRequest): string {
-  return buildTunedSystemInstruction(request);
+  return buildOgRefinoInferenceInstruction(request);
 }
 
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {

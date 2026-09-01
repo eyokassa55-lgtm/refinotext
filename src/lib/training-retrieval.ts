@@ -1,7 +1,7 @@
 import "server-only";
 
 import { paragraphCount, phraseCopyRatio } from "@/lib/humanize-quality";
-import { findExactTrainingMatch, findNormalizedTrainingMatch, getTrainingPairs, normalizeInsignificant, type TrainingPair } from "@/lib/training-lookup";
+import { findExactTrainingMatch, findNormalizedTrainingMatch, findExactTrainingOutputMatch, findNormalizedTrainingOutputMatch, getTrainingPairs, normalizeInsignificant, type TrainingPair } from "@/lib/training-lookup";
 import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
@@ -690,8 +690,14 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
   const exact = findExactTrainingMatch(userText);
   if (exact) return lockedPair(exact, 1, "exact");
 
+  const exactOutput = findExactTrainingOutputMatch(userText);
+  if (exactOutput) return lockedPair(exactOutput, 1, "exact");
+
   const nearExact = findNormalizedTrainingMatch(userText);
   if (nearExact) return lockedPair(nearExact, 0.999, "near_exact");
+
+  const nearOutput = findNormalizedTrainingOutputMatch(userText);
+  if (nearOutput) return lockedPair(nearOutput, 0.999, "near_exact");
 
   const sample = findAiTextSampleMatch(userText);
   if (sample) return sample;

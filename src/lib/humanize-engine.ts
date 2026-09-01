@@ -12,9 +12,10 @@ import {
 } from "@/lib/gemini";
 import {
   buildAntiTemplateRewriteInstruction,
+  buildLengthRepairInstruction,
+  buildOgRefinoInferenceInstruction,
   buildStrongerRewriteInstruction,
-  buildStyleGuidedRewriteInstruction,
-  buildVertexSystemInstruction,
+  buildTunedSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
@@ -31,9 +32,7 @@ import {
 import { getTrainingRowCount } from "@/lib/training-lookup";
 import {
   findDatabaseMatch,
-  retrieveTrainingExamples,
   type DatabaseTrainingMatch,
-  type RetrievedTrainingExample,
 } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
@@ -75,17 +74,13 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-const TUNED_VERTEX_TEMP_MIN = 0.15;
-const TUNED_VERTEX_TEMP_MAX = 0.55;
-const TUNED_VERTEX_TOP_P_MIN = 0.75;
-const TUNED_VERTEX_TOP_P_MAX = 0.92;
+const TUNED_VERTEX_TEMPERATURE = 0;
+const TUNED_VERTEX_TOP_P = 0.1;
 
-function tunedVertexGenerationOptions(intensity?: number) {
-  const clamped = Math.min(100, Math.max(0, intensity ?? 75));
-  const ratio = clamped / 100;
+function tunedVertexGenerationOptions(_intensity?: number) {
   return {
-    temperature: TUNED_VERTEX_TEMP_MIN + ratio * (TUNED_VERTEX_TEMP_MAX - TUNED_VERTEX_TEMP_MIN),
-    topP: TUNED_VERTEX_TOP_P_MIN + ratio * (TUNED_VERTEX_TOP_P_MAX - TUNED_VERTEX_TOP_P_MIN),
+    temperature: TUNED_VERTEX_TEMPERATURE,
+    topP: TUNED_VERTEX_TOP_P,
   };
 }
 
@@ -96,7 +91,7 @@ function generationOptions(request: HumanizeRequest, tuned: boolean) {
   if (tuned) {
     return {
       ...tunedVertexGenerationOptions(intensity),
-      maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 1.55) + 120)),
+      maxOutputTokens: Math.min(8192, Math.max(512, Math.ceil(words * 2.4) + 256)),
     };
   }
 
@@ -192,7 +187,6 @@ async function runModelHumanization(
   request: HumanizeRequest,
   options: {
     backend: GenerateBackend;
-    styleExamples?: RetrievedTrainingExample[];
   },
 ): Promise<HumanizeResult> {
   const vertex = getVertexConfig();
@@ -209,14 +203,14 @@ async function runModelHumanization(
     backend: options.backend,
     model: modelName,
     location: vertex?.location,
-    styleExamples: options.styleExamples?.map((example) => example.index) ?? [],
     intensity: request.intensity ?? 75,
-    ...(options.backend === "tuned" ? tunedVertexGenerationOptions(request.intensity) : {}),
+    ...(options.backend === "tuned" ? tunedVertexGenerationOptions() : {}),
   });
 
-  const systemInstruction = options.styleExamples?.length
-    ? buildStyleGuidedRewriteInstruction(request, options.styleExamples)
-    : buildVertexSystemInstruction(request);
+  const systemInstruction =
+    options.backend === "tuned"
+      ? buildOgRefinoInferenceInstruction(request)
+      : buildTunedSystemInstruction(request);
 
   const raw = await rewriteWithModel(request, {
     tuned: options.backend === "tuned",
@@ -232,50 +226,62 @@ async function runModelHumanization(
     );
   }
 
+  const inputWords = countWords(request.text);
+  const tooShort = inputWords >= 40 && countWords(output) < inputWords * 0.7;
   const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
   const bannedPhrases = findBannedAiPhrases(output);
   const templateLike = isTemplateLikeOutput(output, request.text);
-  const needsRetry = copiedTooClosely || bannedPhrases.length > 0 || templateLike;
+  const needsRetry = tooShort || copiedTooClosely || bannedPhrases.length > 0 || templateLike;
 
   if (needsRetry) {
-    console.info("[humanize] retrying once because the rewrite still looks template-like", {
+    console.info("[humanize] retrying once because the rewrite is truncated or template-like", {
+      tooShort,
       copiedTooClosely,
       bannedPhrases,
       templateLike,
       backend: options.backend,
+      inWords: inputWords,
+      outWords: countWords(output),
     });
-    const instruction = templateLike || bannedPhrases.length > 0
-      ? buildAntiTemplateRewriteInstruction(request, {
-          bannedPhrases,
-          templateLike,
-          copied: copiedTooClosely,
-        })
-      : buildStrongerRewriteInstruction(request, []);
+    const instruction = tooShort
+      ? buildLengthRepairInstruction(request, [])
+      : templateLike || bannedPhrases.length > 0
+        ? buildAntiTemplateRewriteInstruction(request, {
+            bannedPhrases,
+            templateLike,
+            copied: copiedTooClosely,
+          })
+        : buildStrongerRewriteInstruction(request, []);
 
     const repaired = extractTunedOutput(
       await rewriteWithModel(request, {
         tuned: options.backend === "tuned",
         backend: options.backend,
-        systemInstruction: instruction,
+        systemInstruction:
+          options.backend === "tuned" && tooShort
+            ? `${buildOgRefinoInferenceInstruction(request)}\nThe last version was too short. Write the full draft, close to the source length. Do not summarize.`
+            : instruction,
       }),
     );
 
     if (repaired) {
-      const currentScore =
-        rewriteArtificialityScore(output, request.text) +
-        phraseCopyRatio(request.text, output);
-      const repairedScore =
-        rewriteArtificialityScore(repaired, request.text) +
-        phraseCopyRatio(request.text, repaired);
-      if (repairedScore < currentScore) {
+      if (tooShort && countWords(repaired) > countWords(output)) {
         output = repaired;
+      } else if (!tooShort) {
+        const currentScore =
+          rewriteArtificialityScore(output, request.text) +
+          phraseCopyRatio(request.text, output);
+        const repairedScore =
+          rewriteArtificialityScore(repaired, request.text) +
+          phraseCopyRatio(request.text, repaired);
+        if (repairedScore < currentScore) {
+          output = repaired;
+        }
       }
     }
   }
 
-  const quality = assessRewriteQuality(request.text, output, {
-    retrievedPairs: options.styleExamples,
-  });
+  const quality = assessRewriteQuality(request.text, output);
   if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
     console.error("[humanize] model returned an unusable response", {
       codes: quality.issues.map((issue) => issue.code),
@@ -287,22 +293,10 @@ async function runModelHumanization(
     );
   }
 
-  if (quality.issues.some((issue) => issue.code === "COPIED_RETRIEVED" || issue.code === "UNRELATED")) {
-    console.info("[humanize] style reference leaked or drifted; keeping source-faithful rewrite");
-  }
-
   return {
     text: quality.output || output,
     source: "FINE_TUNED_MODEL",
-    retrieval: options.styleExamples?.length
-      ? {
-          band: "high",
-          matches: options.styleExamples.slice(0, 3).map((example) => ({
-            index: example.index,
-            score: example.score,
-          })),
-        }
-      : null,
+    retrieval: null,
   };
 }
 
@@ -313,26 +307,19 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     if (resolved) return resolved;
   }
 
-  const styleExamples = retrieveTrainingExamples(request.text, 3).examples;
-
-  if (hasVertexEndpointEnv() || isVertexConfigured() || isGeminiApiConfigured()) {
+  if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
-      return await runModelHumanization(request, { backend: "base", styleExamples });
+      return await runModelHumanization(request, { backend: "tuned" });
     } catch (error) {
-      if (error instanceof HumanizationFailedError && error.code === "QUALITY_CHECK_FAILED") {
-        throw error;
-      }
-      console.error("[humanize] base model failed", {
-        code: error instanceof HumanizationFailedError ? error.code : "ERROR",
-      });
-      if (hasVertexEndpointEnv() || isVertexConfigured()) {
-        try {
-          return await runModelHumanization(request, { backend: "tuned", styleExamples });
-        } catch (tunedError) {
-          if (tunedError instanceof HumanizationFailedError) throw tunedError;
-          throw wrapAsError(tunedError);
-        }
-      }
+      if (error instanceof HumanizationFailedError) throw error;
+      throw wrapAsError(error);
+    }
+  }
+
+  if (isGeminiApiConfigured()) {
+    try {
+      return await runModelHumanization(request, { backend: "base" });
+    } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);
     }
