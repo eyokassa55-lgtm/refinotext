@@ -1,0 +1,105 @@
+/**
+ * Start a new Vertex supervised tuning job for OG REFINO.
+ *
+ * Requires:
+ * - GOOGLE_CLOUD_PROJECT
+ * - GOOGLE_SERVICE_ACCOUNT_JSON (or ADC)
+ * - TRAINING_DATA_GCS_URI=gs://bucket/path/training_data.jsonl
+ *
+ * Run: npm run train:vertex
+ */
+import { config } from "dotenv";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { GoogleAuth } from "google-auth-library";
+
+config({ path: ".env.local" });
+config();
+
+const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
+
+function cleanEnv(value: string | undefined): string | undefined {
+  const cleaned = value?.trim().replace(/^["']|["']$/g, "");
+  return cleaned ? cleaned : undefined;
+}
+
+async function main() {
+  const project = cleanEnv(process.env.GOOGLE_CLOUD_PROJECT);
+  const location =
+    cleanEnv(process.env.GOOGLE_CLOUD_LOCATION) ??
+    cleanEnv(process.env.VERTEX_AI_LOCATION) ??
+    "us-central1";
+  const datasetUri = cleanEnv(process.env.TRAINING_DATA_GCS_URI);
+  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO v2";
+  const baseModel =
+    cleanEnv(process.env.VERTEX_BASE_MODEL) ?? "gemini-2.5-flash-lite";
+
+  if (!project) {
+    console.error("GOOGLE_CLOUD_PROJECT is missing.");
+    process.exitCode = 1;
+    return;
+  }
+  if (!datasetUri?.startsWith("gs://")) {
+    console.error(
+      "Set TRAINING_DATA_GCS_URI to a gs:// path for data/training_data.jsonl before training.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const localRows = readFileSync(join(process.cwd(), "data", "training_data.jsonl"), "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean).length;
+  console.log(`Local training rows: ${localRows}`);
+  console.log(`Dataset URI: ${datasetUri}`);
+  console.log(`Job name: ${displayName}`);
+  console.log(`Base model: ${baseModel}`);
+
+  const auth = new GoogleAuth({
+    ...getGoogleAuthOptions(),
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+  const client = await auth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  const token = typeof tokenResponse === "string" ? tokenResponse : tokenResponse?.token;
+  if (!token) {
+    console.error("Could not obtain a Google access token.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/tuningJobs`;
+  const body = {
+    baseModel,
+    supervisedTuningSpec: {
+      trainingDatasetUri: datasetUri,
+      validationDatasetUri: datasetUri,
+    },
+    tunedModelDisplayName: displayName,
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const payload = (await res.json()) as {
+    name?: string;
+    error?: { message?: string };
+  };
+
+  if (!res.ok) {
+    console.error("Tuning job create failed:", payload.error?.message ?? res.status);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("Tuning job created:", payload.name ?? "(unknown)");
+  console.log("When it succeeds, run: npm run bind:vertex");
+}
+
+await main();

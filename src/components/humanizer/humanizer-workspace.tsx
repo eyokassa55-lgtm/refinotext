@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
+import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizerControls } from "./humanizer-controls";
@@ -51,6 +52,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const requestKeyRef = useRef<string | null>(null);
 
   const inputWordCount = countWords(input);
+  const showConversationalHint =
+    looksLikeGenericEssay(input) && (tone === "standard" || tone === "academic");
   const outputWordCount = countWords(output);
 
   const notifyStatus = (msg: string) => {
@@ -435,6 +438,20 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </div>
         </div>
       </div>
+
+      {showConversationalHint ? (
+        <p className="rounded-lg border border-border bg-mint-dark/40 px-3 py-2 text-xs leading-relaxed text-muted">
+          This draft reads like a generic topic essay. For a more natural rhythm, try{" "}
+          <button
+            type="button"
+            onClick={() => setTone("conversational")}
+            className="font-semibold text-primary underline-offset-2 hover:underline"
+          >
+            Conversational
+          </button>{" "}
+          tone and raise intensity toward 100%.
+        </p>
+      ) : null}
 
       <HumanizerControls
         tone={tone}

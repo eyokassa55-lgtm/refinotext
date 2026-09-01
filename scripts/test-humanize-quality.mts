@@ -13,10 +13,16 @@ config();
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
+  buildAntiTemplateRewriteInstruction,
   buildEditorSystemInstruction,
   buildRepairSystemInstruction,
   buildTunedSystemInstruction,
 } from "../src/lib/humanize-prompt";
+import {
+  findBannedAiPhrases,
+  isTemplateLikeOutput,
+  looksLikeGenericEssay,
+} from "../src/lib/humanize-voice";
 import {
   assessRewriteQuality,
   extractNumbers,
@@ -298,6 +304,19 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("extracts 4812 from 4,812", extractNumbers("4,812 commuters").includes("4812"));
   assert("extracts Priya Nandakumar", extractProperNames(source).includes("Priya Nandakumar"));
 
+  console.log("\n2b. Template voice detection");
+  const aiEssay =
+    "Success is a significant life goal, yet its definition varies from person to person. For some, success equates to a thriving career or financial prosperity. Others find fulfillment in a happy family, the pursuit of knowledge, or contributing to their communities. Ultimately, true success often intertwines with personal growth and contentment, not just material wealth. Reaching success typically demands considerable effort, patience, and unwavering determination. Along the path, individuals will inevitably encounter failures and challenges. However, these experiences are invaluable for learning and developing resilience. Those who persist in pursuing their goals despite setbacks often emerge stronger and more self-assured. Establishing clear objectives and cultivating positive habits can further facilitate progress toward these aspirations. Education plays a vital role in achieving success.";
+  assert("flags banned AI phrases", findBannedAiPhrases("Ultimately, we must unlock potential.").includes("ultimately"));
+  assert("detects template-like essay output", isTemplateLikeOutput(aiEssay, source));
+  assert("detects generic topic essays", looksLikeGenericEssay(aiEssay));
+  const antiTemplate = buildAntiTemplateRewriteInstruction(
+    { text: aiEssay, tone: "standard", intensity: 100 },
+    { bannedPhrases: ["ultimately", "unlock"], templateLike: true },
+  );
+  assert("anti-template retry bans listed phrases", /Remove these words entirely: ultimately, unlock/i.test(antiTemplate));
+  assert("anti-template retry asks for short sentences", /very short sentences/i.test(antiTemplate));
+
   console.log("\n3. Editor instruction");
   const instruction = buildEditorSystemInstruction({
     text: source,
@@ -361,7 +380,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("asks for an academic register when Academic is selected", /academic register/i.test(tunedCue));
   assert(
     "asks for a conversational register when Conversational is selected",
-    /conversational register/i.test(buildTunedSystemInstruction({ text: source, tone: "conversational", intensity: 75 })),
+    /conversational register/i.test(buildTunedSystemInstruction({ text: source, tone: "conversational", intensity: 75 })) &&
+      /contractions/i.test(buildTunedSystemInstruction({ text: source, tone: "conversational", intensity: 75 })),
   );
   assert(
     "asks for an executive register when Executive is selected",
@@ -386,7 +406,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
   const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
-  assert("loads all training_data.jsonl rows", stats.rows === 716, `rows=${stats.rows}`);
+  assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
   assert(
     "keeps a lookup key for every stored input",
     stats.lookupKeys === stats.rows - stats.duplicateInputs,

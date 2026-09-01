@@ -18,6 +18,8 @@
     "test:humanize": "tsx --conditions=react-server scripts/test-humanize-quality.mts",
     "inspect:vertex": "tsx scripts/list-vertex-tuning.mts",
     "bind:vertex": "tsx scripts/bind-tuned-endpoint.mts",
+    "append:training": "tsx scripts/append-training-variety.mts",
+    "train:vertex": "tsx scripts/start-vertex-tuning.mts",
     "test:fireworks": "tsx --conditions=react-server scripts/test-fireworks.mts",
     "test:polar": "tsx scripts/verify-polar.mts"
   },

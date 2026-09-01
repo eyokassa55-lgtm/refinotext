@@ -1,3 +1,5 @@
+import { looksLikeGenericEssay } from "@/lib/humanize-voice";
+
 export type HumanizePromptRequest = {
   text: string;
   tone?: string;
@@ -15,13 +17,13 @@ function rewriteStrength(intensity?: number): string {
 function tunedToneGuidance(tone?: string): string {
   switch (tone) {
     case "academic":
-      return "Write in an academic register: precise, formal, and suitable for school or scholarly writing. Keep the same claims.";
+      return "Write in an academic register: precise and formal, but still vary sentence length and avoid template transitions like Furthermore or Ultimately. Keep the same claims.";
     case "conversational":
-      return "Write in a conversational register: natural and approachable, still accurate.";
+      return "Write in a conversational register: direct, natural, and approachable. Use shorter sentences mixed with longer ones. Prefer plain words over padded formal phrasing. You may use contractions when they fit. Still keep every fact accurate.";
     case "executive":
       return "Write in an executive register: concise, direct, and professional.";
     default:
-      return "Keep the original tone. Do not flatten the voice.";
+      return "Keep the original tone, but break stiff essay-template rhythm with varied sentence lengths and less predictable phrasing.";
   }
 }
 
@@ -126,6 +128,11 @@ function flaggedPatternDirectives(): string[] {
     "Tighten \"This raises questions about who should control this information\" — prefer control, protect, or data when the meaning is the same.",
     "Replace \"In conclusion, technology is neither entirely good nor entirely bad\" with a direct closing such as \"Technology is neither entirely good nor bad.\"",
     "Replace \"Its effects depend on how people use it\" only when needed for flow; keep the same claim.",
+    "Break parallel \"For some... Others...\" structures into separate sentences with different openings.",
+    "Replace \"Along the path\" or \"Along the way\" with a direct clause or cut the filler entirely.",
+    "Replace \"equates to\" with means or is.",
+    "Replace \"facilitate progress\" with help people move forward or make progress.",
+    "Do not use \"unlock their potential\" — say build skills, grow, or reach their goals instead.",
   ];
 }
 
@@ -262,6 +269,15 @@ export function buildTunedSystemInstruction(request?: HumanizePromptRequest): st
     lines.push(tunedToneGuidance(tone));
   }
 
+  const draft = request?.text?.trim();
+  if (draft && (!tone || tone === "standard" || tone === "academic")) {
+    if (looksLikeGenericEssay(draft)) {
+      lines.push(
+        "This draft reads like a generic topic essay. Prefer conversational rhythm: mix short blunt sentences with longer ones, avoid parallel For some / Others structures, and use plain transitions.",
+      );
+    }
+  }
+
   const readability = request?.readability?.trim();
   if (readability && readability !== "General Audience") {
     lines.push(`Match a ${readability} reading level while keeping the same claims.`);
@@ -354,9 +370,39 @@ export function buildStrongerRewriteInstruction(
 
   return `${refinoTextSystemCore().join("\n")}
 ${tunedToneGuidance(request.tone)}
-The last version copied the draft. Changing one or two words is not enough.
-Rewrite with new sentence openings and rhythm. Keep the same meaning, facts, length, and paragraph breaks.
+The last version copied the draft or sounded like a template. Changing one or two words is not enough.
+Rewrite with new sentence openings, mixed short and long sentences, and fresh transitions. Keep the same meaning, facts, length, and paragraph breaks.
 ${facts}
+Return only one rewritten draft.`;
+}
+
+export function buildAntiTemplateRewriteInstruction(
+  request: HumanizePromptRequest,
+  options: {
+    bannedPhrases?: string[];
+    templateLike?: boolean;
+    copied?: boolean;
+  },
+): string {
+  const banned =
+    options.bannedPhrases && options.bannedPhrases.length > 0
+      ? `Remove these words entirely: ${options.bannedPhrases.join(", ")}.`
+      : "Remove template transitions such as Ultimately, Furthermore, Moreover, However at sentence starts, and unlock.";
+
+  const templateNote = options.templateLike
+    ? "The last draft still read like a generic essay template. Break the For some / Others pattern, vary rhythm sharply, and use at least two very short sentences (3-6 words)."
+    : "Vary rhythm sharply and avoid predictable essay cadence.";
+
+  const copyNote = options.copied
+    ? "The last draft copied the source wording. Rewrite with new sentence openings."
+    : "";
+
+  return `${refinoTextSystemCore().join("\n")}
+${tunedToneGuidance(request.tone)}
+${templateNote}
+${copyNote}
+${banned}
+Keep the same meaning, facts, length, and paragraph breaks. Do not add new examples or arguments.
 Return only one rewritten draft.`;
 }
 

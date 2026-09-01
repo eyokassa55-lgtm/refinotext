@@ -1,4 +1,5 @@
-﻿import { countWords } from "@/lib/words";
+﻿import { templateVoiceHits as countTemplateVoiceHits } from "@/lib/humanize-voice";
+import { countWords } from "@/lib/words";
 
 const STOPWORDS = new Set([
   "a",
@@ -103,17 +104,6 @@ const GENERIC_PATTERNS = [
   /key changes and why/i,
 ];
 
-const TEMPLATE_VOICE_PATTERNS = [
-  /it is (essential|important|imperative|crucial|vital) to\b/i,
-  /play(?:s)? a (crucial|vital|key|significant) role/i,
-  /in (today'?s|modern) (society|world)/i,
-  /\ba wide range of\b/i,
-  /it is important to note/i,
-  /delve into/i,
-  /pave(?:s)? the way/i,
-  /landscape of\b/i,
-  /\bvital ecosystems\b/i,
-];
 
 const LEAK_PATTERNS = [
   /professional editor and reviser for RefinoText/i,
@@ -215,10 +205,7 @@ export function paragraphCount(text: string): number {
 }
 
 function templateVoiceHits(text: string): number {
-  return TEMPLATE_VOICE_PATTERNS.reduce(
-    (count, pattern) => count + (pattern.test(text) ? 1 : 0),
-    0,
-  );
+  return countTemplateVoiceHits(text);
 }
 
 function significantNumbers(text: string): string[] {

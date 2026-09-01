@@ -11,10 +11,16 @@ import {
   redactModelName,
 } from "@/lib/gemini";
 import {
+  buildAntiTemplateRewriteInstruction,
   buildStrongerRewriteInstruction,
   buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
 import { assessRewriteQuality, phraseCopyRatio, stripModelChrome } from "@/lib/humanize-quality";
+import {
+  findBannedAiPhrases,
+  isTemplateLikeOutput,
+  rewriteArtificialityScore,
+} from "@/lib/humanize-voice";
 import { getTrainingRowCount } from "@/lib/training-lookup";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
@@ -56,8 +62,19 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-const TUNED_VERTEX_TEMPERATURE = 0;
-const TUNED_VERTEX_TOP_P = 0.1;
+const TUNED_VERTEX_TEMP_MIN = 0.15;
+const TUNED_VERTEX_TEMP_MAX = 0.55;
+const TUNED_VERTEX_TOP_P_MIN = 0.75;
+const TUNED_VERTEX_TOP_P_MAX = 0.92;
+
+function tunedVertexGenerationOptions(intensity?: number) {
+  const clamped = Math.min(100, Math.max(0, intensity ?? 75));
+  const ratio = clamped / 100;
+  return {
+    temperature: TUNED_VERTEX_TEMP_MIN + ratio * (TUNED_VERTEX_TEMP_MAX - TUNED_VERTEX_TEMP_MIN),
+    topP: TUNED_VERTEX_TOP_P_MIN + ratio * (TUNED_VERTEX_TOP_P_MAX - TUNED_VERTEX_TOP_P_MIN),
+  };
+}
 
 function generationOptions(request: HumanizeRequest, tuned: boolean) {
   const intensity = request.intensity ?? 75;
@@ -65,8 +82,7 @@ function generationOptions(request: HumanizeRequest, tuned: boolean) {
 
   if (tuned) {
     return {
-      temperature: TUNED_VERTEX_TEMPERATURE,
-      topP: TUNED_VERTEX_TOP_P,
+      ...tunedVertexGenerationOptions(intensity),
       maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 1.55) + 120)),
     };
   }
@@ -141,6 +157,10 @@ async function runModelHumanization(
     model: modelName,
     location: options.provider === "vertex" ? vertex?.location : undefined,
     baseGemini: options.provider === "gemini-api",
+    intensity: request.intensity ?? 75,
+    ...(options.tuned
+      ? tunedVertexGenerationOptions(request.intensity)
+      : {}),
   });
 
   const raw = await rewriteWithModel(request, {
@@ -157,16 +177,41 @@ async function runModelHumanization(
   }
 
   const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
-  if (copiedTooClosely) {
-    console.info("[humanize] retrying once because the model copied the draft");
+  const bannedPhrases = findBannedAiPhrases(output);
+  const templateLike = isTemplateLikeOutput(output, request.text);
+  const needsRetry = copiedTooClosely || bannedPhrases.length > 0 || templateLike;
+
+  if (needsRetry) {
+    console.info("[humanize] retrying once because the rewrite still looks template-like", {
+      copiedTooClosely,
+      bannedPhrases,
+      templateLike,
+    });
+    const instruction = templateLike || bannedPhrases.length > 0
+      ? buildAntiTemplateRewriteInstruction(request, {
+          bannedPhrases,
+          templateLike,
+          copied: copiedTooClosely,
+        })
+      : buildStrongerRewriteInstruction(request, []);
+
     const repaired = extractTunedOutput(
       await rewriteWithModel(request, {
         tuned: options.tuned,
-        systemInstruction: buildStrongerRewriteInstruction(request, []),
+        systemInstruction: instruction,
       }),
     );
-    if (repaired && phraseCopyRatio(request.text, repaired) < phraseCopyRatio(request.text, output)) {
-      output = repaired;
+
+    if (repaired) {
+      const currentScore =
+        rewriteArtificialityScore(output, request.text) +
+        phraseCopyRatio(request.text, output);
+      const repairedScore =
+        rewriteArtificialityScore(repaired, request.text) +
+        phraseCopyRatio(request.text, repaired);
+      if (repairedScore < currentScore) {
+        output = repaired;
+      }
     }
   }
 
