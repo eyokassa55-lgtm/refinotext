@@ -1,7 +1,7 @@
 /**
  * Humanizer quality tests.
- * Offline checks never call a model. Live Grubby checks run only when
- * RUN_GRUBBY_LIVE=1 and GRUBBY_API_KEY is set.
+ * Offline checks never call a model. Live Vertex checks run when
+ * TUNED_MODEL_ENDPOINT is set. Full rewrite samples require RUN_VERTEX_LIVE=1.
  *
  * Run with: npm run test:humanize
  */
@@ -526,19 +526,48 @@ Rainforests also illustrate a much broader set of global development debates. It
 }
 
 async function runLiveTests() {
-  const { isGrubbyConfigured } = await import("../src/lib/grubby");
+  const {
+    isVertexConfigured,
+    redactModelName,
+    requireVertexConfig,
+  } = await import("../src/lib/gemini");
   const { runHumanization } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
 
-  console.log("\n4. Live Grubby rewrite");
+  console.log("\n4. Live REFINO TEXT Vertex endpoint");
 
-  if (process.env.RUN_GRUBBY_LIVE !== "1") {
-    console.log("  SKIP  Live Grubby tests are off. Set RUN_GRUBBY_LIVE=1 to enable.");
+  if (!isVertexConfigured()) {
+    console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
+    console.log("         Add GOOGLE_CLOUD_PROJECT, TUNED_MODEL_ENDPOINT, and GOOGLE_SERVICE_ACCOUNT_JSON to .env.local.");
     return;
   }
 
-  if (!isGrubbyConfigured()) {
-    console.log("  SKIP  GRUBBY_API_KEY is not set.");
+  const vertex = requireVertexConfig();
+  const tunedModel = redactModelName(vertex.model);
+  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
+  assert(
+    "live path targets the succeeded REFINO TEXT endpoint",
+    tunedModel.includes("6997771935991988224"),
+    tunedModel,
+  );
+  assert(
+    "live path does not call gemini-2.5-flash-lite",
+    !/gemini-/i.test(tunedModel) && !/gemini-/i.test(vertex.model),
+    tunedModel,
+  );
+  assert(
+    "live path does not use the failed refino text endpoint",
+    !tunedModel.includes("8870143481071271936"),
+    tunedModel,
+  );
+  assert(
+    "live path does not use the older refino correct endpoint",
+    !tunedModel.includes("7419984401057972224"),
+    tunedModel,
+  );
+
+  if (process.env.RUN_VERTEX_LIVE !== "1") {
+    console.log("  SKIP  Live rewrite samples are off. Set RUN_VERTEX_LIVE=1 to enable.");
     return;
   }
 
@@ -556,7 +585,6 @@ async function runLiveTests() {
     const ms = Date.now() - started;
     const meaning = meaningPreservation(sample.text, result.text);
     const copyRatio = phraseCopyRatio(sample.text, result.text);
-    const ratio = lengthRatio(sample.text, result.text);
     const usedStoredEssay = storedOutputs.has(result.text);
     assert(
       `${sample.id} ${sample.name}`,
@@ -566,7 +594,7 @@ async function runLiveTests() {
         meaning.result === "preserved" &&
         !usedStoredEssay &&
         copyRatio < 0.32,
-      `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)} len=${ratio.toFixed(2)}`,
+      `source=${result.source} ms=${ms} issues=${meaning.quality.issues.map((issue) => issue.code).join(",") || "none"} copy=${copyRatio.toFixed(2)}`,
     );
     printCaseReport(`${sample.id} ${sample.name}`, sample.text, result);
   } catch (error) {

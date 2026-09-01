@@ -12,6 +12,7 @@ import {
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
+import { findDatabaseMatch } from "@/lib/training-retrieval";
 import { ensureCurrentUser } from "@/lib/users";
 import type { ApiErrorResponse } from "@/types";
 
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
     return humanizeSuccess({
       id: previous.id,
       output: previous.outputText,
-      source: "model",
+      source: findDatabaseMatch(text) ? "database" : "model",
       wordCount: previous.inputWordCount,
       creditsCharged: 0,
       creditsRemaining: check.balance,
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
         return humanizeSuccess({
           id: saved.id,
           output: saved.outputText,
-          source: "model",
+          source: findDatabaseMatch(text) ? "database" : "model",
           wordCount: saved.inputWordCount,
           creditsCharged: 0,
           creditsRemaining: account?.balance ?? check.balance,

@@ -1,6 +1,7 @@
 /**
- * Copies the succeeded "refino correct" tuning job's endpoint into .env.local.
- * Does not create a tuning job. Never prints private keys.
+ * Copies the succeeded "REFINO TEXT" tuning job's endpoint into .env.local.
+ * Ignores the failed lowercase "refino text" job. Does not create a tuning job.
+ * Never prints private keys.
  */
 import { config } from "dotenv";
 import { promises as fs } from "node:fs";
@@ -11,8 +12,16 @@ config();
 
 const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 
-const SUCCESS_JOB_NAME = "refino correct";
+const SUCCESS_JOB_NAME = "REFINO TEXT";
 const FAILED_JOB_NAME = "refino text";
+
+type TuningJob = {
+  displayName?: string;
+  tunedModelDisplayName?: string;
+  state?: string;
+  createTime?: string;
+  tunedModel?: { endpoint?: string; model?: string };
+};
 
 function cleanEnv(value: string | undefined): string | undefined {
   const cleaned = value?.trim().replace(/^["']|["']$/g, "");
@@ -22,6 +31,10 @@ function cleanEnv(value: string | undefined): string | undefined {
 function redact(value: string): string {
   const match = value.match(/\/((?:endpoints|models|tuningJobs)\/[^/?#]+)/);
   return match?.[1] ?? "tuned-endpoint";
+}
+
+function jobName(job: TuningJob): string {
+  return String(job.displayName ?? job.tunedModelDisplayName ?? "").trim();
 }
 
 function upsertLine(text: string, key: string, value: string): string {
@@ -65,12 +78,7 @@ async function main() {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const body = (await res.json()) as {
     error?: { message?: string };
-    tuningJobs?: Array<{
-      displayName?: string;
-      tunedModelDisplayName?: string;
-      state?: string;
-      tunedModel?: { endpoint?: string; model?: string };
-    }>;
+    tuningJobs?: TuningJob[];
   };
 
   if (!res.ok) {
@@ -82,15 +90,22 @@ async function main() {
   const jobs = body.tuningJobs ?? [];
   console.log(`Listed ${jobs.length} tuning job(s).`);
   for (const job of jobs) {
-    const name = String(job.displayName ?? job.tunedModelDisplayName ?? "").trim();
-    console.log(`  ${name || "(unnamed)"} state=${job.state ?? "unknown"} endpoint=${job.tunedModel?.endpoint ? "yes" : "no"}`);
+    console.log(
+      `  ${jobName(job) || "(unnamed)"} state=${job.state ?? "unknown"} endpoint=${job.tunedModel?.endpoint ? "yes" : "no"}`,
+    );
   }
 
-  const failed = jobs.find((job) => /refino\s*text/i.test(String(job.displayName ?? job.tunedModelDisplayName ?? "")));
-  const succeeded = jobs.find((job) => {
-    const name = String(job.displayName ?? job.tunedModelDisplayName ?? "").trim();
-    return /refino\s*correct/i.test(name) && job.state === "JOB_STATE_SUCCEEDED";
-  });
+  const failed = jobs.find(
+    (job) => /^refino\s*text$/i.test(jobName(job)) && job.state !== "JOB_STATE_SUCCEEDED",
+  );
+  const succeeded = jobs
+    .filter(
+      (job) =>
+        /^refino\s*text$/i.test(jobName(job)) &&
+        job.state === "JOB_STATE_SUCCEEDED" &&
+        Boolean(job.tunedModel?.endpoint?.trim()),
+    )
+    .sort((a, b) => String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")))[0];
   const endpoint = succeeded?.tunedModel?.endpoint?.trim();
 
   if (failed) {
