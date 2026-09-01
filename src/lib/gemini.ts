@@ -419,8 +419,8 @@ async function generateOnce(
     ],
     config: {
       httpOptions: { timeout: GEMINI_TIMEOUT_MS },
-      temperature: options.temperature ?? (provider === "vertex" ? 0.2 : 0.7),
-      topP: options.topP ?? (provider === "vertex" ? 0.9 : 0.95),
+      temperature: options.temperature ?? (provider === "vertex" ? 0 : 0.7),
+      topP: options.topP ?? (provider === "vertex" ? 0.1 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
       candidateCount: 1,
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),

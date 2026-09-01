@@ -12,7 +12,6 @@ import {
 import {
   buildEditorSystemInstruction,
   buildStrongerRewriteInstruction,
-  buildTunedSystemInstruction,
   buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
 import { assessRewriteQuality, phraseCopyRatio, stripModelChrome } from "@/lib/humanize-quality";
@@ -58,16 +57,26 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-function generationOptions(request: HumanizeRequest, tuned: boolean, extraTemperature = 0) {
+const TUNED_VERTEX_TEMPERATURE = 0;
+const TUNED_VERTEX_TOP_P = 0.1;
+
+function generationOptions(request: HumanizeRequest, tuned: boolean) {
   const intensity = request.intensity ?? 75;
-  const temperature = tuned
-    ? 0.32 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.22
-    : 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   const words = countWords(request.text);
+
+  if (tuned) {
+    return {
+      temperature: TUNED_VERTEX_TEMPERATURE,
+      topP: TUNED_VERTEX_TOP_P,
+      maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 1.55) + 120)),
+    };
+  }
+
+  const temperature = 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   return {
-    temperature: Math.min(0.72, temperature + extraTemperature),
-    topP: tuned ? 0.9 : 0.95,
-    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * (tuned ? 1.55 : 2.2)) + (tuned ? 120 : 160))),
+    temperature: Math.min(0.72, temperature),
+    topP: 0.95,
+    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160)),
   };
 }
 
@@ -84,13 +93,13 @@ function wrapAsError(error: unknown): HumanizationFailedError {
 
 async function rewriteWithModel(
   request: HumanizeRequest,
-  options: { systemInstruction?: string; tuned: boolean; extraTemperature?: number },
+  options: { systemInstruction?: string; tuned: boolean },
 ): Promise<string> {
   return generateText(request.text, {
     ...(options.systemInstruction
       ? { systemInstruction: options.systemInstruction }
       : {}),
-    ...generationOptions(request, options.tuned, options.extraTemperature),
+    ...generationOptions(request, options.tuned),
   });
 }
 
@@ -169,7 +178,6 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
         const repaired = extractTunedOutput(
           await rewriteWithModel(request, {
             tuned: true,
-            extraTemperature: 0.12,
             systemInstruction: buildStrongerRewriteInstruction(request, []),
           }),
         );
