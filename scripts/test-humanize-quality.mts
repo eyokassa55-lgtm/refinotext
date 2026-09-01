@@ -339,6 +339,12 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("uses the Vertex objective line", /reads naturally human while retaining 100%/i.test(tunedCue));
   assert("includes burstiness guidance", /maximize burstiness/i.test(tunedCue) && /3-5 words/i.test(tunedCue));
   assert("bans common AI filler words", /banish ai vocabulary/i.test(tunedCue) && /delve/i.test(tunedCue));
+  assert(
+    "includes clarity swap guidance",
+    /clarity swaps/i.test(tunedCue) &&
+      /dominates or shapes/i.test(tunedCue) &&
+      /can lead to a loss of/i.test(tunedCue),
+  );
   assert("identifies as RefinoText", /you are refinotext/i.test(tunedCue));
   assert(
     "does not mention detectors or the 720-pair dataset",
