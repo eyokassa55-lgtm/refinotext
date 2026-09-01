@@ -329,8 +329,12 @@ Rainforests also illustrate a much broader set of global development debates. It
     /one or two words is not enough/i.test(tunedCue) && /do not copy sentences/i.test(tunedCue),
   );
   assert(
-    "does not send University readability into the tuned model",
-    !/university/i.test(tunedCue),
+    "sends University readability into the tuned model when selected",
+    /university \/ academic reading level/i.test(tunedCue),
+  );
+  assert(
+    "asks for varied sentence length and natural phrasing",
+    /vary sentence length/i.test(tunedCue) && /natural phrasing/i.test(tunedCue),
   );
   assert(
     "does not mention detectors or the 720-pair dataset",

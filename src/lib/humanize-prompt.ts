@@ -33,12 +33,21 @@ function formatTone(tone?: string): string {
   return tone.replace(/[-_]/g, " ");
 }
 
+function naturalWritingDirectives(): string[] {
+  return [
+    "Vary sentence length: alternate short, direct statements with longer multi-clause sentences.",
+    "Use diverse, natural phrasing. Avoid predictable template transitions (for example, furthermore, moreover, in conclusion) and overused filler (for example, tapestry, delve, testament, crucial role, paramount).",
+    "Prefer natural flow, active voice where appropriate, and subtle stylistic variation typical of careful human revision.",
+    "Do not summarize, truncate, or add speculative content. Keep all core facts and details from the input.",
+  ];
+}
+
 /**
  * Base system line from the Vertex chat conversion of the ai_text → human_text
  * pairs. Endpoint weights hold the dataset. Inference does not send training rows.
  */
 export const TUNED_TRAINING_SYSTEM_INSTRUCTION =
-  "Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
+  "You are an expert human academic editor and professional writer. Rewrite the user's draft naturally while preserving the original meaning, facts, names, numbers, dates, URLs, citations, conclusions, and intent.";
 
 export function buildTunedSystemInstruction(request?: HumanizePromptRequest): string {
   const lines = [TUNED_TRAINING_SYSTEM_INSTRUCTION];
@@ -54,11 +63,12 @@ export function buildTunedSystemInstruction(request?: HumanizePromptRequest): st
   }
 
   lines.push(`Rewrite strength: ${rewriteStrength(request?.intensity)}.`);
+  lines.push(...naturalWritingDirectives());
   lines.push(
     "Rewrite with new sentence openings and wording, the way a human would revise a stiff draft. Changing one or two words is not enough. Do not copy sentences.",
   );
   lines.push(
-    "Keep the same meaning, facts, names, numbers, and paragraph breaks. Return only the rewritten text. Do not add explanations or analysis.",
+    "Keep the same meaning, facts, names, numbers, and paragraph breaks. Return only the rewritten text. Do not add explanations or analysis, and do not wrap the output in quotes.",
   );
 
   return lines.join("\n");
@@ -124,6 +134,7 @@ export function buildRepairSystemInstruction(
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
 ${tunedToneGuidance(request.tone)}
+${naturalWritingDirectives().join("\n")}
 Rewrite with natural rhythm and varied sentences. Keep the same meaning.
 Keep the same length and paragraph breaks. Do not invent or drop facts.
 ${facts}
@@ -141,6 +152,7 @@ export function buildStrongerRewriteInstruction(
 
   return `${TUNED_TRAINING_SYSTEM_INSTRUCTION}
 ${tunedToneGuidance(request.tone)}
+${naturalWritingDirectives().join("\n")}
 The last version copied the draft. Changing one or two words is not enough.
 Rewrite with new sentence openings and rhythm. Keep the same meaning, facts, length, and paragraph breaks.
 ${facts}
