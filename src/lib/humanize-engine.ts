@@ -3,14 +3,14 @@ import "server-only";
 import {
   GeminiError,
   generateText,
+  getGeminiModel,
   getVertexConfig,
   hasVertexEndpointEnv,
-  isBaseGeminiFallbackEnabled,
+  isGeminiApiConfigured,
   isVertexConfigured,
   redactModelName,
 } from "@/lib/gemini";
 import {
-  buildEditorSystemInstruction,
   buildStrongerRewriteInstruction,
   buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
@@ -124,89 +124,98 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+async function runModelHumanization(
+  request: HumanizeRequest,
+  options: { provider: "vertex" | "gemini-api"; tuned: boolean },
+): Promise<HumanizeResult> {
   const vertex = getVertexConfig();
+  const modelName =
+    options.provider === "vertex"
+      ? redactModelName(vertex?.model ?? "TUNED_MODEL_ENDPOINT")
+      : redactModelName(getGeminiModel());
+
+  console.info("[humanize] [MODEL_GENERATED]", {
+    rows: getTrainingRowCount(),
+    tone: request.tone ?? "standard",
+    provider: options.provider,
+    model: modelName,
+    location: options.provider === "vertex" ? vertex?.location : undefined,
+    baseGemini: options.provider === "gemini-api",
+  });
+
+  const raw = await rewriteWithModel(request, {
+    tuned: options.tuned,
+    systemInstruction: buildVertexSystemInstruction(request),
+  });
+  let output = extractTunedOutput(raw);
+  if (!output) {
+    throw new HumanizationFailedError(
+      "The writing service returned an empty response.",
+      "EMPTY_RESPONSE",
+      502,
+    );
+  }
+
+  const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
+  if (copiedTooClosely) {
+    console.info("[humanize] retrying once because the model copied the draft");
+    const repaired = extractTunedOutput(
+      await rewriteWithModel(request, {
+        tuned: options.tuned,
+        systemInstruction: buildStrongerRewriteInstruction(request, []),
+      }),
+    );
+    if (repaired && phraseCopyRatio(request.text, repaired) < phraseCopyRatio(request.text, output)) {
+      output = repaired;
+    }
+  }
+
+  const quality = assessRewriteQuality(request.text, output);
+  if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
+    console.error("[humanize] model returned an unusable response", {
+      codes: quality.issues.map((issue) => issue.code),
+    });
+    throw new HumanizationFailedError(
+      "Humanization failed. Please try again.",
+      "QUALITY_CHECK_FAILED",
+      502,
+    );
+  }
+
+  if (options.provider === "gemini-api") {
+    output = finalizeFallbackOutput(request.text, output);
+  }
+
+  return {
+    text: output,
+    source: "FINE_TUNED_MODEL",
+    retrieval: null,
+  };
+}
+
+export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
-      console.info("[humanize] [MODEL_GENERATED]", {
-        rows: getTrainingRowCount(),
-        tone: request.tone ?? "standard",
-        provider: "vertex",
-        model: redactModelName(vertex?.model ?? "TUNED_MODEL_ENDPOINT"),
-        location: vertex?.location,
-        baseGemini: false,
-      });
-      const raw = await rewriteWithModel(request, {
-        tuned: true,
-        systemInstruction: buildVertexSystemInstruction(request),
-      });
-      let output = extractTunedOutput(raw);
-      if (!output) {
-        throw new HumanizationFailedError(
-          "The writing service returned an empty response.",
-          "EMPTY_RESPONSE",
-          502,
-        );
-      }
-
-      const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
-      if (copiedTooClosely) {
-        console.info("[humanize] retrying once because the tuned model copied the draft");
-        const repaired = extractTunedOutput(
-          await rewriteWithModel(request, {
-            tuned: true,
-            systemInstruction: buildStrongerRewriteInstruction(request, []),
-          }),
-        );
-        if (repaired && phraseCopyRatio(request.text, repaired) < phraseCopyRatio(request.text, output)) {
-          output = repaired;
-        }
-      }
-
-      const quality = assessRewriteQuality(request.text, output);
-      if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
-        console.error("[humanize] tuned model returned an unusable response", {
-          codes: quality.issues.map((issue) => issue.code),
-        });
-        throw new HumanizationFailedError(
-          "Humanization failed. Please try again.",
-          "QUALITY_CHECK_FAILED",
-          502,
-        );
-      }
-
-      return {
-        text: output,
-        source: "FINE_TUNED_MODEL",
-        retrieval: null,
-      };
+      return await runModelHumanization(request, { provider: "vertex", tuned: true });
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);
     }
   }
 
-  if (isBaseGeminiFallbackEnabled()) {
+  if (isGeminiApiConfigured()) {
     try {
-      const text = await rewriteWithModel(request, {
-        tuned: false,
-        systemInstruction: buildEditorSystemInstruction(request),
-      });
-      return {
-        text: finalizeFallbackOutput(request.text, text),
-        source: "FINE_TUNED_MODEL",
-        retrieval: null,
-      };
+      return await runModelHumanization(request, { provider: "gemini-api", tuned: false });
     } catch (error) {
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);
     }
   }
 
-  console.error("[humanize] Vertex AI tuned endpoint is not configured; refusing base Gemini");
+  console.error("[humanize] No Vertex endpoint or Gemini API key is configured");
   throw new HumanizationFailedError(
     "The writing service is not configured. Please try again later.",
-    "MISSING_VERTEX_CONFIG",
+    "MISSING_API_KEY",
     503,
   );
 }

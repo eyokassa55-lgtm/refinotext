@@ -35,8 +35,7 @@ export const env = {
 
   gemini: {
     apiKey: getEnv("GEMINI_API_KEY"),
-    model: getEnv("GEMINI_MODEL") ?? "gemini-3.6-flash",
-    allowBaseFallback: getEnv("ALLOW_BASE_GEMINI_FALLBACK") === "true",
+    model: getEnv("GEMINI_MODEL")?.replace(/-+$/, "") ?? "gemini-2.5-flash",
   },
 
   grubby: {

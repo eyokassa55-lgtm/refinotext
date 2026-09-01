@@ -77,6 +77,7 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
     case "UNAVAILABLE":
     case "MISSING_GRUBBY_CONFIG":
     case "MISSING_VERTEX_CONFIG":
+    case "MISSING_API_KEY":
     case "INVALID_VERTEX_ENDPOINT":
       return 503;
     default:

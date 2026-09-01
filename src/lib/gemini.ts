@@ -157,8 +157,16 @@ export function isVertexConfigured(): boolean {
   }
 }
 
+export function isGeminiApiConfigured(): boolean {
+  return Boolean(cleanEnv(process.env.GEMINI_API_KEY));
+}
+
+/** @deprecated Gemini API is used automatically when Vertex is not configured. */
 export function isBaseGeminiFallbackEnabled(): boolean {
-  return cleanEnv(process.env.ALLOW_BASE_GEMINI_FALLBACK)?.toLowerCase() === "true";
+  return (
+    isGeminiApiConfigured() ||
+    cleanEnv(process.env.ALLOW_BASE_GEMINI_FALLBACK)?.toLowerCase() === "true"
+  );
 }
 
 export function redactModelName(model: string): string {
@@ -185,8 +193,9 @@ export function getGeminiModel(): string {
   const vertex = getVertexConfig();
   if (vertex) return vertex.model;
 
-  const model = cleanEnv(process.env.GEMINI_MODEL);
-  return model || DEFAULT_GEMINI_MODEL;
+  const model = cleanEnv(process.env.GEMINI_MODEL)?.replace(/-+$/, "");
+  if (model && /^gemini-/i.test(model)) return model;
+  return DEFAULT_GEMINI_MODEL;
 }
 
 function loadGoogleAuthOptions() {
@@ -268,10 +277,10 @@ function modelsToTry(): { provider: "vertex" | "gemini-api"; model: string }[] {
     return [{ provider: "vertex", model: vertex.model }];
   }
 
-  if (!isBaseGeminiFallbackEnabled()) {
+  if (!isGeminiApiConfigured()) {
     throw new GeminiError(
       "The writing service is not configured. Please try again later.",
-      "MISSING_VERTEX_CONFIG",
+      "MISSING_API_KEY",
       503,
     );
   }

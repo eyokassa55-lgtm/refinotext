@@ -553,6 +553,8 @@ Rainforests also illustrate a much broader set of global development debates. It
 
 async function runLiveTests() {
   const {
+    getGeminiModel,
+    isGeminiApiConfigured,
     isVertexConfigured,
     redactModelName,
     requireVertexConfig,
@@ -560,21 +562,25 @@ async function runLiveTests() {
   const { runHumanization } = await import("../src/lib/humanize-engine");
   const { getTrainingPairs } = await import("../src/lib/training-lookup");
 
-  console.log("\n4. Live fine-tuned Vertex cases");
+  console.log("\n4. Live Humanize provider cases");
 
-  if (!isVertexConfigured()) {
-    console.log("  SKIP  Vertex env is not set locally. Live tuned-model tests were not run.");
+  if (isVertexConfigured()) {
+    const vertex = requireVertexConfig();
+    const tunedModel = redactModelName(vertex.model);
+    console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
+    assert(
+      "live path targets TUNED_MODEL_ENDPOINT",
+      tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
+      tunedModel,
+    );
+  } else if (isGeminiApiConfigured()) {
+    const model = redactModelName(getGeminiModel());
+    console.log(`  Using provider=gemini-api model=${model}`);
+    assert("live path targets Gemini API model", model.startsWith("gemini-"), model);
+  } else {
+    console.log("  SKIP  No Vertex endpoint or Gemini API key is set locally.");
     return;
   }
-
-  const vertex = requireVertexConfig();
-  const tunedModel = redactModelName(vertex.model);
-  console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
-  assert(
-    "live path targets TUNED_MODEL_ENDPOINT",
-    tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
-    tunedModel,
-  );
 
   if (process.env.RUN_VERTEX_LIVE !== "1") {
     console.log("  SKIP  Live rewrite samples are off. Set RUN_VERTEX_LIVE=1 to enable.");
