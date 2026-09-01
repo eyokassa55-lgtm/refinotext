@@ -3,16 +3,17 @@ import "server-only";
 import {
   GeminiError,
   generateText,
-  getGeminiModel,
   getVertexConfig,
   hasVertexEndpointEnv,
   isGeminiApiConfigured,
   isVertexConfigured,
   redactModelName,
+  type GenerateBackend,
 } from "@/lib/gemini";
 import {
   buildAntiTemplateRewriteInstruction,
   buildStrongerRewriteInstruction,
+  buildStyleGuidedRewriteInstruction,
   buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
 import {
@@ -27,8 +28,14 @@ import {
   isTemplateLikeOutput,
   rewriteArtificialityScore,
 } from "@/lib/humanize-voice";
+import { GrubbyError, humanizeWithGrubby, isGrubbyConfigured } from "@/lib/grubby";
 import { getTrainingRowCount } from "@/lib/training-lookup";
-import { findDatabaseMatch, type DatabaseTrainingMatch } from "@/lib/training-retrieval";
+import {
+  findDatabaseMatch,
+  retrieveTrainingExamples,
+  type DatabaseTrainingMatch,
+  type RetrievedTrainingExample,
+} from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -106,6 +113,9 @@ function wrapAsError(error: unknown): HumanizationFailedError {
   if (error instanceof GeminiError) {
     return new HumanizationFailedError(error.message, error.code, error.status);
   }
+  if (error instanceof GrubbyError) {
+    return new HumanizationFailedError(error.message, error.code, error.status);
+  }
 
   return new HumanizationFailedError(
     "Humanization failed. Please try again.",
@@ -115,32 +125,19 @@ function wrapAsError(error: unknown): HumanizationFailedError {
 
 async function rewriteWithModel(
   request: HumanizeRequest,
-  options: { systemInstruction?: string; tuned: boolean },
+  options: { systemInstruction?: string; tuned: boolean; backend: GenerateBackend },
 ): Promise<string> {
   return generateText(request.text, {
     ...(options.systemInstruction
       ? { systemInstruction: options.systemInstruction }
       : {}),
     ...generationOptions(request, options.tuned),
+    backend: options.backend,
   });
 }
 
 function extractTunedOutput(raw: string): string {
   return stripModelChrome(raw);
-}
-
-function finalizeFallbackOutput(input: string, raw: string): string {
-  const quality = assessRewriteQuality(input, raw);
-  if (quality.output) return quality.output;
-  const cleaned = extractTunedOutput(raw);
-  if (!cleaned) {
-    throw new HumanizationFailedError(
-      "Humanization failed. Please try again.",
-      "QUALITY_CHECK_FAILED",
-      502,
-    );
-  }
-  return cleaned;
 }
 
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
@@ -195,32 +192,80 @@ function resolveDatabaseHit(request: HumanizeRequest, hit: DatabaseTrainingMatch
   };
 }
 
+async function runGrubbyHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  console.info("[humanize] [GRUBBY]", {
+    rows: getTrainingRowCount(),
+    tone: request.tone ?? "standard",
+    intensity: request.intensity ?? 75,
+  });
+
+  const output = extractTunedOutput(await humanizeWithGrubby(request.text));
+  if (!output) {
+    throw new HumanizationFailedError(
+      "The writing service returned an empty response.",
+      "EMPTY_RESPONSE",
+      502,
+    );
+  }
+
+  const quality = assessRewriteQuality(request.text, output);
+  if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
+    throw new HumanizationFailedError(
+      "Humanization failed. Please try again.",
+      "QUALITY_CHECK_FAILED",
+      502,
+    );
+  }
+
+  return {
+    text: quality.output || output,
+    source: "FINE_TUNED_MODEL",
+    retrieval: null,
+  };
+}
+
+function shouldFallbackFromGrubby(error: unknown): boolean {
+  if (!(error instanceof GrubbyError) && !(error instanceof HumanizationFailedError)) {
+    return true;
+  }
+  const code = error instanceof GrubbyError || error instanceof HumanizationFailedError ? error.code : "";
+  return !["TEXT_TOO_SHORT", "GRUBBY_LIMIT"].includes(code);
+}
+
 async function runModelHumanization(
   request: HumanizeRequest,
-  options: { provider: "vertex" | "gemini-api"; tuned: boolean },
+  options: {
+    backend: GenerateBackend;
+    styleExamples?: RetrievedTrainingExample[];
+  },
 ): Promise<HumanizeResult> {
   const vertex = getVertexConfig();
+  const providerLabel = options.backend === "tuned" ? "vertex" : "base";
   const modelName =
-    options.provider === "vertex"
+    options.backend === "tuned"
       ? redactModelName(vertex?.model ?? "TUNED_MODEL_ENDPOINT")
-      : redactModelName(getGeminiModel());
+      : redactModelName("gemini-2.5-flash");
 
   console.info("[humanize] [MODEL_GENERATED]", {
     rows: getTrainingRowCount(),
     tone: request.tone ?? "standard",
-    provider: options.provider,
+    provider: providerLabel,
+    backend: options.backend,
     model: modelName,
-    location: options.provider === "vertex" ? vertex?.location : undefined,
-    baseGemini: options.provider === "gemini-api",
+    location: vertex?.location,
+    styleExamples: options.styleExamples?.map((example) => example.index) ?? [],
     intensity: request.intensity ?? 75,
-    ...(options.tuned
-      ? tunedVertexGenerationOptions(request.intensity)
-      : {}),
+    ...(options.backend === "tuned" ? tunedVertexGenerationOptions(request.intensity) : {}),
   });
 
+  const systemInstruction = options.styleExamples?.length
+    ? buildStyleGuidedRewriteInstruction(request, options.styleExamples)
+    : buildVertexSystemInstruction(request);
+
   const raw = await rewriteWithModel(request, {
-    tuned: options.tuned,
-    systemInstruction: buildVertexSystemInstruction(request),
+    tuned: options.backend === "tuned",
+    backend: options.backend,
+    systemInstruction,
   });
   let output = extractTunedOutput(raw);
   if (!output) {
@@ -241,6 +286,7 @@ async function runModelHumanization(
       copiedTooClosely,
       bannedPhrases,
       templateLike,
+      backend: options.backend,
     });
     const instruction = templateLike || bannedPhrases.length > 0
       ? buildAntiTemplateRewriteInstruction(request, {
@@ -252,7 +298,8 @@ async function runModelHumanization(
 
     const repaired = extractTunedOutput(
       await rewriteWithModel(request, {
-        tuned: options.tuned,
+        tuned: options.backend === "tuned",
+        backend: options.backend,
         systemInstruction: instruction,
       }),
     );
@@ -270,7 +317,9 @@ async function runModelHumanization(
     }
   }
 
-  const quality = assessRewriteQuality(request.text, output);
+  const quality = assessRewriteQuality(request.text, output, {
+    retrievedPairs: options.styleExamples,
+  });
   if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
     console.error("[humanize] model returned an unusable response", {
       codes: quality.issues.map((issue) => issue.code),
@@ -282,14 +331,22 @@ async function runModelHumanization(
     );
   }
 
-  if (options.provider === "gemini-api") {
-    output = finalizeFallbackOutput(request.text, output);
+  if (quality.issues.some((issue) => issue.code === "COPIED_RETRIEVED" || issue.code === "UNRELATED")) {
+    console.info("[humanize] style reference leaked or drifted; keeping source-faithful rewrite");
   }
 
   return {
-    text: output,
+    text: quality.output || output,
     source: "FINE_TUNED_MODEL",
-    retrieval: null,
+    retrieval: options.styleExamples?.length
+      ? {
+          band: "high",
+          matches: options.styleExamples.slice(0, 3).map((example) => ({
+            index: example.index,
+            score: example.score,
+          })),
+        }
+      : null,
   };
 }
 
@@ -300,25 +357,43 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     if (resolved) return resolved;
   }
 
-  if (hasVertexEndpointEnv() || isVertexConfigured()) {
+  const styleExamples = retrieveTrainingExamples(request.text, 3).examples;
+
+  if (isGrubbyConfigured()) {
     try {
-      return await runModelHumanization(request, { provider: "vertex", tuned: true });
+      return await runGrubbyHumanization(request);
     } catch (error) {
+      if (!shouldFallbackFromGrubby(error)) throw wrapAsError(error);
+      console.error("[humanize] Grubby rewrite failed; using base model", {
+        code: error instanceof GrubbyError || error instanceof HumanizationFailedError ? error.code : "ERROR",
+      });
+    }
+  }
+
+  if (hasVertexEndpointEnv() || isVertexConfigured() || isGeminiApiConfigured()) {
+    try {
+      return await runModelHumanization(request, { backend: "base", styleExamples });
+    } catch (error) {
+      if (error instanceof HumanizationFailedError && error.code === "QUALITY_CHECK_FAILED") {
+        throw error;
+      }
+      console.error("[humanize] base model failed", {
+        code: error instanceof HumanizationFailedError ? error.code : "ERROR",
+      });
+      if (hasVertexEndpointEnv() || isVertexConfigured()) {
+        try {
+          return await runModelHumanization(request, { backend: "tuned", styleExamples });
+        } catch (tunedError) {
+          if (tunedError instanceof HumanizationFailedError) throw tunedError;
+          throw wrapAsError(tunedError);
+        }
+      }
       if (error instanceof HumanizationFailedError) throw error;
       throw wrapAsError(error);
     }
   }
 
-  if (isGeminiApiConfigured()) {
-    try {
-      return await runModelHumanization(request, { provider: "gemini-api", tuned: false });
-    } catch (error) {
-      if (error instanceof HumanizationFailedError) throw error;
-      throw wrapAsError(error);
-    }
-  }
-
-  console.error("[humanize] No Vertex endpoint or Gemini API key is configured");
+  console.error("[humanize] No Vertex endpoint, Gemini API key, or Grubby key is configured");
   throw new HumanizationFailedError(
     "The writing service is not configured. Please try again later.",
     "MISSING_API_KEY",

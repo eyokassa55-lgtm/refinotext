@@ -22,12 +22,19 @@ export class GeminiError extends Error {
   }
 }
 
+export type GenerateBackend = "tuned" | "base";
+
 export type GenerateTextOptions = {
   systemInstruction?: string;
   temperature?: number;
   topP?: number;
   maxOutputTokens?: number;
+  /** `tuned` is the Vertex endpoint. `base` is a publisher Gemini model for new drafts. */
+  backend?: GenerateBackend;
 };
+
+const BASE_VERTEX_MODEL = "gemini-2.5-flash";
+type GenerateProvider = "vertex" | "vertex-base" | "gemini-api";
 
 function cleanEnv(value: string | undefined): string | undefined {
   const cleaned = value?.trim().replace(/^["']|["']$/g, "");
@@ -189,13 +196,16 @@ function getApiKey(): string {
   return apiKey;
 }
 
+export function getGeminiApiModel(): string {
+  const model = cleanEnv(process.env.GEMINI_MODEL)?.replace(/-+$/, "");
+  if (model && /^gemini-/i.test(model) && !model.includes("endpoints/")) return model;
+  return DEFAULT_GEMINI_MODEL;
+}
+
 export function getGeminiModel(): string {
   const vertex = getVertexConfig();
   if (vertex) return vertex.model;
-
-  const model = cleanEnv(process.env.GEMINI_MODEL)?.replace(/-+$/, "");
-  if (model && /^gemini-/i.test(model)) return model;
-  return DEFAULT_GEMINI_MODEL;
+  return getGeminiApiModel();
 }
 
 function loadGoogleAuthOptions() {
@@ -264,8 +274,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function modelsToTry(): { provider: "vertex" | "gemini-api"; model: string }[] {
-  if (hasVertexEndpointEnv()) {
+function modelsToTry(
+  backend: GenerateBackend = "tuned",
+): { provider: GenerateProvider; model: string }[] {
+  if (backend === "tuned" && hasVertexEndpointEnv()) {
     const vertex = requireVertexConfig();
     if (isInvalidEndpointValue(vertex.model) || /^gemini-/i.test(vertex.model)) {
       throw new GeminiError(
@@ -277,7 +289,22 @@ function modelsToTry(): { provider: "vertex" | "gemini-api"; model: string }[] {
     return [{ provider: "vertex", model: vertex.model }];
   }
 
-  if (!isGeminiApiConfigured()) {
+  const targets: { provider: GenerateProvider; model: string }[] = [];
+  if (hasVertexEndpointEnv() || isVertexConfigured()) {
+    targets.push({ provider: "vertex-base", model: BASE_VERTEX_MODEL });
+  }
+
+  if (isGeminiApiConfigured()) {
+    const primary = getGeminiApiModel();
+    targets.push({ provider: "gemini-api", model: primary.startsWith("gemini-") ? primary : BASE_VERTEX_MODEL });
+    for (const model of GEMINI_API_FALLBACK_MODELS) {
+      if (!targets.some((target) => target.provider === "gemini-api" && target.model === model)) {
+        targets.push({ provider: "gemini-api", model });
+      }
+    }
+  }
+
+  if (targets.length === 0) {
     throw new GeminiError(
       "The writing service is not configured. Please try again later.",
       "MISSING_API_KEY",
@@ -285,14 +312,7 @@ function modelsToTry(): { provider: "vertex" | "gemini-api"; model: string }[] {
     );
   }
 
-  const primary = getGeminiModel();
-  return [
-    { provider: "gemini-api" as const, model: primary },
-    ...GEMINI_API_FALLBACK_MODELS.filter((model) => model !== primary).map((model) => ({
-      provider: "gemini-api" as const,
-      model,
-    })),
-  ];
+  return targets;
 }
 
 export function sanitizeGeminiError(error: unknown): GeminiError {
@@ -400,7 +420,7 @@ export function preserveSourceText(text: string): string {
 }
 
 async function generateOnce(
-  provider: "vertex" | "gemini-api",
+  provider: GenerateProvider,
   model: string,
   userText: string,
   options: GenerateTextOptions,
@@ -414,9 +434,10 @@ async function generateOnce(
   }
 
   const client =
-    provider === "vertex"
-      ? getVertexClient(requireVertexConfig())
-      : getGeminiApiClient();
+    provider === "gemini-api"
+      ? getGeminiApiClient()
+      : getVertexClient(requireVertexConfig());
+  const tuned = provider === "vertex";
 
   const response = await client.models.generateContent({
     model,
@@ -428,8 +449,8 @@ async function generateOnce(
     ],
     config: {
       httpOptions: { timeout: GEMINI_TIMEOUT_MS },
-      temperature: options.temperature ?? (provider === "vertex" ? 0 : 0.7),
-      topP: options.topP ?? (provider === "vertex" ? 0.1 : 0.95),
+      temperature: options.temperature ?? (tuned ? 0 : 0.72),
+      topP: options.topP ?? (tuned ? 0.1 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
       candidateCount: 1,
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
@@ -453,8 +474,8 @@ async function generateOnce(
 
 /**
  * Server-side text generation with retries.
- * When TUNED_MODEL_ENDPOINT (or VERTEX_AI_TUNED_ENDPOINT) is set, only that
- * tuned Vertex resource is called — never gemini-2.5-flash-lite as a base model.
+ * `backend: "tuned"` uses the Vertex endpoint. `backend: "base"` uses a
+ * publisher Gemini model so new drafts are not sent to a lookup-tuned endpoint.
  */
 export async function generateText(
   prompt: string,
@@ -466,14 +487,15 @@ export async function generateText(
   }
 
   let lastError: GeminiError | null = null;
+  const backend = options.backend ?? "tuned";
 
-  for (const target of modelsToTry()) {
+  for (const target of modelsToTry(backend)) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
       try {
         console.info("[gemini] generateContent", {
           provider: target.provider,
           model: redactModelName(target.model),
-          location: target.provider === "vertex" ? getVertexConfig()?.location : undefined,
+          location: target.provider === "gemini-api" ? undefined : getVertexConfig()?.location,
           baseGemini: target.provider !== "vertex",
           attempt,
         });

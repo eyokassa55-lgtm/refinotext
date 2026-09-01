@@ -406,6 +406,37 @@ Keep the same meaning, facts, length, and paragraph breaks. Do not add new examp
 Return only one rewritten draft.`;
 }
 
+function clipStyleReference(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= 900) return trimmed;
+  return `${trimmed.slice(0, 900).trimEnd()}…`;
+}
+
+/**
+ * Few-shot cadence from stored human_text. Used only for unseen drafts.
+ * The references are style, not content to copy.
+ */
+export function buildStyleGuidedRewriteInstruction(
+  request: HumanizePromptRequest,
+  examples: Array<{ output: string }>,
+): string {
+  const references = examples
+    .filter((example) => example.output.trim())
+    .slice(0, 3)
+    .map((example, index) => `STYLE REFERENCE ${index + 1}:\n${clipStyleReference(example.output)}`)
+    .join("\n\n");
+
+  return `${buildTunedSystemInstruction(request)}
+The STYLE REFERENCE passages show cadence and diction only.
+Rewrite the user's draft in that cadence. Keep the user's topic, claims, names, numbers, dates, and paragraph breaks.
+Do not copy sentences, names, or numbers from the style references.
+Do not replace the user's draft with a style-reference essay.
+
+${references}
+
+Return only the rewritten user draft.`;
+}
+
 export function buildLengthRepairInstruction(
   request: HumanizePromptRequest,
   missingFacts: string[],
