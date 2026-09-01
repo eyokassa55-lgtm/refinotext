@@ -6,7 +6,7 @@ import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-
 
 /**
  * Indexed search over stored ai_text. Humanize uses this to return stored
- * human_text for the same underlying draft, then falls back to Vertex.
+ * human_text for the same underlying draft, then rewrites unmatched drafts.
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
@@ -578,6 +578,58 @@ export function retrieveTrainingExamples(userText: string, k = MAX_EXAMPLES): Tr
     band: selected.band,
     examples: selected.examples.slice(0, k),
   };
+}
+
+function contentOverlap(a: string, b: string): number {
+  const left = new Set(
+    a
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((word) => word.length > 3),
+  );
+  if (left.size === 0) return 0;
+  const right = new Set(
+    b
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((word) => word.length > 3),
+  );
+  let hits = 0;
+  for (const word of left) {
+    if (right.has(word)) hits += 1;
+  }
+  return hits / left.size;
+}
+
+/**
+ * Stored human_text used only as cadence examples for unseen drafts.
+ * Prefers rows whose wording does not overlap the user's topic, so the
+ * model cannot substitute a training essay for the user's draft.
+ */
+export function pickDistantStyleReferences(
+  userText: string,
+  k = MAX_EXAMPLES,
+): Array<{ index: number; input: string; output: string }> {
+  const ranked = getTrainingPairs()
+    .map((pair) => ({
+      index: pair.index,
+      input: pair.input,
+      output: pair.output,
+      overlap: contentOverlap(userText, pair.output),
+    }))
+    .sort((a, b) => a.overlap - b.overlap || a.index - b.index);
+
+  const chosen: Array<{ index: number; input: string; output: string }> = [];
+  const usedOpenings = new Set<string>();
+  for (const row of ranked) {
+    if (row.output.trim().length < 80) continue;
+    const opening = row.output.slice(0, 48).toLowerCase();
+    if (usedOpenings.has(opening)) continue;
+    usedOpenings.add(opening);
+    chosen.push({ index: row.index, input: row.input, output: row.output });
+    if (chosen.length >= k) break;
+  }
+  return chosen;
 }
 
 export function getRetrievalIndexStats(): {

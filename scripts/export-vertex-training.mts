@@ -5,12 +5,12 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildTunedSystemInstruction } from "../src/lib/humanize-prompt";
+import { HUMAN_REWRITE_SYSTEM_INSTRUCTION } from "../src/lib/humanize-prompt";
 
 const sourcePath = join(process.cwd(), "data", "training_data.jsonl");
 const outputPath = join(process.cwd(), "data", "humanizer_train_v2.jsonl");
 
-const systemText = buildTunedSystemInstruction({ intensity: 75 });
+const systemText = HUMAN_REWRITE_SYSTEM_INSTRUCTION;
 const lines = readFileSync(sourcePath, "utf8")
   .split(/\r?\n/)
   .filter(Boolean);

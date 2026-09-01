@@ -12,10 +12,12 @@ config();
 
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
+  HUMAN_REWRITE_SYSTEM_INSTRUCTION,
   OG_REFINO_TRAINING_SYSTEM_INSTRUCTION,
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildAntiTemplateRewriteInstruction,
   buildEditorSystemInstruction,
+  buildHumanRewriteInstruction,
   buildOgRefinoInferenceInstruction,
   buildRepairSystemInstruction,
   buildStyleGuidedRewriteInstruction,
@@ -406,7 +408,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
     "../src/lib/training-lookup"
   );
-  const { findDatabaseMatch } = await import("../src/lib/training-retrieval");
+  const { findDatabaseMatch, pickDistantStyleReferences } = await import("../src/lib/training-retrieval");
   const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
@@ -508,10 +510,19 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
   const stylePrompt = buildStyleGuidedRewriteInstruction(
     { text: NEW_ESSAY, intensity: 75 },
-    [{ output: firstPair.output }],
+    [{ input: firstPair.input, output: firstPair.output }],
   );
-  assert("unseen drafts get stored human_text as style references", stylePrompt.includes("STYLE REFERENCE 1"));
-  assert("style prompt forbids copying reference essays", /do not replace the user's draft/i.test(stylePrompt));
+  assert("unseen drafts get a before/after rewrite example", stylePrompt.includes("EXAMPLE of how much to rewrite"));
+  assert("style prompt forbids copying the example topic", /do not write about the example topic/i.test(stylePrompt));
+  assert("rewrite prompt states the source word count", /\d+ words/.test(stylePrompt));
+  assert(
+    "human rewrite is not a lookup task",
+    !HUMAN_REWRITE_SYSTEM_INSTRUCTION.includes("Find the matching human-written version"),
+  );
+  const rewritePrompt = buildHumanRewriteInstruction({ text: NEW_ESSAY, intensity: 75 }, [
+    { input: firstPair.input, output: firstPair.output },
+  ]);
+  assert("rewrite prompt keeps facts and paragraph breaks", /paragraph breaks/i.test(rewritePrompt));
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
   const ogCue = buildOgRefinoInferenceInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -520,8 +531,16 @@ Rainforests also illustrate a much broader set of global development debates. It
     ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
-  assert("unseen drafts use the tuned Vertex endpoint", engineSource.includes('backend: "tuned"'));
-  assert("Humanize engine does not send style examples to OG REFINO", !engineSource.includes("retrieveTrainingExamples"));
+  assert("unseen drafts use the base Gemini rewriter", engineSource.includes('backend: "base"'));
+  assert("Humanize engine does not send new drafts to the lookup-tuned endpoint", !engineSource.includes('backend: "tuned"'));
+  assert("Humanize engine sends distant human_text as style", engineSource.includes("pickDistantStyleReferences"));
+  assert("Humanize engine disables model thinking so drafts are not truncated", engineSource.includes("thinkingBudget: 0"));
+  const styleRefs = pickDistantStyleReferences(NEW_ESSAY, 1);
+  assert("picks a distant rewrite demonstration", styleRefs.length === 1, `count=${styleRefs.length}`);
+  assert(
+    "style demonstration is not the user draft",
+    styleRefs.every((row) => !NEW_ESSAY.includes(row.output.slice(0, 48))),
+  );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",
@@ -624,9 +643,9 @@ async function runLiveTests() {
   if (isVertexConfigured()) {
     const vertex = requireVertexConfig();
     const tunedModel = redactModelName(vertex.model);
-    console.log(`  Using provider=vertex model=${tunedModel} location=${vertex.location}`);
+    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts use publisher Gemini`);
     assert(
-      "live path targets TUNED_MODEL_ENDPOINT",
+      "Vertex endpoint env is a resource id",
       tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
       tunedModel,
     );

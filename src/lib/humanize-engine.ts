@@ -10,13 +10,7 @@ import {
   redactModelName,
   type GenerateBackend,
 } from "@/lib/gemini";
-import {
-  buildAntiTemplateRewriteInstruction,
-  buildLengthRepairInstruction,
-  buildOgRefinoInferenceInstruction,
-  buildStrongerRewriteInstruction,
-  buildTunedSystemInstruction,
-} from "@/lib/humanize-prompt";
+import { buildHumanRewriteInstruction } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
   entitiesNeedMerge,
@@ -24,14 +18,10 @@ import {
   stripModelChrome,
   tryDeterministicEntityMerge,
 } from "@/lib/humanize-quality";
-import {
-  findBannedAiPhrases,
-  isTemplateLikeOutput,
-  rewriteArtificialityScore,
-} from "@/lib/humanize-voice";
 import { getTrainingRowCount } from "@/lib/training-lookup";
 import {
   findDatabaseMatch,
+  pickDistantStyleReferences,
   type DatabaseTrainingMatch,
 } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -74,32 +64,14 @@ export class HumanizationFailedError extends Error {
   }
 }
 
-const TUNED_VERTEX_TEMPERATURE = 0;
-const TUNED_VERTEX_TOP_P = 0.1;
+const REWRITE_TOP_P = 0.95;
 
-function tunedVertexGenerationOptions(_intensity?: number) {
-  return {
-    temperature: TUNED_VERTEX_TEMPERATURE,
-    topP: TUNED_VERTEX_TOP_P,
-  };
-}
-
-function generationOptions(request: HumanizeRequest, tuned: boolean) {
-  const intensity = request.intensity ?? 75;
+function rewriteGenerationOptions(request: HumanizeRequest, temperature: number) {
   const words = countWords(request.text);
-
-  if (tuned) {
-    return {
-      ...tunedVertexGenerationOptions(intensity),
-      maxOutputTokens: Math.min(8192, Math.max(512, Math.ceil(words * 2.4) + 256)),
-    };
-  }
-
-  const temperature = 0.38 + (Math.min(100, Math.max(0, intensity)) / 100) * 0.32;
   return {
-    temperature: Math.min(0.72, temperature),
-    topP: 0.95,
-    maxOutputTokens: Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160)),
+    temperature,
+    topP: REWRITE_TOP_P,
+    maxOutputTokens: 8192,
   };
 }
 
@@ -116,14 +88,17 @@ function wrapAsError(error: unknown): HumanizationFailedError {
 
 async function rewriteWithModel(
   request: HumanizeRequest,
-  options: { systemInstruction?: string; tuned: boolean; backend: GenerateBackend },
+  options: {
+    systemInstruction: string;
+    backend: GenerateBackend;
+    temperature: number;
+  },
 ): Promise<string> {
   return generateText(request.text, {
-    ...(options.systemInstruction
-      ? { systemInstruction: options.systemInstruction }
-      : {}),
-    ...generationOptions(request, options.tuned),
+    systemInstruction: options.systemInstruction,
+    ...rewriteGenerationOptions(request, options.temperature),
     backend: options.backend,
+    thinkingBudget: 0,
   });
 }
 
@@ -183,41 +158,61 @@ function resolveDatabaseHit(request: HumanizeRequest, hit: DatabaseTrainingMatch
   };
 }
 
-async function runModelHumanization(
-  request: HumanizeRequest,
-  options: {
-    backend: GenerateBackend;
-  },
-): Promise<HumanizeResult> {
+function rewritePenalty(input: string, output: string): number {
+  const inWords = countWords(input);
+  const outWords = countWords(output);
+  const tooShort = inWords >= 40 && outWords < inWords * 0.7;
+  const tooLong = inWords >= 40 && outWords > inWords * 1.55;
+  const copy = phraseCopyRatio(input, output);
+  const quality = assessRewriteQuality(input, output);
+  const blocking = quality.issues.some((issue) =>
+    ["REFUSAL", "LEAK", "UNRELATED", "COPIED_RETRIEVED", "GENERIC"].includes(issue.code),
+  );
+  const collapsed = quality.issues.some((issue) => issue.code === "TOO_SHORT" || issue.code === "PARAGRAPH_DRIFT");
+
+  let score = 0;
+  if (!output.trim()) score += 100;
+  if (blocking) score += 80;
+  if (tooShort || collapsed) score += 50;
+  if (tooLong) score += 8;
+  if (copy >= 0.22) score += 18;
+  score += copy * 12;
+  if (inWords > 0) score += (Math.abs(outWords - inWords) / inWords) * 6;
+  return score;
+}
+
+async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   const vertex = getVertexConfig();
-  const providerLabel = options.backend === "tuned" ? "vertex" : "base";
-  const modelName =
-    options.backend === "tuned"
-      ? redactModelName(vertex?.model ?? "TUNED_MODEL_ENDPOINT")
-      : redactModelName("gemini-2.5-flash");
+  const demo = pickDistantStyleReferences(request.text, 1);
+  const systemInstruction = buildHumanRewriteInstruction(request, demo);
+  const lengthOnlyInstruction = buildHumanRewriteInstruction(request, []);
 
   console.info("[humanize] [MODEL_GENERATED]", {
     rows: getTrainingRowCount(),
     tone: request.tone ?? "standard",
-    provider: providerLabel,
-    backend: options.backend,
-    model: modelName,
+    provider: vertex ? "vertex-base" : "gemini-api",
+    backend: "base",
+    model: redactModelName("gemini-2.5-flash"),
     location: vertex?.location,
     intensity: request.intensity ?? 75,
-    ...(options.backend === "tuned" ? tunedVertexGenerationOptions() : {}),
+    styleRefs: demo.map((item) => item.index),
   });
 
-  const systemInstruction =
-    options.backend === "tuned"
-      ? buildOgRefinoInferenceInstruction(request)
-      : buildTunedSystemInstruction(request);
+  let output = "";
+  try {
+    output = extractTunedOutput(
+      await rewriteWithModel(request, {
+        backend: "base",
+        temperature: 0.62,
+        systemInstruction,
+      }),
+    );
+  } catch (error) {
+    console.error("[humanize] rewrite candidate failed", {
+      code: error instanceof HumanizationFailedError ? error.code : "UNKNOWN",
+    });
+  }
 
-  const raw = await rewriteWithModel(request, {
-    tuned: options.backend === "tuned",
-    backend: options.backend,
-    systemInstruction,
-  });
-  let output = extractTunedOutput(raw);
   if (!output) {
     throw new HumanizationFailedError(
       "The writing service returned an empty response.",
@@ -229,55 +224,36 @@ async function runModelHumanization(
   const inputWords = countWords(request.text);
   const tooShort = inputWords >= 40 && countWords(output) < inputWords * 0.7;
   const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
-  const bannedPhrases = findBannedAiPhrases(output);
-  const templateLike = isTemplateLikeOutput(output, request.text);
-  const needsRetry = tooShort || copiedTooClosely || bannedPhrases.length > 0 || templateLike;
 
-  if (needsRetry) {
-    console.info("[humanize] retrying once because the rewrite is truncated or template-like", {
+  if (tooShort || copiedTooClosely) {
+    console.info("[humanize] retrying once because the rewrite is truncated or copied", {
       tooShort,
       copiedTooClosely,
-      bannedPhrases,
-      templateLike,
-      backend: options.backend,
+      backend: "base",
       inWords: inputWords,
       outWords: countWords(output),
     });
-    const instruction = tooShort
-      ? buildLengthRepairInstruction(request, [])
-      : templateLike || bannedPhrases.length > 0
-        ? buildAntiTemplateRewriteInstruction(request, {
-            bannedPhrases,
-            templateLike,
-            copied: copiedTooClosely,
-          })
-        : buildStrongerRewriteInstruction(request, []);
+
+    const repairInstruction = tooShort
+      ? `${lengthOnlyInstruction}
+The last version was ${countWords(output)} words. That is a summary and is not allowed.
+Write the full rewrite of the user's draft, close to ${inputWords} words, with the same paragraph breaks.
+Do not switch topics. Do not add a title.`
+      : `${lengthOnlyInstruction}
+The last version copied the draft. Change the sentence openings. Keep every fact, name, number, and paragraph break.`;
 
     const repaired = extractTunedOutput(
       await rewriteWithModel(request, {
-        tuned: options.backend === "tuned",
-        backend: options.backend,
-        systemInstruction:
-          options.backend === "tuned" && tooShort
-            ? `${buildOgRefinoInferenceInstruction(request)}\nThe last version was too short. Write the full draft, close to the source length. Do not summarize.`
-            : instruction,
+        backend: "base",
+        temperature: 0.5,
+        systemInstruction: repairInstruction,
       }),
     );
-
     if (repaired) {
-      if (tooShort && countWords(repaired) > countWords(output)) {
-        output = repaired;
-      } else if (!tooShort) {
-        const currentScore =
-          rewriteArtificialityScore(output, request.text) +
-          phraseCopyRatio(request.text, output);
-        const repairedScore =
-          rewriteArtificialityScore(repaired, request.text) +
-          phraseCopyRatio(request.text, repaired);
-        if (repairedScore < currentScore) {
-          output = repaired;
-        }
-      }
+      const preferRepair =
+        (tooShort && countWords(repaired) > countWords(output)) ||
+        rewritePenalty(request.text, repaired) < rewritePenalty(request.text, output);
+      if (preferRepair) output = repaired;
     }
   }
 
@@ -293,8 +269,18 @@ async function runModelHumanization(
     );
   }
 
+  output = quality.output || output;
+
+  if (inputWords >= 40 && countWords(output) < inputWords * 0.55) {
+    throw new HumanizationFailedError(
+      "The rewrite was too short. Please try again.",
+      "TEXT_TOO_SHORT",
+      502,
+    );
+  }
+
   return {
-    text: quality.output || output,
+    text: output,
     source: "FINE_TUNED_MODEL",
     retrieval: null,
   };
@@ -307,28 +293,21 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     if (resolved) return resolved;
   }
 
-  if (hasVertexEndpointEnv() || isVertexConfigured()) {
-    try {
-      return await runModelHumanization(request, { backend: "tuned" });
-    } catch (error) {
-      if (error instanceof HumanizationFailedError) throw error;
-      throw wrapAsError(error);
-    }
+  // OG REFINO is a lookup-tuned endpoint. New drafts must not go there.
+  // Unmatched text is rewritten with a publisher Gemini model plus stored human_text as style.
+  if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
+    console.error("[humanize] No Vertex credentials or Gemini API key is configured");
+    throw new HumanizationFailedError(
+      "The writing service is not configured. Please try again later.",
+      "MISSING_API_KEY",
+      503,
+    );
   }
 
-  if (isGeminiApiConfigured()) {
-    try {
-      return await runModelHumanization(request, { backend: "base" });
-    } catch (error) {
-      if (error instanceof HumanizationFailedError) throw error;
-      throw wrapAsError(error);
-    }
+  try {
+    return await runModelHumanization(request);
+  } catch (error) {
+    if (error instanceof HumanizationFailedError) throw error;
+    throw wrapAsError(error);
   }
-
-  console.error("[humanize] No Vertex endpoint or Gemini API key is configured");
-  throw new HumanizationFailedError(
-    "The writing service is not configured. Please try again later.",
-    "MISSING_API_KEY",
-    503,
-  );
 }

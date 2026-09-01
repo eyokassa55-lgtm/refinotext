@@ -31,6 +31,8 @@ export type GenerateTextOptions = {
   maxOutputTokens?: number;
   /** `tuned` is the Vertex endpoint. `base` is a publisher Gemini model for new drafts. */
   backend?: GenerateBackend;
+  /** 0 disables thinking so the full rewrite is not eaten by thought tokens. */
+  thinkingBudget?: number;
 };
 
 const BASE_VERTEX_MODEL = "gemini-2.5-flash";
@@ -453,6 +455,9 @@ async function generateOnce(
       topP: options.topP ?? (tuned ? 0.1 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
       candidateCount: 1,
+      ...(typeof options.thinkingBudget === "number"
+        ? { thinkingConfig: { thinkingBudget: options.thinkingBudget, includeThoughts: false } }
+        : {}),
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     },
   });

@@ -269,6 +269,19 @@ Return only the full text.`;
 }
 
 /**
+ * Rewrite instruction for unseen drafts and for OG REFINO v2 training.
+ * This is a rewrite task, not “find the matching stored human_text.”
+ */
+export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the AI draft into natural human prose.
+
+Keep the same topic, meaning, facts, names, numbers, dates, and paragraph breaks.
+Change sentence openings and rhythm so it reads like a person wrote it in one sitting.
+Ordinary words are better than polished template phrasing. A little repetition is fine.
+Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
+Never turn a multi-paragraph draft into a short summary.
+Return only the rewritten text.`;
+
+/**
  * Base role line for the Vertex tuned endpoint.
  * Endpoint weights hold the training pairs. Inference does not send training rows.
  */
@@ -425,10 +438,53 @@ Keep the same meaning, facts, length, and paragraph breaks. Do not add new examp
 Return only one rewritten draft.`;
 }
 
-function clipStyleReference(text: string): string {
+function clipStyleReference(text: string, max = 520): string {
   const trimmed = text.trim();
-  if (trimmed.length <= 900) return trimmed;
-  return `${trimmed.slice(0, 900).trimEnd()}…`;
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max).trimEnd()}…`;
+}
+
+/**
+ * Rewrite prompt for unseen drafts. Optional STYLE REFERENCE passages are
+ * stored human_text used for cadence only — never as content to copy.
+ */
+export function buildHumanRewriteInstruction(
+  request: HumanizePromptRequest,
+  examples: Array<{ input?: string; output: string }> = [],
+): string {
+  const tone =
+    request.tone && request.tone !== "standard" ? `\n${tunedToneGuidance(request.tone)}` : "";
+  const readability = request.readability?.trim();
+  const readingNote =
+    readability && readability !== "General Audience"
+      ? `\nMatch a ${readability} reading level while keeping the same claims.`
+      : "";
+
+  const draft = request.text?.trim() ?? "";
+  const words = draft ? draft.split(/\s+/).filter(Boolean).length : 0;
+  const paragraphs = draft ? draft.split(/\n\s*\n/).filter((part) => part.trim()).length : 0;
+  const lengthNote =
+    words > 0
+      ? `The user's draft is ${words} words in ${Math.max(1, paragraphs)} paragraph(s). Your rewrite must stay within about 15% of that word count and keep those paragraph breaks. A short summary is not allowed.`
+      : "Keep approximately the same length as the user's draft.";
+
+  const demo = examples.find((example) => example.input?.trim() && example.output.trim());
+  const demoBlock = demo
+    ? `
+EXAMPLE of how much to rewrite (different topic — copy the amount of rewriting, not the topic):
+BEFORE:
+${clipStyleReference(demo.input ?? "")}
+
+AFTER:
+${clipStyleReference(demo.output)}
+`
+    : "";
+
+  return `${HUMAN_REWRITE_SYSTEM_INSTRUCTION}${tone}${readingNote}
+${lengthNote}
+${demoBlock}
+Rewrite ONLY the user's draft. Do not write about the example topic.
+Return only the rewritten user draft.`;
 }
 
 /**
@@ -439,21 +495,7 @@ export function buildStyleGuidedRewriteInstruction(
   request: HumanizePromptRequest,
   examples: Array<{ output: string }>,
 ): string {
-  const references = examples
-    .filter((example) => example.output.trim())
-    .slice(0, 3)
-    .map((example, index) => `STYLE REFERENCE ${index + 1}:\n${clipStyleReference(example.output)}`)
-    .join("\n\n");
-
-  return `${buildTunedSystemInstruction(request)}
-The STYLE REFERENCE passages show cadence and diction only.
-Rewrite the user's draft in that cadence. Keep the user's topic, claims, names, numbers, dates, and paragraph breaks.
-Do not copy sentences, names, or numbers from the style references.
-Do not replace the user's draft with a style-reference essay.
-
-${references}
-
-Return only the rewritten user draft.`;
+  return buildHumanRewriteInstruction(request, examples);
 }
 
 export function buildLengthRepairInstruction(

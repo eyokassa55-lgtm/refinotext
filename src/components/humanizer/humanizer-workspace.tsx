@@ -449,7 +449,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           >
             Conversational
           </button>{" "}
-          tone and raise intensity toward 100%.
+          tone. Intensity does not need to be at 100%.
         </p>
       ) : null}
 
