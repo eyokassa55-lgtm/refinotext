@@ -322,8 +322,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     "starts from the training system line",
     tunedCue.startsWith(TUNED_TRAINING_SYSTEM_INSTRUCTION),
   );
-  assert("asks for rewritten text only", /return only the rewritten text/i.test(tunedCue));
-  assert("does not ask for analysis", /do not add explanations or analysis/i.test(tunedCue));
+  assert("asks for rewritten text only", /return only the final refined text/i.test(tunedCue));
+  assert("does not ask for analysis", /no analysis|do not add explanations or analysis/i.test(tunedCue));
   assert(
     "rejects one-word swaps",
     /one or two words is not enough/i.test(tunedCue) && /do not copy sentences/i.test(tunedCue),
@@ -333,9 +333,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     /university \/ academic reading level/i.test(tunedCue),
   );
   assert(
-    "asks for varied sentence length and natural phrasing",
-    /vary sentence length/i.test(tunedCue) && /natural phrasing/i.test(tunedCue),
+    "asks for varied sentence length and natural vocabulary",
+    /varied sentence length/i.test(tunedCue) && /natural vocabulary/i.test(tunedCue),
   );
+  assert("identifies as RefinoText", /you are refinotext/i.test(tunedCue));
   assert(
     "does not mention detectors or the 720-pair dataset",
     !/detector|gptzero|turnitin|720/i.test(tunedCue),
@@ -448,7 +449,7 @@ Rainforests also illustrate a much broader set of global development debates. It
 
   const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
   assert("new-input prompt does not include training examples", !newPrompt.includes("STYLE REFERENCE"));
-  assert("new-input prompt asks for rewritten text only", /return only the rewritten text/i.test(newPrompt));
+  assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",
     !/academic register|conversational register|executive register/i.test(newPrompt),
