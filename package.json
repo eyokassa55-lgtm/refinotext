@@ -19,7 +19,9 @@
     "inspect:vertex": "tsx scripts/list-vertex-tuning.mts",
     "bind:vertex": "tsx scripts/bind-tuned-endpoint.mts",
     "append:training": "tsx scripts/append-training-variety.mts",
+    "export:vertex-training": "tsx --conditions=react-server scripts/export-vertex-training.mts",
     "train:vertex": "tsx scripts/start-vertex-tuning.mts",
+    "upload:training": "tsx scripts/upload-training-to-gcs.mts",
     "test:fireworks": "tsx --conditions=react-server scripts/test-fireworks.mts",
     "test:polar": "tsx scripts/verify-polar.mts"
   },

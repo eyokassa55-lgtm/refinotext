@@ -15,13 +15,20 @@ import {
   buildStrongerRewriteInstruction,
   buildVertexSystemInstruction,
 } from "@/lib/humanize-prompt";
-import { assessRewriteQuality, phraseCopyRatio, stripModelChrome } from "@/lib/humanize-quality";
+import {
+  assessRewriteQuality,
+  entitiesNeedMerge,
+  phraseCopyRatio,
+  stripModelChrome,
+  tryDeterministicEntityMerge,
+} from "@/lib/humanize-quality";
 import {
   findBannedAiPhrases,
   isTemplateLikeOutput,
   rewriteArtificialityScore,
 } from "@/lib/humanize-voice";
 import { getTrainingRowCount } from "@/lib/training-lookup";
+import { findDatabaseMatch, type DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -140,6 +147,54 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
+function databaseSource(kind: DatabaseTrainingMatch["kind"]): HumanizeSource {
+  return kind === "exact" ? "EXACT_TRAINING_MATCH" : "DATABASE_SIMILARITY_MATCH";
+}
+
+function databaseRetrieval(hit: DatabaseTrainingMatch): HumanizeRetrievalSummary {
+  return {
+    band: hit.kind === "exact" ? "exact" : "high",
+    matches: [{ index: hit.index, score: hit.score }],
+  };
+}
+
+function resolveDatabaseHit(request: HumanizeRequest, hit: DatabaseTrainingMatch): HumanizeResult | null {
+  const retrieval = databaseRetrieval(hit);
+  const needsEntityMerge =
+    hit.kind === "similarity" && entitiesNeedMerge(request.text, hit.input);
+
+  if (needsEntityMerge) {
+    const merged = tryDeterministicEntityMerge(request.text, hit.input, hit.output);
+    if (merged) {
+      console.info("[humanize] [DATABASE_ENTITY_MERGE]", {
+        row: hit.index,
+        kind: hit.kind,
+        score: hit.score,
+        rows: getTrainingRowCount(),
+        mode: "deterministic",
+      });
+      return {
+        text: merged,
+        source: "DATABASE_SIMILARITY_MATCH",
+        retrieval,
+      };
+    }
+    return null;
+  }
+
+  console.info("[humanize] [DATABASE_MATCH]", {
+    row: hit.index,
+    kind: hit.kind,
+    score: hit.score,
+    rows: getTrainingRowCount(),
+  });
+  return {
+    text: hit.output,
+    source: databaseSource(hit.kind),
+    retrieval,
+  };
+}
+
 async function runModelHumanization(
   request: HumanizeRequest,
   options: { provider: "vertex" | "gemini-api"; tuned: boolean },
@@ -239,6 +294,12 @@ async function runModelHumanization(
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  const databaseHit = findDatabaseMatch(request.text);
+  if (databaseHit) {
+    const resolved = resolveDatabaseHit(request, databaseHit);
+    if (resolved) return resolved;
+  }
+
   if (hasVertexEndpointEnv() || isVertexConfigured()) {
     try {
       return await runModelHumanization(request, { provider: "vertex", tuned: true });

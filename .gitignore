@@ -41,3 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated Vertex export (from npm run export:vertex-training)
+data/humanizer_train_v2.jsonl

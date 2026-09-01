@@ -464,10 +464,20 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
+  const { runHumanization: runEngineHumanization } = await import("../src/lib/humanize-engine");
+  const engineExact = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
   assert(
-    "Humanize engine skips database short-circuit",
-    !engineSource.includes("findDatabaseMatch"),
+    "Humanize engine returns stored human_text for an exact training row",
+    engineExact.source === "EXACT_TRAINING_MATCH" &&
+      engineExact.text === firstPair.output &&
+      engineExact.retrieval?.band === "exact",
+    `source=${engineExact.source}`,
+  );
+  const engineNear = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
+  assert(
+    "Humanize engine returns stored human_text for a near-exact training row",
+    engineNear.source === "DATABASE_SIMILARITY_MATCH" && engineNear.text === techPair.output,
+    `source=${engineNear.source}`,
   );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
