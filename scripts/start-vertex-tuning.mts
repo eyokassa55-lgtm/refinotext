@@ -37,7 +37,7 @@ async function main() {
   const datasetUri = cleanEnv(process.env.TRAINING_DATA_GCS_URI);
   const validationUri =
     cleanEnv(process.env.VALIDATION_DATA_GCS_URI) ?? datasetUri;
-  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO v3";
+  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO human_text";
   const baseModel =
     cleanEnv(process.env.VERTEX_BASE_MODEL) ?? "gemini-2.5-flash-lite";
 

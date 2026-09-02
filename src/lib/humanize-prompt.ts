@@ -269,7 +269,7 @@ Return only the full text.`;
 }
 
 /**
- * Rewrite instruction for unseen drafts and for OG REFINO v2 training.
+ * Rewrite instruction for unseen drafts and for OG REFINO v3 training.
  * This is a rewrite task, not “find the matching stored human_text.”
  */
 export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the draft into natural human prose.

@@ -13,7 +13,7 @@
  * Run: npm run upload:training
  */
 import { config } from "dotenv";
-import { readFileSync } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GoogleAuth } from "google-auth-library";
 
@@ -25,6 +25,23 @@ const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 function cleanEnv(value: string | undefined): string | undefined {
   const cleaned = value?.trim().replace(/^["']|["']$/g, "");
   return cleaned ? cleaned : undefined;
+}
+
+function upsertLine(text: string, key: string, value: string): string {
+  const line = `${key}=${value}`;
+  const pattern = new RegExp(`^${key}=.*$`, "m");
+  if (pattern.test(text)) return text.replace(pattern, line);
+  return `${text.trimEnd()}\n${line}\n`;
+}
+
+async function persistTrainingUris(trainUri: string, validationUri: string) {
+  const envPath = ".env.local";
+  let text = await fs.readFile(envPath, "utf8");
+  text = upsertLine(text, "TRAINING_DATA_GCS_URI", trainUri);
+  text = upsertLine(text, "VALIDATION_DATA_GCS_URI", validationUri);
+  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "OG REFINO human_text");
+  await fs.writeFile(envPath, text, "utf8");
+  console.log("Wrote TRAINING_DATA_GCS_URI, VALIDATION_DATA_GCS_URI, and TUNED_MODEL_JOB_NAME in .env.local");
 }
 
 function defaultBucketName(project: string): string {
@@ -171,6 +188,7 @@ async function main() {
   try {
     const trainUri = await uploadObject(object, localPath);
     const validationUri = await uploadObject(validationObject, validationPath);
+    await persistTrainingUris(trainUri, validationUri);
     console.log(`Set TRAINING_DATA_GCS_URI=${trainUri}`);
     console.log(`Set VALIDATION_DATA_GCS_URI=${validationUri}`);
   } catch (error) {

@@ -1,8 +1,25 @@
 import "server-only";
 
+import {
+  GeminiError,
+  generateText,
+  getVertexConfig,
+  hasVertexEndpointEnv,
+  isGeminiApiConfigured,
+  isVertexConfigured,
+  redactModelName,
+  type GenerateBackend,
+} from "@/lib/gemini";
+import { buildHumanRewriteInstruction } from "@/lib/humanize-prompt";
+import {
+  assessRewriteQuality,
+  phraseCopyRatio,
+  stripModelChrome,
+} from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
 import { findTopicMatch, type DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
+import { countWords } from "@/lib/words";
 
 export type HumanizeRequest = {
   text: string;
@@ -45,6 +62,62 @@ export class HumanizationFailedError extends Error {
   }
 }
 
+const REWRITE_TOP_P = 0.95;
+
+/**
+ * Unmatched drafts use the human_text-trained Vertex endpoint only after
+ * `npm run bind:vertex` succeeds for OG REFINO human_text. Until then, a publisher
+ * Gemini model rewrites with the same instruction. The older OG REFINO
+ * endpoint is lookup-tuned and must not see new drafts.
+ */
+function isHumanTextTunedReady(): boolean {
+  return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
+}
+
+function unmatchedRewriteBackend(): GenerateBackend {
+  return isHumanTextTunedReady() ? "tuned" : "base";
+}
+
+function unmatchedRewriteTemperature(backend: GenerateBackend): number {
+  return backend === "tuned" ? 0.55 : 0.62;
+}
+
+function rewriteGenerationOptions(request: HumanizeRequest, temperature: number) {
+  return {
+    temperature,
+    topP: REWRITE_TOP_P,
+    maxOutputTokens: 8192,
+  };
+}
+
+function wrapAsError(error: unknown): HumanizationFailedError {
+  if (error instanceof HumanizationFailedError) return error;
+  if (error instanceof GeminiError) {
+    return new HumanizationFailedError(error.message, error.code, error.status);
+  }
+
+  return new HumanizationFailedError(
+    "Humanization failed. Please try again.",
+    "HUMANIZATION_FAILED",
+  );
+}
+
+async function rewriteWithModel(
+  request: HumanizeRequest,
+  options: {
+    systemInstruction: string;
+    backend: GenerateBackend;
+    temperature: number;
+  },
+): Promise<string> {
+  return generateText(request.text, {
+    systemInstruction: options.systemInstruction,
+    ...rewriteGenerationOptions(request, options.temperature),
+    backend: options.backend,
+    thinkingBudget: 0,
+  });
+}
+
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
@@ -73,13 +146,146 @@ function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
   };
 }
 
+function rewritePenalty(input: string, output: string): number {
+  const inWords = countWords(input);
+  const outWords = countWords(output);
+  const tooShort = inWords >= 40 && outWords < inWords * 0.7;
+  const tooLong = inWords >= 40 && outWords > inWords * 1.55;
+  const copy = phraseCopyRatio(input, output);
+  const quality = assessRewriteQuality(input, output);
+  const blocking = quality.issues.some((issue) =>
+    ["REFUSAL", "LEAK", "UNRELATED", "COPIED_RETRIEVED", "GENERIC"].includes(issue.code),
+  );
+  const collapsed = quality.issues.some(
+    (issue) => issue.code === "TOO_SHORT" || issue.code === "PARAGRAPH_DRIFT",
+  );
+
+  let score = 0;
+  if (!output.trim()) score += 100;
+  if (blocking) score += 80;
+  if (tooShort || collapsed) score += 50;
+  if (tooLong) score += 8;
+  if (copy >= 0.22) score += 18;
+  score += copy * 12;
+  if (inWords > 0) score += (Math.abs(outWords - inWords) / inWords) * 6;
+  return score;
+}
+
+async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  const backend = unmatchedRewriteBackend();
+  const temperature = unmatchedRewriteTemperature(backend);
+  const vertex = getVertexConfig();
+  const systemInstruction = buildHumanRewriteInstruction(request, []);
+
+  console.info("[humanize] [MODEL_GENERATED]", {
+    rows: getTrainingRowCount(),
+    tone: request.tone ?? "standard",
+    backend,
+    humanTextTuned: isHumanTextTunedReady(),
+    model:
+      backend === "tuned" && vertex
+        ? redactModelName(vertex.model)
+        : redactModelName("gemini-2.5-flash"),
+    location: vertex?.location,
+    intensity: request.intensity ?? 75,
+  });
+
+  const outputRaw = await rewriteWithModel(request, {
+    backend,
+    temperature,
+    systemInstruction,
+  });
+  let output = stripModelChrome(outputRaw);
+
+  if (!output) {
+    throw new HumanizationFailedError(
+      "The writing service returned an empty response.",
+      "EMPTY_RESPONSE",
+      502,
+    );
+  }
+
+  const inputWords = countWords(request.text);
+  const tooShort = inputWords >= 40 && countWords(output) < inputWords * 0.7;
+  const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
+
+  if (tooShort || copiedTooClosely) {
+    console.info("[humanize] retrying once because the rewrite is truncated or copied", {
+      tooShort,
+      copiedTooClosely,
+      backend,
+      inWords: inputWords,
+      outWords: countWords(output),
+    });
+
+    const repairInstruction = tooShort
+      ? `${systemInstruction}
+The last version was ${countWords(output)} words. That is a summary and is not allowed.
+Write the full rewrite of the user's draft, close to ${inputWords} words, with the same paragraph breaks.
+Do not switch topics. Do not add a title.`
+      : `${systemInstruction}
+The last version copied the draft. Change the sentence openings. Keep every fact, name, number, and paragraph break.`;
+
+    const repaired = stripModelChrome(
+      await rewriteWithModel(request, {
+        backend,
+        temperature: Math.max(0.35, temperature - 0.12),
+        systemInstruction: repairInstruction,
+      }),
+    );
+    if (repaired) {
+      const preferRepair =
+        (tooShort && countWords(repaired) > countWords(output)) ||
+        rewritePenalty(request.text, repaired) < rewritePenalty(request.text, output);
+      if (preferRepair) output = repaired;
+    }
+  }
+
+  const quality = assessRewriteQuality(request.text, output);
+  if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
+    console.error("[humanize] model returned an unusable response", {
+      codes: quality.issues.map((issue) => issue.code),
+    });
+    throw new HumanizationFailedError(
+      "Humanization failed. Please try again.",
+      "QUALITY_CHECK_FAILED",
+      502,
+    );
+  }
+
+  output = quality.output || output;
+
+  if (inputWords >= 40 && countWords(output) < inputWords * 0.55) {
+    throw new HumanizationFailedError(
+      "The rewrite was too short. Please try again.",
+      "TEXT_TOO_SHORT",
+      502,
+    );
+  }
+
+  return {
+    text: output,
+    source: "FINE_TUNED_MODEL",
+    retrieval: null,
+  };
+}
+
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   const topicHit = findTopicMatch(request.text);
   if (topicHit) return resolveStoredHit(topicHit);
 
-  throw new HumanizationFailedError(
-    "No matching topic was found in the training set.",
-    "NO_TRAINING_MATCH",
-    404,
-  );
+  if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
+    console.error("[humanize] No Vertex credentials or Gemini API key is configured");
+    throw new HumanizationFailedError(
+      "The writing service is not configured. Please try again later.",
+      "MISSING_API_KEY",
+      503,
+    );
+  }
+
+  try {
+    return await runModelHumanization(request);
+  } catch (error) {
+    throw wrapAsError(error);
+  }
 }

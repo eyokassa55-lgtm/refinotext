@@ -1,6 +1,8 @@
 /**
  * Binds Humanize to the latest succeeded Vertex tuning job endpoint in .env.local.
- * Prefers OG REFINO by default (override with TUNED_MODEL_JOB_NAME).
+ * Prefers OG REFINO human_text by default (override with TUNED_MODEL_JOB_NAME).
+ * Does not fall back to an older lookup-tuned OG REFINO job.
+ * Sets VERTEX_HUMAN_TEXT_MODEL=1 only when the bound job is the human_text job.
  * Never prints private keys.
  */
 import { config } from "dotenv";
@@ -12,7 +14,7 @@ config();
 
 const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 
-const DEFAULT_JOB_NAME = "OG REFINO";
+const DEFAULT_JOB_NAME = "OG REFINO human_text";
 
 type TuningJob = {
   displayName?: string;
@@ -57,14 +59,9 @@ function pickSucceededJob(jobs: TuningJob[], preferredName: string): TuningJob |
     "i",
   );
 
-  const preferred = succeeded
+  return succeeded
     .filter((job) => preferredPattern.test(jobName(job)))
     .sort((a, b) => String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")))[0];
-  if (preferred) return preferred;
-
-  return succeeded.sort((a, b) =>
-    String(b.createTime ?? "").localeCompare(String(a.createTime ?? "")),
-  )[0];
 }
 
 async function main() {
@@ -121,20 +118,27 @@ async function main() {
 
   if (!endpoint) {
     console.error(
-      `No succeeded tuning job with an endpoint was found (looked for "${preferredName}" first).`,
+      `No succeeded "${preferredName}" job with an endpoint was found. Not binding an older lookup-tuned job.`,
     );
     process.exitCode = 1;
     return;
   }
 
+  const selectedName = jobName(selected!);
+  const humanTextJob = /human_text/i.test(selectedName);
   const envPath = ".env.local";
   let text = await fs.readFile(envPath, "utf8");
   text = upsertLine(text, "TUNED_MODEL_ENDPOINT", endpoint);
   text = upsertLine(text, "VERTEX_AI_TUNED_ENDPOINT", endpoint);
+  text = upsertLine(text, "VERTEX_HUMAN_TEXT_MODEL", humanTextJob ? "1" : "0");
   await fs.writeFile(envPath, text, "utf8");
 
-  console.log(`Bound Humanize to "${jobName(selected!)}" ${redact(endpoint)}`);
-  console.log("Wrote TUNED_MODEL_ENDPOINT and VERTEX_AI_TUNED_ENDPOINT in .env.local");
+  console.log(`Bound Humanize to "${selectedName}" ${redact(endpoint)}`);
+  console.log(
+    humanTextJob
+      ? "Wrote TUNED_MODEL_ENDPOINT, VERTEX_AI_TUNED_ENDPOINT, and VERTEX_HUMAN_TEXT_MODEL=1 in .env.local"
+      : "Wrote TUNED_MODEL_ENDPOINT. VERTEX_HUMAN_TEXT_MODEL stays 0 because this is not the human_text job.",
+  );
 }
 
 await main();

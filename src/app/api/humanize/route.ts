@@ -68,8 +68,6 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
     case "TEXT_TOO_SHORT":
     case "GRUBBY_LIMIT":
       return 400;
-    case "NO_TRAINING_MATCH":
-      return 404;
     case "GRUBBY_QUOTA":
       return 429;
     case "TIMEOUT":

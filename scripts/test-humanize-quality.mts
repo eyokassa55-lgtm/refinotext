@@ -465,7 +465,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "../src/lib/training-lookup"
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
-  const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
+  const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
   assert(
@@ -729,7 +729,18 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert("Humanize engine looks up by keyword topic only", engineSource.includes("findTopicMatch"));
   assert("Humanize engine does not use word-for-word ai_text matching", !engineSource.includes("findDatabaseMatch"));
-  assert("Humanize engine does not send new drafts to the lookup-tuned endpoint", !engineSource.includes('backend: "tuned"'));
+  assert("Humanize engine rewrites unmatched drafts instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
+  assert(
+    "unmatched drafts use the human_text rewrite instruction, not OG lookup",
+    engineSource.includes("buildHumanRewriteInstruction(request, [])") &&
+      !engineSource.includes("buildOgRefinoInferenceInstruction"),
+  );
+  assert(
+    "Humanize engine does not send new drafts to the lookup-tuned endpoint",
+    engineSource.includes("VERTEX_HUMAN_TEXT_MODEL") &&
+      engineSource.includes("unmatchedRewriteBackend()") &&
+      !engineSource.includes('backend: "tuned"'),
+  );
   assert("Humanize engine returns stored human_text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
@@ -765,36 +776,18 @@ Rainforests also illustrate a much broader set of global development debates. It
       /\beducation\b/i.test(engineEducationPair!.input.slice(0, 480)),
     `source=${engineEducation.source} row=${engineEducation.retrieval?.matches[0]?.index}`,
   );
-  try {
-    await runEngineHumanization({ text: NEW_TOPIC, intensity: 75 });
-    assert("unrelated Harborline draft does not invent a rewrite", false);
-  } catch (error) {
-    assert(
-      "unrelated draft returns no training match",
-      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
-      error instanceof Error ? error.message : "unknown",
-    );
-  }
-  try {
-    await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
-    assert("a general History draft does not invent American History", false);
-  } catch (error) {
-    assert(
-      "History draft returns no training match instead of a narrower history essay",
-      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
-      error instanceof Error ? error.message : "unknown",
-    );
-  }
-  try {
-    await runEngineHumanization({ text: INTELLIGENCE_ONLY_ESSAY, intensity: 75 });
-    assert("an intelligence draft does not invent an artificial intelligence essay", false);
-  } catch (error) {
-    assert(
-      "intelligence draft returns no training match instead of an AI essay",
-      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
-      error instanceof Error ? error.message : "unknown",
-    );
-  }
+  assert(
+    "unrelated Harborline draft is not a stored topic and is rewritten, not 404",
+    findTopicMatch(NEW_TOPIC) === null && engineSource.includes("runModelHumanization"),
+  );
+  assert(
+    "a general History draft is not a stored topic and is rewritten, not American History",
+    findTopicMatch(HISTORY_ESSAY) === null && engineSource.includes("runModelHumanization"),
+  );
+  assert(
+    "an intelligence draft is not a stored topic and is rewritten, not an AI essay",
+    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null && engineSource.includes("runModelHumanization"),
+  );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(
     "Humanize returns exact paired human_text for an American History draft",
@@ -828,6 +821,13 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Vertex training job uses a full-set validation URI",
     trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("not a 90-row holdout"),
+  );
+  const bindSource = readFileSync(join(process.cwd(), "scripts", "bind-tuned-endpoint.mts"), "utf8");
+  assert(
+    "bind prefers the human_text job and does not fall back to lookup-tuned OG REFINO",
+    bindSource.includes('DEFAULT_JOB_NAME = "OG REFINO human_text"') &&
+      bindSource.includes("VERTEX_HUMAN_TEXT_MODEL") &&
+      bindSource.includes("Not binding an older lookup-tuned job"),
   );
 
   console.log("\n3e. Grubby MCP payload parsing");
@@ -923,7 +923,7 @@ async function runLiveTests() {
   if (isVertexConfigured()) {
     const vertex = requireVertexConfig();
     const tunedModel = redactModelName(vertex.model);
-    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts stay on dataset lookup`);
+    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts rewrite until VERTEX_HUMAN_TEXT_MODEL=1`);
     assert(
       "Vertex endpoint env is a resource id",
       tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),

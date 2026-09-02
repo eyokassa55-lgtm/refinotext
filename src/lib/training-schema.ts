@@ -8,7 +8,8 @@
  * hashtag is not required. This same-topic rule applies to every stored pair:
  * a narrower or related subject does not replace the user's meaning
  * (History vs American History, intelligence vs artificial intelligence).
- * Unrelated drafts do not generate a new essay.
+ * Unmatched drafts are rewritten by the human_text-trained Vertex model
+ * (or a publisher Gemini model until that job is bound).
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
