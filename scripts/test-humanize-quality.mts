@@ -180,6 +180,24 @@ Chronology is also useful when telling stories. A story can begin with an event,
 
 Understanding chronology is important because it helps people organize information and remember events accurately. It also makes complicated subjects easier to understand. Students often use timelines to study historical events and see how they are connected.`;
 
+const SUCCESS_CHATGPT_ESSAY = `# Success
+
+Success is an important goal in life, but it can mean different things to different people. For some, success means achieving a good career or earning money, while for others, it means having a happy family, gaining knowledge, or helping their community. True success is often connected to personal growth and satisfaction rather than wealth alone.
+
+Achieving success usually requires hard work, patience, and determination. People may face failures and difficult situations along the way, but these experiences can teach valuable lessons. A person who continues working toward a goal after experiencing setbacks can become stronger and more confident. Setting clear goals and developing good habits can also make it easier to make progress.
+
+Education is another important part of success. Learning provides people with knowledge and skills that can help them solve problems and find opportunities. However, knowledge alone is not enough. Discipline, responsibility, and the willingness to learn from mistakes are also important qualities.
+
+Success should not be measured only by material possessions. A person can be considered successful when they live according to their values, maintain healthy relationships, and make a positive contribution to others.`;
+
+const HASH_TECHNOLOGY_ESSAY = `#technology
+
+Phones, laptops, and the internet are now part of school, work, and home. People can send a message across the world in seconds. Online classes let students learn from anywhere.
+
+Too much screen time can make it harder to talk face to face. Personal data is also stored on company servers, so privacy matters.
+
+Used carefully, these tools help people get more done. Used carelessly, they can distract and spread mistakes.`;
+
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
   const meaningCodes = quality.issues
@@ -408,8 +426,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
     "../src/lib/training-lookup"
   );
-  const { findDatabaseMatch, pickDistantStyleReferences } = await import("../src/lib/training-retrieval");
-  const { toApiSource } = await import("../src/lib/humanize-engine");
+  const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
+  const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
   assert(
@@ -471,25 +489,35 @@ Rainforests also illustrate a much broader set of global development debates. It
 
   const { runHumanization: runEngineHumanization } = await import("../src/lib/humanize-engine");
   const engineExact = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
+  const engineExactPair = getTrainingPairs()[engineExact.retrieval?.matches[0]?.index ?? -1];
   assert(
-    "Humanize engine returns stored human_text for an exact training row",
-    engineExact.source === "EXACT_TRAINING_MATCH" &&
-      engineExact.text === firstPair.output &&
-      engineExact.retrieval?.band === "exact",
-    `source=${engineExact.source}`,
+    "Humanize engine uses keyword match even for a stored ai_text paste",
+    engineExact.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineExactPair) &&
+      engineExact.text === engineExactPair!.output &&
+      /^success\b/i.test(engineExactPair!.input.trim()),
+    `source=${engineExact.source} row=${engineExact.retrieval?.matches[0]?.index}`,
   );
   const engineNear = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
+  const engineNearPair = getTrainingPairs()[engineNear.retrieval?.matches[0]?.index ?? -1];
   assert(
-    "Humanize engine returns stored human_text for a near-exact training row",
-    engineNear.source === "DATABASE_SIMILARITY_MATCH" && engineNear.text === techPair.output,
-    `source=${engineNear.source}`,
+    "Humanize engine returns a stored technology human_text by keyword",
+    engineNear.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineNearPair) &&
+      engineNear.text === engineNearPair!.output &&
+      /\btechnolog/i.test(engineNearPair!.input.slice(0, 480)),
+    `source=${engineNear.source} row=${engineNear.retrieval?.matches[0]?.index}`,
   );
 
   const engineHuman = await runEngineHumanization({ text: firstPair.output, intensity: 75 });
+  const engineHumanPair = getTrainingPairs()[engineHuman.retrieval?.matches[0]?.index ?? -1];
   assert(
-    "pasting stored human_text returns it unchanged",
-    engineHuman.source === "EXACT_TRAINING_MATCH" && engineHuman.text === firstPair.output,
-    `source=${engineHuman.source}`,
+    "pasting stored human_text still returns exact paired human_text from a keyword hit",
+    engineHuman.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineHumanPair) &&
+      engineHuman.text === engineHumanPair!.output &&
+      Buffer.from(engineHuman.text, "utf8").equals(Buffer.from(engineHumanPair!.output, "utf8")),
+    `source=${engineHuman.source} row=${engineHuman.retrieval?.matches[0]?.index}`,
   );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
@@ -504,6 +532,44 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("T4 business essay is not a database match", findDatabaseMatch(BUSINESS_ESSAY) === null);
   assert("T5 general essay is not a database match", findDatabaseMatch(GENERAL_ESSAY) === null);
   assert("chronology essay is not a stored ai_text sample", findDatabaseMatch(CHRONOLOGY_ESSAY) === null);
+  assert("ChatGPT success essay is not an exact ai_text row", findDatabaseMatch(SUCCESS_CHATGPT_ESSAY) === null);
+  const successTopic = findTopicMatch(SUCCESS_CHATGPT_ESSAY);
+  const successStored = successTopic ? getTrainingPairs()[successTopic.index] : null;
+  assert(
+    "ChatGPT success essay finds a stored success human_text",
+    successTopic?.kind === "topic" &&
+      Boolean(successStored) &&
+      /^success\b/i.test(successStored!.input.trim()) &&
+      successTopic!.output === successStored!.output,
+    `kind=${successTopic?.kind} row=${successTopic?.index}`,
+  );
+  assert(
+    "topic match does not alter stored human_text",
+    Boolean(successTopic) &&
+      Boolean(successStored) &&
+      Buffer.from(successTopic!.output, "utf8").equals(Buffer.from(successStored!.output, "utf8")),
+  );
+  const educationTopic = findTopicMatch(EDUCATION_ESSAY);
+  const educationStored = educationTopic ? getTrainingPairs()[educationTopic.index] : null;
+  assert(
+    "education draft finds a stored education human_text",
+    educationTopic?.kind === "topic" &&
+      Boolean(educationStored) &&
+      /\beducation\b/i.test(educationStored!.input.slice(0, 480)) &&
+      educationTopic!.output === educationStored!.output,
+    `row=${educationTopic?.index}`,
+  );
+  assert("Harborline field study has no related training topic", findTopicMatch(NEW_TOPIC) === null);
+  const hashTech = findTopicMatch(HASH_TECHNOLOGY_ESSAY);
+  const hashTechStored = hashTech ? getTrainingPairs()[hashTech.index] : null;
+  assert(
+    "#technology heading finds a stored technology human_text",
+    hashTech?.kind === "topic" &&
+      Boolean(hashTechStored) &&
+      /\btechnolog/i.test(hashTechStored!.input.slice(0, 480)) &&
+      hashTech!.output === hashTechStored!.output,
+    `row=${hashTech?.index}`,
+  );
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
   const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -531,16 +597,42 @@ Rainforests also illustrate a much broader set of global development debates. It
     ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
-  assert("unseen drafts use the base Gemini rewriter", engineSource.includes('backend: "base"'));
+  assert("Humanize engine looks up by keyword topic only", engineSource.includes("findTopicMatch"));
+  assert("Humanize engine does not use word-for-word ai_text matching", !engineSource.includes("findDatabaseMatch"));
   assert("Humanize engine does not send new drafts to the lookup-tuned endpoint", !engineSource.includes('backend: "tuned"'));
-  assert("Humanize engine sends distant human_text as style", engineSource.includes("pickDistantStyleReferences"));
-  assert("Humanize engine disables model thinking so drafts are not truncated", engineSource.includes("thinkingBudget: 0"));
-  const styleRefs = pickDistantStyleReferences(NEW_ESSAY, 1);
-  assert("picks a distant rewrite demonstration", styleRefs.length === 1, `count=${styleRefs.length}`);
+  assert("Humanize engine returns stored human_text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
+  const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
+  const engineHashTechPair = getTrainingPairs()[engineHashTech.retrieval?.matches[0]?.index ?? -1];
   assert(
-    "style demonstration is not the user draft",
-    styleRefs.every((row) => !NEW_ESSAY.includes(row.output.slice(0, 48))),
+    "Humanize returns exact paired human_text for a #technology draft",
+    engineHashTech.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineHashTechPair) &&
+      engineHashTech.text === engineHashTechPair!.output &&
+      /\btechnolog/i.test(engineHashTechPair!.input.slice(0, 480)) &&
+      Buffer.from(engineHashTech.text, "utf8").equals(Buffer.from(engineHashTechPair!.output, "utf8")),
+    `source=${engineHashTech.source} row=${engineHashTech.retrieval?.matches[0]?.index}`,
   );
+  const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
+  const engineSuccessPair = getTrainingPairs()[engineSuccess.retrieval?.matches[0]?.index ?? -1];
+  assert(
+    "Humanize returns exact paired human_text for a related Success draft",
+    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineSuccessPair) &&
+      engineSuccess.text === engineSuccessPair!.output &&
+      /^success\b/i.test(engineSuccessPair!.input.trim()) &&
+      Buffer.from(engineSuccess.text, "utf8").equals(Buffer.from(engineSuccessPair!.output, "utf8")),
+    `source=${engineSuccess.source} row=${engineSuccess.retrieval?.matches[0]?.index}`,
+  );
+  try {
+    await runEngineHumanization({ text: NEW_TOPIC, intensity: 75 });
+    assert("unrelated Harborline draft does not invent a rewrite", false);
+  } catch (error) {
+    assert(
+      "unrelated draft returns no training match",
+      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
+      error instanceof Error ? error.message : "unknown",
+    );
+  }
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",
@@ -548,6 +640,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
   assert("same-draft API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
+  assert("topic match API source is database", toApiSource("TOPIC_TRAINING_MATCH") === "database");
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
   const exportSource = readFileSync(join(process.cwd(), "scripts", "export-vertex-training.mts"), "utf8");
   assert(
@@ -653,7 +746,7 @@ async function runLiveTests() {
   if (isVertexConfigured()) {
     const vertex = requireVertexConfig();
     const tunedModel = redactModelName(vertex.model);
-    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts use publisher Gemini`);
+    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts stay on dataset lookup`);
     assert(
       "Vertex endpoint env is a resource id",
       tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
@@ -673,8 +766,9 @@ async function runLiveTests() {
     return;
   }
 
+  const { HumanizationFailedError } = await import("../src/lib/humanize-engine");
   const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
-  const sample = { id: "T6", name: "chronology", text: CHRONOLOGY_ESSAY };
+  const sample = { id: "T6", name: "success-topic", text: SUCCESS_CHATGPT_ESSAY };
 
   try {
     const result = await runHumanization({
@@ -683,19 +777,18 @@ async function runLiveTests() {
       readability: "General Audience",
       intensity: 75,
     });
-    const copyRatio = phraseCopyRatio(sample.text, result.text);
-    const usedStoredEssay = storedOutputs.has(result.text);
+    const matched = getTrainingPairs()[result.retrieval?.matches[0]?.index ?? -1];
     assert(
       `${sample.id} ${sample.name}`,
-      result.source === "FINE_TUNED_MODEL" &&
-        result.retrieval === null &&
-        Boolean(result.text.trim()) &&
-        !usedStoredEssay &&
-        copyRatio < 0.32,
-      `source=${result.source} copy=${copyRatio.toFixed(2)}`,
+      result.source === "TOPIC_TRAINING_MATCH" &&
+        storedOutputs.has(result.text) &&
+        Boolean(matched) &&
+        result.text === matched!.output &&
+        /^success\b/i.test(matched!.input.trim()),
+      `source=${result.source}`,
     );
   } catch (error) {
-    const code = error instanceof Error ? error.name : "ERROR";
+    const code = error instanceof HumanizationFailedError ? error.code : "ERROR";
     assert(`${sample.id} ${sample.name}`, false, `failed [${code}]`);
   }
 }

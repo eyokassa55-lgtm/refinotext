@@ -414,7 +414,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 >
                   <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
                   <p className="text-sm font-medium text-foreground">
-                    Refining your text…
+                    Matching your draft…
                   </p>
                 </div>
               )}

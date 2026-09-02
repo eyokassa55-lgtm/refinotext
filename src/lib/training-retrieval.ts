@@ -5,8 +5,9 @@ import { findExactTrainingMatch, findNormalizedTrainingMatch, findExactTrainingO
 import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
- * Indexed search over stored ai_text. Humanize uses this to return stored
- * human_text for the same underlying draft, then rewrites unmatched drafts.
+ * Keyword search over stored ai_text. Humanize reads the user's draft for a
+ * main topic and returns that row's paired human_text. It does not require a
+ * word-for-word copy of a stored draft.
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
@@ -246,14 +247,186 @@ function topicCategory(tokens: Iterable<string>): TopicCategory {
   return hits.size >= 2 ? "technology" : "general";
 }
 
-function expandTopicTerms(terms: Set<string>): Set<string> {
-  const expanded = new Set(terms);
-  for (const term of terms) {
-    const synonyms = TOPIC_SYNONYMS[term];
-    if (!synonyms) continue;
-    for (const synonym of synonyms) expanded.add(synonym);
+/** Essay glue that should not become the main topic keyword. */
+const TOPIC_GLUE = new Set([
+  "also",
+  "another",
+  "become",
+  "becomes",
+  "being",
+  "best",
+  "better",
+  "conclusion",
+  "could",
+  "different",
+  "does",
+  "during",
+  "each",
+  "even",
+  "every",
+  "good",
+  "help",
+  "helping",
+  "helps",
+  "however",
+  "important",
+  "including",
+  "individual",
+  "individuals",
+  "into",
+  "just",
+  "large",
+  "late",
+  "life",
+  "like",
+  "make",
+  "makes",
+  "many",
+  "means",
+  "modern",
+  "more",
+  "most",
+  "much",
+  "need",
+  "needs",
+  "often",
+  "others",
+  "part",
+  "people",
+  "person",
+  "play",
+  "plays",
+  "really",
+  "role",
+  "several",
+  "should",
+  "significant",
+  "society",
+  "still",
+  "such",
+  "therefore",
+  "thing",
+  "things",
+  "today",
+  "used",
+  "using",
+  "usually",
+  "various",
+  "well",
+  "world",
+  "would",
+]);
+
+const MONTH_TERMS = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+]);
+
+function isTopicKeyword(term: string): boolean {
+  if (!term || STOPWORDS.has(term) || TOPIC_GLUE.has(term) || MONTH_TERMS.has(term)) return false;
+  if (SHORT_TOPIC_TERMS.has(term)) return true;
+  return term.length >= 4;
+}
+
+function topicVariants(term: string): string[] {
+  const variants = new Set<string>([term, ...(TOPIC_SYNONYMS[term] ?? [])]);
+  if (term.endsWith("ies") && term.length > 5) {
+    variants.add(`${term.slice(0, -3)}y`);
+  } else if (term.endsWith("ss") || term.endsWith("us") || term.endsWith("is")) {
+    variants.add(`${term}es`);
+  } else if (term.endsWith("s") && term.length > 4) {
+    variants.add(term.slice(0, -1));
+  } else {
+    variants.add(`${term}s`);
   }
-  return expanded;
+  return [...variants];
+}
+
+function termPresent(term: string, docTerms: Set<string>): boolean {
+  if (docTerms.has(term)) return true;
+  return (TOPIC_SYNONYMS[term] ?? []).some((synonym) => docTerms.has(synonym));
+}
+
+function termInSet(term: string, docTerms: Set<string>): boolean {
+  return topicVariants(term).some((variant) => termPresent(variant, docTerms));
+}
+
+function extractHeadingLine(text: string): string | null {
+  const lines = text
+    .trim()
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const first = lines[0];
+  if (!first) return null;
+  const heading = first
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*•]\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .trim();
+  const words = heading.split(/\s+/).filter(Boolean);
+  if (words.length >= 1 && words.length <= 8 && !/[.?!]$/.test(heading)) {
+    return heading;
+  }
+  return null;
+}
+
+function extractHashtagTopics(text: string): string[] {
+  const head = text.trim().split(/\n/).slice(0, 6).join("\n");
+  const tags = [...head.matchAll(/#([\p{L}\p{N}_-]+)/gu)].map((match) => match[1]!.toLowerCase());
+  return [...new Set(tags.filter(isTopicKeyword))];
+}
+
+function firstSentences(text: string, count = 2): string {
+  const body = text.trim().replace(/^#{1,6}\s*[^\n]+\n+/, "");
+  const parts = body.split(/(?<=[.!?])\s+/).filter((part) => part.trim());
+  return parts.slice(0, count).join(" ");
+}
+
+type TopicKeyword = { term: string; weight: number };
+
+function extractTopicKeywords(text: string): TopicKeyword[] {
+  const hashtags = extractHashtagTopics(text);
+  const heading = extractHeadingLine(text);
+  const first = firstSentences(text, 1);
+  const headingTokens = heading ? tokenizeTopic(heading).filter(isTopicKeyword) : [];
+  const firstTokens = tokenizeTopic(first).filter(isTopicKeyword);
+  const openingTokens = tokenizeTopic(`${hashtags.join(" ")} ${heading ?? ""} ${firstSentences(text, 2)}`).filter(
+    isTopicKeyword,
+  );
+  const fullCounts = termCounts(tokenizeTopic(text).filter(isTopicKeyword));
+  const openingSet = new Set(openingTokens);
+  const substantialFirst = firstTokens.filter(
+    (term) => term.length >= 6 || SHORT_TOPIC_TERMS.has(term),
+  );
+  const firstPool = substantialFirst.length > 0 ? substantialFirst : firstTokens;
+  const repeatedFirst = [...firstPool].sort((left, right) => {
+    const byTf = (fullCounts.get(right) ?? 0) - (fullCounts.get(left) ?? 0);
+    if (byTf !== 0) return byTf;
+    return firstPool.indexOf(left) - firstPool.indexOf(right);
+  });
+  const primaryTerms =
+    hashtags.length > 0 ? hashtags : headingTokens.length > 0 ? headingTokens : repeatedFirst.slice(0, 1);
+  const primarySet = new Set(primaryTerms);
+  const candidates = new Set([...primaryTerms, ...openingTokens]);
+
+  return [...candidates]
+    .map((term) => {
+      const tf = Math.min(fullCounts.get(term) ?? 1, 8);
+      const weight = (primarySet.has(term) ? 20 : 0) + (openingSet.has(term) ? 3 : 0) + tf;
+      return { term, weight };
+    })
+    .sort((left, right) => right.weight - left.weight || left.term.localeCompare(right.term))
+    .slice(0, 8);
 }
 
 function withBigrams(tokens: string[]): string[] {
@@ -799,57 +972,12 @@ export function findDatabaseMatch(userText: string): DatabaseTrainingMatch | nul
 }
 
 export function peekClosestTrainingScore(userText: string): { index: number; score: number } | null {
-  const hit = findDatabaseMatch(userText) ?? findTopicMatch(userText);
+  const hit = findTopicMatch(userText) ?? findDatabaseMatch(userText);
   if (hit) return { index: hit.index, score: hit.score };
   const retrieval = retrieveTrainingExamples(userText, 1);
   const top = retrieval.examples[0];
   if (!top) return null;
   return { index: top.index, score: top.score };
-}
-
-function queryTermCoverage(queryTerms: Set<string>, docTerms: Set<string>): number {
-  if (queryTerms.size === 0) return 0;
-  let matched = 0;
-  for (const term of queryTerms) {
-    if (docTerms.has(term)) {
-      matched += 1;
-      continue;
-    }
-    const synonyms = TOPIC_SYNONYMS[term] ?? [];
-    if (synonyms.some((synonym) => docTerms.has(synonym))) matched += 1;
-  }
-  return matched / queryTerms.size;
-}
-
-function termPresent(term: string, docTerms: Set<string>): boolean {
-  if (docTerms.has(term)) return true;
-  return (TOPIC_SYNONYMS[term] ?? []).some((synonym) => docTerms.has(synonym));
-}
-
-function idfCoverage(
-  queryTerms: Set<string>,
-  docTerms: Set<string>,
-  idf: Map<string, number>,
-): number {
-  let matchedWeight = 0;
-  let totalWeight = 0;
-  for (const term of queryTerms) {
-    const weight = idf.get(term) ?? (SHORT_TOPIC_TERMS.has(term) ? 2.6 : 1.15);
-    totalWeight += weight;
-    if (termPresent(term, docTerms)) matchedWeight += weight;
-  }
-  return totalWeight === 0 ? 0 : matchedWeight / totalWeight;
-}
-
-function strongestQueryTerms(queryTerms: Set<string>, idf: Map<string, number>, n = 2): string[] {
-  return [...queryTerms]
-    .map((term) => ({
-      term,
-      weight: idf.get(term) ?? (SHORT_TOPIC_TERMS.has(term) ? 2.6 : 1.15),
-    }))
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, n)
-    .map((item) => item.term);
 }
 
 export function isTopicQuery(text: string): boolean {
@@ -860,60 +988,42 @@ export function isTopicQuery(text: string): boolean {
 }
 
 /**
- * Semantic topic search over stored ai_text. Returns the paired human_text
- * from the same row only. Weak or unrelated matches are rejected.
+ * Keyword / main-topic search over stored ai_text.
+ * Reads the user's draft for a title, #hashtag, or opening keyword, then
+ * returns that row's paired human_text unchanged. Different AI drafts on
+ * the same topic do not need to match the stored ai_text word for word.
  */
 export function findTopicMatch(userText: string): DatabaseTrainingMatch | null {
+  const keywords = extractTopicKeywords(userText);
+  const primary = keywords[0];
+  if (!primary) return null;
+
   const index = getRetrievalIndex();
-  const queryTokens = tokenizeTopic(userText);
-  const queryTerms = new Set(queryTokens);
-  if (queryTerms.size < 2) return null;
+  let best: { doc: IndexedDoc; score: number } | null = null;
 
-  const queryCategory = topicCategory(expandTopicTerms(queryTerms));
-  const querySparse = sparseFromCounts(termCounts(withBigrams(queryTokens)), index.idf);
-  const queryNorm = sparseNorm(querySparse) || 1;
-  const requiredTerms =
-    queryTerms.size <= 10 ? strongestQueryTerms(queryTerms, index.idf, 2) : [];
+  for (const doc of index.docs) {
+    const opening = new Set(tokenizeTopic(doc.pair.input.slice(0, 480)));
+    const titleAndOpening = new Set([...doc.titleUnigrams, ...opening]);
+    if (!termInSet(primary.term, titleAndOpening)) continue;
 
-  const tfidfScores = new Float64Array(index.docs.length);
-  for (const item of querySparse) {
-    const posting = index.inverted.get(item.term);
-    if (!posting) continue;
-    for (const hit of posting) {
-      tfidfScores[hit.doc] += item.weight * hit.weight;
+    let matched = 0;
+    let total = 0;
+    for (const keyword of keywords) {
+      total += keyword.weight;
+      if (termInSet(keyword.term, titleAndOpening)) matched += keyword.weight;
+      else if (termInSet(keyword.term, doc.unigrams)) matched += keyword.weight * 0.4;
+    }
+    const coverage = total > 0 ? matched / total : 0;
+    // Primary keyword in the stored opening is the topic hit; coverage only ranks pairs.
+    const score = Number((0.72 + 0.28 * coverage).toFixed(4));
+    if (!best || score > best.score || (score === best.score && doc.pair.index < best.doc.pair.index)) {
+      best = { doc, score };
     }
   }
 
-  let best: { doc: IndexedDoc; score: number; coverage: number } | null = null;
-  for (let docIndex = 0; docIndex < index.docs.length; docIndex += 1) {
-    const doc = index.docs[docIndex]!;
-    if (requiredTerms.length > 0 && !requiredTerms.some((term) => termPresent(term, doc.unigrams))) {
-      continue;
-    }
+  if (!best || best.score < TOPIC_MATCH_THRESHOLD) return null;
 
-    const coverage = idfCoverage(queryTerms, doc.unigrams, index.idf);
-    if (coverage < 0.5) continue;
-
-    const titleCoverage = queryTermCoverage(queryTerms, doc.titleUnigrams);
-    const tfidf = (tfidfScores[docIndex] ?? 0) / (queryNorm * doc.norm);
-    const satTfidf = Math.max(0, Math.min(1, tfidf / 0.22));
-    const techAlign =
-      queryCategory === "technology" ? (doc.category === "technology" ? 1 : 0) : 0.5;
-    const score =
-      queryCategory === "technology"
-        ? 0.42 * coverage + 0.28 * titleCoverage + 0.15 * satTfidf + 0.15 * techAlign
-        : 0.55 * coverage + 0.3 * titleCoverage + 0.15 * satTfidf;
-
-    if (!best || score > best.score) {
-      best = { doc, score, coverage };
-    }
-  }
-
-  if (!best || best.score < TOPIC_MATCH_THRESHOLD || best.coverage < 0.5) {
-    return null;
-  }
-
-  const match = lockedPair(best.doc.pair, Number(best.score.toFixed(4)), "topic");
+  const match = lockedPair(best.doc.pair, best.score, "topic");
   if (match.index !== best.doc.pair.index || match.output !== best.doc.pair.output) {
     return null;
   }

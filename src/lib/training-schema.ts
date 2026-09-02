@@ -1,11 +1,11 @@
 /**
- * Dataset contract for Humanize exact-match lookup.
+ * Dataset contract for Humanize keyword lookup.
  *
- * The 722-pair corpus lives in `data/training_data.jsonl`. Exact ai_text
- * matches, and same-draft near-matches, return stored human_text. All other
- * drafts are rewritten with a publisher Gemini model, using stored human_text
- * only as style. The JSONL is not sent as the answer. A related topic with
- * different sentences is not a hit.
+ * The 722-pair corpus lives in `data/training_data.jsonl`. Humanize reads the
+ * user's draft for a main topic (title, #hashtag, or opening keywords) and
+ * returns that row's paired human_text unchanged. It does not require the
+ * draft to match ai_text word for word. Unrelated drafts do not generate a
+ * new essay.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
