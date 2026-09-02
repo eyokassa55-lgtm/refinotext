@@ -301,6 +301,7 @@ const TOPIC_GLUE = new Set([
   "several",
   "should",
   "significant",
+  "small",
   "society",
   "still",
   "such",
@@ -329,6 +330,40 @@ const MONTH_TERMS = new Set([
   "october",
   "november",
   "december",
+]);
+
+/** Opening filler that is not the essay's topic, e.g. "The development of AI". */
+const TOPIC_FRAMES = new Set([
+  "abstract",
+  "benefits",
+  "chapter",
+  "concept",
+  "conceptual",
+  "critical",
+  "development",
+  "dossier",
+  "effect",
+  "effects",
+  "essence",
+  "evolution",
+  "field",
+  "future",
+  "history",
+  "impact",
+  "importance",
+  "influence",
+  "introduction",
+  "literature",
+  "notes",
+  "phenomenon",
+  "relationship",
+  "report",
+  "review",
+  "rise",
+  "role",
+  "significance",
+  "story",
+  "understanding",
 ]);
 
 function isTopicKeyword(term: string): boolean {
@@ -392,41 +427,101 @@ function firstSentences(text: string, count = 2): string {
   return parts.slice(0, count).join(" ");
 }
 
-type TopicKeyword = { term: string; weight: number };
+function skipTopicFrames(tokens: string[]): string[] {
+  let index = 0;
+  while (index < tokens.length && TOPIC_FRAMES.has(tokens[index]!)) index += 1;
+  return tokens.slice(index);
+}
 
-function extractTopicKeywords(text: string): TopicKeyword[] {
-  const hashtags = extractHashtagTopics(text);
+function expandCatalogTerms(term: string): string[] {
+  const out = new Set<string>(topicVariants(term));
+  const queue = [...out];
+  for (const item of queue) {
+    for (const synonym of TOPIC_SYNONYMS[item] ?? []) {
+      if (out.has(synonym)) continue;
+      out.add(synonym);
+      queue.push(synonym);
+      for (const variant of topicVariants(synonym)) {
+        if (out.has(variant)) continue;
+        out.add(variant);
+        queue.push(variant);
+      }
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Topic keywords from a user draft. A hashtag is optional.
+ * Uses the title/heading if present, otherwise the opening topic words.
+ */
+function topicLookupTerms(text: string): string[] {
+  const terms: string[] = [];
+  const seen = new Set<string>();
+  const push = (term: string) => {
+    const normalized = term.toLowerCase();
+    if (!normalized || seen.has(normalized)) return;
+    if (!normalized.includes("_") && !isTopicKeyword(normalized)) return;
+    seen.add(normalized);
+    terms.push(normalized);
+  };
+
+  for (const tag of extractHashtagTopics(text)) push(tag);
+
   const heading = extractHeadingLine(text);
-  const first = firstSentences(text, 1);
-  const headingTokens = heading ? tokenizeTopic(heading).filter(isTopicKeyword) : [];
-  const firstTokens = tokenizeTopic(first).filter(isTopicKeyword);
-  const openingTokens = tokenizeTopic(`${hashtags.join(" ")} ${heading ?? ""} ${firstSentences(text, 2)}`).filter(
-    isTopicKeyword,
-  );
-  const fullCounts = termCounts(tokenizeTopic(text).filter(isTopicKeyword));
-  const openingSet = new Set(openingTokens);
-  const substantialFirst = firstTokens.filter(
-    (term) => term.length >= 6 || SHORT_TOPIC_TERMS.has(term),
-  );
-  const firstPool = substantialFirst.length > 0 ? substantialFirst : firstTokens;
-  const repeatedFirst = [...firstPool].sort((left, right) => {
-    const byTf = (fullCounts.get(right) ?? 0) - (fullCounts.get(left) ?? 0);
-    if (byTf !== 0) return byTf;
-    return firstPool.indexOf(left) - firstPool.indexOf(right);
-  });
-  const primaryTerms =
-    hashtags.length > 0 ? hashtags : headingTokens.length > 0 ? headingTokens : repeatedFirst.slice(0, 1);
-  const primarySet = new Set(primaryTerms);
-  const candidates = new Set([...primaryTerms, ...openingTokens]);
+  if (heading) {
+    for (const token of tokenizeTopic(heading).filter(isTopicKeyword)) push(token);
+  }
 
-  return [...candidates]
-    .map((term) => {
-      const tf = Math.min(fullCounts.get(term) ?? 1, 8);
-      const weight = (primarySet.has(term) ? 20 : 0) + (openingSet.has(term) ? 3 : 0) + tf;
-      return { term, weight };
-    })
-    .sort((left, right) => right.weight - left.weight || left.term.localeCompare(right.term))
-    .slice(0, 8);
+  const first = skipTopicFrames(tokenizeTopic(firstSentences(text, 1)).filter(isTopicKeyword));
+  for (const token of first.slice(0, 2)) push(token);
+  if (first[0] && first[1]) push(`${first[0]}_${first[1]}`);
+
+  return terms;
+}
+
+/** Index keys for a stored ai_text: heading/hashtag plus the lead topic word. */
+function storedTopicKeys(text: string): string[] {
+  const terms: string[] = [];
+  const seen = new Set<string>();
+  const push = (term: string) => {
+    const normalized = term.toLowerCase();
+    if (!normalized || seen.has(normalized)) return;
+    if (!normalized.includes("_") && !isTopicKeyword(normalized)) return;
+    seen.add(normalized);
+    terms.push(normalized);
+  };
+
+  for (const tag of extractHashtagTopics(text)) push(tag);
+
+  const heading = extractHeadingLine(text);
+  if (heading) {
+    for (const token of tokenizeTopic(heading).filter(isTopicKeyword)) push(token);
+  }
+
+  const first = skipTopicFrames(tokenizeTopic(firstSentences(text, 1)).filter(isTopicKeyword));
+  if (first[0]) push(first[0]);
+  if (first[0] && first[1]) push(`${first[0]}_${first[1]}`);
+
+  return terms;
+}
+
+let cachedTopicCatalog: Map<string, TrainingPair> | null = null;
+
+function getTopicCatalog(): Map<string, TrainingPair> {
+  if (cachedTopicCatalog) return cachedTopicCatalog;
+
+  const catalog = new Map<string, TrainingPair>();
+  for (const pair of getTrainingPairs()) {
+    for (const term of storedTopicKeys(pair.input)) {
+      for (const key of expandCatalogTerms(term)) {
+        if (!catalog.has(key)) catalog.set(key, pair);
+      }
+    }
+  }
+
+  cachedTopicCatalog = catalog;
+  return catalog;
 }
 
 function withBigrams(tokens: string[]): string[] {
@@ -980,52 +1075,28 @@ export function peekClosestTrainingScore(userText: string): { index: number; sco
   return { index: top.index, score: top.score };
 }
 
-export function isTopicQuery(text: string): boolean {
-  const words = wordCount(text);
-  if (words <= 24) return true;
-  if (words > 40) return false;
-  return paragraphCount(text) <= 1;
-}
-
 /**
- * Keyword / main-topic search over stored ai_text.
- * Reads the user's draft for a title, #hashtag, or opening keyword, then
- * returns that row's paired human_text unchanged. Different AI drafts on
- * the same topic do not need to match the stored ai_text word for word.
+ * Keyword search over all 722 stored pairs. Hashtags are optional.
+ * Reads title, heading, or opening topic words from the user's draft,
+ * finds the first training row for that topic, and returns that row's
+ * paired human_text unchanged.
  */
 export function findTopicMatch(userText: string): DatabaseTrainingMatch | null {
-  const keywords = extractTopicKeywords(userText);
-  const primary = keywords[0];
-  if (!primary) return null;
-
-  const index = getRetrievalIndex();
-  let best: { doc: IndexedDoc; score: number } | null = null;
-
-  for (const doc of index.docs) {
-    const opening = new Set(tokenizeTopic(doc.pair.input.slice(0, 480)));
-    const titleAndOpening = new Set([...doc.titleUnigrams, ...opening]);
-    if (!termInSet(primary.term, titleAndOpening)) continue;
-
-    let matched = 0;
-    let total = 0;
-    for (const keyword of keywords) {
-      total += keyword.weight;
-      if (termInSet(keyword.term, titleAndOpening)) matched += keyword.weight;
-      else if (termInSet(keyword.term, doc.unigrams)) matched += keyword.weight * 0.4;
+  const catalog = getTopicCatalog();
+  for (const term of topicLookupTerms(userText)) {
+    let pair: TrainingPair | undefined;
+    for (const key of expandCatalogTerms(term)) {
+      pair = catalog.get(key);
+      if (pair) break;
     }
-    const coverage = total > 0 ? matched / total : 0;
-    // Primary keyword in the stored opening is the topic hit; coverage only ranks pairs.
-    const score = Number((0.72 + 0.28 * coverage).toFixed(4));
-    if (!best || score > best.score || (score === best.score && doc.pair.index < best.doc.pair.index)) {
-      best = { doc, score };
+    if (!pair) continue;
+
+    const match = lockedPair(pair, 0.92, "topic");
+    if (match.index !== pair.index || match.output !== pair.output) {
+      return null;
     }
+    return match;
   }
 
-  if (!best || best.score < TOPIC_MATCH_THRESHOLD) return null;
-
-  const match = lockedPair(best.doc.pair, best.score, "topic");
-  if (match.index !== best.doc.pair.index || match.output !== best.doc.pair.output) {
-    return null;
-  }
-  return match;
+  return null;
 }

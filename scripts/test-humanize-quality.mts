@@ -198,6 +198,16 @@ Too much screen time can make it harder to talk face to face. Personal data is a
 
 Used carefully, these tools help people get more done. Used carelessly, they can distract and spread mistakes.`;
 
+const SUCCESS_PLAIN_ESSAY = SUCCESS_CHATGPT_ESSAY.replace(/^# Success\s*/, "").trim();
+
+const CLIMATE_PLAIN_ESSAY = `Climate change is heating the planet. Ice melts, seas rise, and storms get worse.
+
+Cutting fossil fuels and planting trees can slow the damage. Cities can also prepare hospitals and cooling centers.`;
+
+const FRIENDSHIP_PLAIN_ESSAY = `Friendship makes hard days easier. Trust, honesty, and time together keep the bond strong.
+
+True friends listen, tell the truth, and stay when plans fall apart. That kind of support is worth more than a long list of contacts.`;
+
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
   const meaningCodes = quality.issues
@@ -534,20 +544,17 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("chronology essay is not a stored ai_text sample", findDatabaseMatch(CHRONOLOGY_ESSAY) === null);
   assert("ChatGPT success essay is not an exact ai_text row", findDatabaseMatch(SUCCESS_CHATGPT_ESSAY) === null);
   const successTopic = findTopicMatch(SUCCESS_CHATGPT_ESSAY);
-  const successStored = successTopic ? getTrainingPairs()[successTopic.index] : null;
   assert(
-    "ChatGPT success essay finds a stored success human_text",
+    "ChatGPT success essay finds the first stored success human_text",
     successTopic?.kind === "topic" &&
-      Boolean(successStored) &&
-      /^success\b/i.test(successStored!.input.trim()) &&
-      successTopic!.output === successStored!.output,
+      successTopic?.index === 0 &&
+      successTopic!.output === firstPair.output,
     `kind=${successTopic?.kind} row=${successTopic?.index}`,
   );
   assert(
     "topic match does not alter stored human_text",
     Boolean(successTopic) &&
-      Boolean(successStored) &&
-      Buffer.from(successTopic!.output, "utf8").equals(Buffer.from(successStored!.output, "utf8")),
+      Buffer.from(successTopic!.output, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
   );
   const educationTopic = findTopicMatch(EDUCATION_ESSAY);
   const educationStored = educationTopic ? getTrainingPairs()[educationTopic.index] : null;
@@ -561,14 +568,58 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("Harborline field study has no related training topic", findTopicMatch(NEW_TOPIC) === null);
   const hashTech = findTopicMatch(HASH_TECHNOLOGY_ESSAY);
-  const hashTechStored = hashTech ? getTrainingPairs()[hashTech.index] : null;
   assert(
-    "#technology heading finds a stored technology human_text",
+    "#technology heading finds the first stored technology human_text",
     hashTech?.kind === "topic" &&
-      Boolean(hashTechStored) &&
-      /\btechnolog/i.test(hashTechStored!.input.slice(0, 480)) &&
-      hashTech!.output === hashTechStored!.output,
+      hashTech?.index === techPair.index &&
+      hashTech!.output === techPair.output,
     `row=${hashTech?.index}`,
+  );
+  const plainTech = findTopicMatch(TECH_SCREENSHOT_ESSAY);
+  assert(
+    "technology draft without a hashtag still finds the first stored technology human_text",
+    plainTech?.kind === "topic" &&
+      plainTech?.index === techPair.index &&
+      plainTech!.output === techPair.output,
+    `row=${plainTech?.index}`,
+  );
+  const plainSuccess = findTopicMatch(SUCCESS_PLAIN_ESSAY);
+  assert(
+    "success draft without a hashtag finds the first stored success human_text",
+    plainSuccess?.kind === "topic" &&
+      plainSuccess?.index === 0 &&
+      plainSuccess!.output === firstPair.output,
+    `row=${plainSuccess?.index}`,
+  );
+  const aiPair = getTrainingPairs()[13]!;
+  const aiTopic = findTopicMatch(AI_TECH_ESSAY);
+  assert(
+    "AI draft without a hashtag finds the stored artificial intelligence human_text",
+    /^artificial intelligence\b/i.test(aiPair.input.trim()) &&
+      aiTopic?.kind === "topic" &&
+      aiTopic?.index === aiPair.index &&
+      aiTopic!.output === aiPair.output,
+    `row=${aiTopic?.index} stored=${aiPair.index}`,
+  );
+  const climatePair = getTrainingPairs()[11]!;
+  const climateTopic = findTopicMatch(CLIMATE_PLAIN_ESSAY);
+  assert(
+    "climate draft finds the first stored climate human_text",
+    /^climate change\b/i.test(climatePair.input.trim()) &&
+      climateTopic?.kind === "topic" &&
+      climateTopic?.index === climatePair.index &&
+      climateTopic!.output === climatePair.output,
+    `row=${climateTopic?.index}`,
+  );
+  const friendshipPair = getTrainingPairs()[12]!;
+  const friendshipTopic = findTopicMatch(FRIENDSHIP_PLAIN_ESSAY);
+  assert(
+    "friendship draft finds the first stored friendship human_text",
+    /^friendship\b/i.test(friendshipPair.input.trim()) &&
+      friendshipTopic?.kind === "topic" &&
+      friendshipTopic?.index === friendshipPair.index &&
+      friendshipTopic!.output === friendshipPair.output,
+    `row=${friendshipTopic?.index}`,
   );
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
@@ -602,26 +653,38 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("Humanize engine does not send new drafts to the lookup-tuned endpoint", !engineSource.includes('backend: "tuned"'));
   assert("Humanize engine returns stored human_text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
-  const engineHashTechPair = getTrainingPairs()[engineHashTech.retrieval?.matches[0]?.index ?? -1];
   assert(
     "Humanize returns exact paired human_text for a #technology draft",
     engineHashTech.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineHashTechPair) &&
-      engineHashTech.text === engineHashTechPair!.output &&
-      /\btechnolog/i.test(engineHashTechPair!.input.slice(0, 480)) &&
-      Buffer.from(engineHashTech.text, "utf8").equals(Buffer.from(engineHashTechPair!.output, "utf8")),
+      engineHashTech.text === techPair.output &&
+      Buffer.from(engineHashTech.text, "utf8").equals(Buffer.from(techPair.output, "utf8")),
     `source=${engineHashTech.source} row=${engineHashTech.retrieval?.matches[0]?.index}`,
   );
   const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
-  const engineSuccessPair = getTrainingPairs()[engineSuccess.retrieval?.matches[0]?.index ?? -1];
   assert(
     "Humanize returns exact paired human_text for a related Success draft",
     engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineSuccessPair) &&
-      engineSuccess.text === engineSuccessPair!.output &&
-      /^success\b/i.test(engineSuccessPair!.input.trim()) &&
-      Buffer.from(engineSuccess.text, "utf8").equals(Buffer.from(engineSuccessPair!.output, "utf8")),
+      engineSuccess.text === firstPair.output &&
+      Buffer.from(engineSuccess.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
     `source=${engineSuccess.source} row=${engineSuccess.retrieval?.matches[0]?.index}`,
+  );
+  const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns exact paired human_text for a technology draft with no hashtag",
+    enginePlainTech.source === "TOPIC_TRAINING_MATCH" &&
+      enginePlainTech.text === techPair.output &&
+      Buffer.from(enginePlainTech.text, "utf8").equals(Buffer.from(techPair.output, "utf8")),
+    `source=${enginePlainTech.source} row=${enginePlainTech.retrieval?.matches[0]?.index}`,
+  );
+  const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
+  const engineEducationPair = getTrainingPairs()[engineEducation.retrieval?.matches[0]?.index ?? -1];
+  assert(
+    "Humanize returns exact paired human_text for an education draft with no hashtag",
+    engineEducation.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(engineEducationPair) &&
+      engineEducation.text === engineEducationPair!.output &&
+      /\beducation\b/i.test(engineEducationPair!.input.slice(0, 480)),
+    `source=${engineEducation.source} row=${engineEducation.retrieval?.matches[0]?.index}`,
   );
   try {
     await runEngineHumanization({ text: NEW_TOPIC, intensity: 75 });
@@ -767,7 +830,7 @@ async function runLiveTests() {
   }
 
   const { HumanizationFailedError } = await import("../src/lib/humanize-engine");
-  const storedOutputs = new Set(getTrainingPairs().map((pair) => pair.output));
+  const successPair = getTrainingPairs()[0]!;
   const sample = { id: "T6", name: "success-topic", text: SUCCESS_CHATGPT_ESSAY };
 
   try {
@@ -777,14 +840,10 @@ async function runLiveTests() {
       readability: "General Audience",
       intensity: 75,
     });
-    const matched = getTrainingPairs()[result.retrieval?.matches[0]?.index ?? -1];
     assert(
       `${sample.id} ${sample.name}`,
       result.source === "TOPIC_TRAINING_MATCH" &&
-        storedOutputs.has(result.text) &&
-        Boolean(matched) &&
-        result.text === matched!.output &&
-        /^success\b/i.test(matched!.input.trim()),
+        result.text === successPair.output,
       `source=${result.source}`,
     );
   } catch (error) {

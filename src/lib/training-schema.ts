@@ -1,11 +1,11 @@
 /**
  * Dataset contract for Humanize keyword lookup.
  *
- * The 722-pair corpus lives in `data/training_data.jsonl`. Humanize reads the
- * user's draft for a main topic (title, #hashtag, or opening keywords) and
- * returns that row's paired human_text unchanged. It does not require the
- * draft to match ai_text word for word. Unrelated drafts do not generate a
- * new essay.
+ * The 722-pair corpus lives in `data/training_data.jsonl`. Humanize reads
+ * topic keywords from the user's draft (a title, optional #hashtag, or
+ * opening words) and matches them against every stored ai_text. The first
+ * pair for that topic is returned with its human_text unchanged. A hashtag
+ * is not required. Unrelated drafts do not generate a new essay.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
