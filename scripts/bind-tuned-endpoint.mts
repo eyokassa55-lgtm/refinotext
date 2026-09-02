@@ -1,8 +1,8 @@
 /**
  * Binds Humanize to the latest succeeded Vertex tuning job endpoint in .env.local.
- * Prefers OG REFINO human_text by default (override with TUNED_MODEL_JOB_NAME).
+ * Prefers OG REFINO rewrite by default (override with TUNED_MODEL_JOB_NAME).
  * Does not fall back to an older lookup-tuned OG REFINO job.
- * Sets VERTEX_HUMAN_TEXT_MODEL=1 only when the bound job is the human_text job.
+ * Sets VERTEX_HUMAN_TEXT_MODEL=1 only when the bound job is the rewrite job.
  * Never prints private keys.
  */
 import { config } from "dotenv";
@@ -14,7 +14,7 @@ config();
 
 const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 
-const DEFAULT_JOB_NAME = "OG REFINO human_text";
+const DEFAULT_JOB_NAME = "OG REFINO rewrite";
 
 type TuningJob = {
   displayName?: string;
@@ -125,19 +125,19 @@ async function main() {
   }
 
   const selectedName = jobName(selected!);
-  const humanTextJob = /human_text/i.test(selectedName);
+  const rewriteJob = /rewrite/i.test(selectedName);
   const envPath = ".env.local";
   let text = await fs.readFile(envPath, "utf8");
   text = upsertLine(text, "TUNED_MODEL_ENDPOINT", endpoint);
   text = upsertLine(text, "VERTEX_AI_TUNED_ENDPOINT", endpoint);
-  text = upsertLine(text, "VERTEX_HUMAN_TEXT_MODEL", humanTextJob ? "1" : "0");
+  text = upsertLine(text, "VERTEX_HUMAN_TEXT_MODEL", rewriteJob ? "1" : "0");
   await fs.writeFile(envPath, text, "utf8");
 
   console.log(`Bound Humanize to "${selectedName}" ${redact(endpoint)}`);
   console.log(
-    humanTextJob
+    rewriteJob
       ? "Wrote TUNED_MODEL_ENDPOINT, VERTEX_AI_TUNED_ENDPOINT, and VERTEX_HUMAN_TEXT_MODEL=1 in .env.local"
-      : "Wrote TUNED_MODEL_ENDPOINT. VERTEX_HUMAN_TEXT_MODEL stays 0 because this is not the human_text job.",
+      : "Wrote TUNED_MODEL_ENDPOINT. VERTEX_HUMAN_TEXT_MODEL stays 0 because this is not the rewrite job.",
   );
 }
 

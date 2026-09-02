@@ -8,7 +8,7 @@
  *
  * Optional:
  * - TRAINING_GCS_BUCKET (defaults to refino-og-v2-<project-slug>)
- * - TRAINING_GCS_OBJECT=humanizer_trainOG_v3.jsonl
+ * - TRAINING_GCS_OBJECT=humanizer_trainOG_v4.jsonl
  *
  * Run: npm run upload:training
  */
@@ -39,7 +39,7 @@ async function persistTrainingUris(trainUri: string, validationUri: string) {
   let text = await fs.readFile(envPath, "utf8");
   text = upsertLine(text, "TRAINING_DATA_GCS_URI", trainUri);
   text = upsertLine(text, "VALIDATION_DATA_GCS_URI", validationUri);
-  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "OG REFINO human_text");
+  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "OG REFINO rewrite");
   await fs.writeFile(envPath, text, "utf8");
   console.log("Wrote TRAINING_DATA_GCS_URI, VALIDATION_DATA_GCS_URI, and TUNED_MODEL_JOB_NAME in .env.local");
 }
@@ -105,15 +105,15 @@ async function ensureBucket(token: string, project: string, bucket: string) {
 async function main() {
   const project = cleanEnv(process.env.GOOGLE_CLOUD_PROJECT);
   let bucket = cleanEnv(process.env.TRAINING_GCS_BUCKET) ?? (project ? defaultBucketName(project) : undefined);
-  const object = cleanEnv(process.env.TRAINING_GCS_OBJECT) ?? "humanizer_trainOG_v3.jsonl";
+  const object = cleanEnv(process.env.TRAINING_GCS_OBJECT) ?? "humanizer_trainOG_v4.jsonl";
   const validationObject =
-    cleanEnv(process.env.VALIDATION_GCS_OBJECT) ?? "humanizer_validationOG_v3.jsonl";
+    cleanEnv(process.env.VALIDATION_GCS_OBJECT) ?? "humanizer_validationOG_v4.jsonl";
   const localPath =
     cleanEnv(process.env.TRAINING_LOCAL_PATH) ??
-    join(process.cwd(), "data", "humanizer_train_v3.jsonl");
+    join(process.cwd(), "data", "humanizer_train_v4.jsonl");
   const validationPath =
     cleanEnv(process.env.VALIDATION_LOCAL_PATH) ??
-    join(process.cwd(), "data", "humanizer_validation_v3.jsonl");
+    join(process.cwd(), "data", "humanizer_validation_v4.jsonl");
 
   if (!project) {
     console.error("GOOGLE_CLOUD_PROJECT is missing.");

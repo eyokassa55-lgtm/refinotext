@@ -269,16 +269,18 @@ Return only the full text.`;
 }
 
 /**
- * Rewrite instruction for unseen drafts and for OG REFINO v3 training.
- * This is a rewrite task, not “find the matching stored human_text.”
+ * Rewrite instruction for unseen drafts and for OG REFINO rewrite training.
+ * Teaches the gold human_text edit. Not a copy of the input, and not a
+ * lookup of a different stored essay on a related topic.
  */
 export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the draft into natural human prose.
 
-Keep the same topic, meaning, facts, names, numbers, dates, and paragraph breaks.
-Change sentence openings and rhythm so it reads like a person wrote it in one sitting.
-Ordinary words are better than polished template phrasing. A little repetition is fine.
+This is an editing job, not a copy job and not a lookup job.
+Change the sentence openings, rhythm, and transitions. Swapping a few words is not enough.
+Keep the same topic, meaning, facts, names, numbers, dates, length, and paragraph breaks.
+Do not replace the draft with a different essay on a related subject.
 Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
-Never turn a multi-paragraph draft into a short summary.
+Ordinary words are better than polished template phrasing. A little repetition is fine.
 Return only the rewritten text.`;
 
 /**

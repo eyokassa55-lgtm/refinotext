@@ -8,8 +8,8 @@
  * hashtag is not required. This same-topic rule applies to every stored pair:
  * a narrower or related subject does not replace the user's meaning
  * (History vs American History, intelligence vs artificial intelligence).
- * Unmatched drafts are rewritten by the human_text-trained Vertex model
- * (or a publisher Gemini model until that job is bound).
+ * Unmatched drafts are rewritten by the Vertex model trained on
+ * ai_text → human_text (or a publisher Gemini model until that job is bound).
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

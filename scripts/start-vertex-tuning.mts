@@ -4,11 +4,11 @@
  * Requires:
  * - GOOGLE_CLOUD_PROJECT
  * - GOOGLE_SERVICE_ACCOUNT_JSON (or ADC)
- * - TRAINING_DATA_GCS_URI=gs://bucket/path/humanizer_trainOG_v3.jsonl
- *   (exported human_text-only JSONL, not raw ai_text/human_text pairs)
+ * - TRAINING_DATA_GCS_URI=gs://bucket/path/humanizer_trainOG_v4.jsonl
+ *   (ai_text → human_text rewrite JSONL — not identity copy)
  *
  * Optional:
- * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v3.jsonl
+ * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v4.jsonl
  *   (defaults to the training URI so validation is the full set, not a 90-row holdout)
  *
  * Run: npm run train:vertex
@@ -37,7 +37,7 @@ async function main() {
   const datasetUri = cleanEnv(process.env.TRAINING_DATA_GCS_URI);
   const validationUri =
     cleanEnv(process.env.VALIDATION_DATA_GCS_URI) ?? datasetUri;
-  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO human_text";
+  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO rewrite";
   const baseModel =
     cleanEnv(process.env.VERTEX_BASE_MODEL) ?? "gemini-2.5-flash-lite";
 
@@ -48,7 +48,7 @@ async function main() {
   }
   if (!datasetUri?.startsWith("gs://")) {
     console.error(
-      "Set TRAINING_DATA_GCS_URI to a gs:// path for the exported human_text Vertex JSONL before training.",
+      "Set TRAINING_DATA_GCS_URI to a gs:// path for the exported ai_text → human_text Vertex JSONL before training.",
     );
     process.exitCode = 1;
     return;
@@ -62,6 +62,7 @@ async function main() {
   console.log(`Validation URI: ${validationUri} (full set, not a 90-row holdout)`);
   console.log(`Job name: ${displayName}`);
   console.log(`Base model: ${baseModel}`);
+  console.log("Hyperparameters: epochs=8 adapter=8 learningRateMultiplier=5");
 
   const auth = new GoogleAuth({
     ...getGoogleAuthOptions(),
@@ -82,6 +83,11 @@ async function main() {
     supervisedTuningSpec: {
       trainingDatasetUri: datasetUri,
       validationDatasetUri: validationUri,
+      hyperParameters: {
+        epochCount: "8",
+        adapterSize: "ADAPTER_SIZE_EIGHT",
+        learningRateMultiplier: 5,
+      },
     },
     tunedModelDisplayName: displayName,
   };

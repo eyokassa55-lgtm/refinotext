@@ -47,3 +47,5 @@ data/humanizer_train_v2.jsonl
 data/humanizer_validation_v2.jsonl
 data/humanizer_train_v3.jsonl
 data/humanizer_validation_v3.jsonl
+data/humanizer_train_v4.jsonl
+data/humanizer_validation_v4.jsonl

@@ -65,8 +65,8 @@ export class HumanizationFailedError extends Error {
 const REWRITE_TOP_P = 0.95;
 
 /**
- * Unmatched drafts use the human_text-trained Vertex endpoint only after
- * `npm run bind:vertex` succeeds for OG REFINO human_text. Until then, a publisher
+ * Unmatched drafts use the rewrite-trained Vertex endpoint only after
+ * `npm run bind:vertex` succeeds for OG REFINO rewrite. Until then, a publisher
  * Gemini model rewrites with the same instruction. The older OG REFINO
  * endpoint is lookup-tuned and must not see new drafts.
  */

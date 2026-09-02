@@ -715,6 +715,11 @@ Rainforests also illustrate a much broader set of global development debates. It
     "human rewrite is not a lookup task",
     !HUMAN_REWRITE_SYSTEM_INSTRUCTION.includes("Find the matching human-written version"),
   );
+  assert(
+    "human rewrite forbids lazy copying and swapping in a related stored essay",
+    /not a copy job/i.test(HUMAN_REWRITE_SYSTEM_INSTRUCTION) &&
+      /related subject/i.test(HUMAN_REWRITE_SYSTEM_INSTRUCTION),
+  );
   const rewritePrompt = buildHumanRewriteInstruction({ text: NEW_ESSAY, intensity: 75 }, [
     { input: firstPair.input, output: firstPair.output },
   ]);
@@ -807,25 +812,34 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
   const exportSource = readFileSync(join(process.cwd(), "scripts", "export-vertex-training.mts"), "utf8");
   assert(
-    "v3 Vertex export writes the full set to validation, not a 90-row holdout",
-    exportSource.includes("humanizer_validation_v3.jsonl") && exportSource.includes("not a 90-row holdout"),
+    "v4 Vertex export writes the full set to validation, not a 90-row holdout",
+    exportSource.includes("humanizer_validation_v4.jsonl") && exportSource.includes("not a 90-row holdout"),
   );
   assert(
-    "Vertex export trains on human_text only and ignores ai_text",
-    exportSource.includes("human_text only") &&
-      exportSource.includes("row.output ?? row.human_text") &&
-      !exportSource.includes("row.input") &&
-      !exportSource.includes("row.ai_text"),
+    "Vertex export trains ai_text to human_text, not identity copy",
+    exportSource.includes("ai_text → human_text") &&
+      exportSource.includes("row.input ?? row.ai_text") &&
+      exportSource.includes("row.output ?? row.human_text"),
+  );
+  assert(
+    "Vertex export includes every stored pair with no topic filter",
+    exportSource.includes("every stored pair") &&
+      exportSource.includes("No topic filter") &&
+      exportSource.includes("exported.length + skippedIdentity !== lines.length"),
   );
   const trainSource = readFileSync(join(process.cwd(), "scripts", "start-vertex-tuning.mts"), "utf8");
   assert(
     "Vertex training job uses a full-set validation URI",
     trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("not a 90-row holdout"),
   );
+  assert(
+    "Vertex rewrite job uses extra epochs and a larger adapter so it learns the edit",
+    trainSource.includes('epochCount: "8"') && trainSource.includes("ADAPTER_SIZE_EIGHT"),
+  );
   const bindSource = readFileSync(join(process.cwd(), "scripts", "bind-tuned-endpoint.mts"), "utf8");
   assert(
-    "bind prefers the human_text job and does not fall back to lookup-tuned OG REFINO",
-    bindSource.includes('DEFAULT_JOB_NAME = "OG REFINO human_text"') &&
+    "bind prefers the rewrite job and does not fall back to lookup-tuned OG REFINO",
+    bindSource.includes('DEFAULT_JOB_NAME = "OG REFINO rewrite"') &&
       bindSource.includes("VERTEX_HUMAN_TEXT_MODEL") &&
       bindSource.includes("Not binding an older lookup-tuned job"),
   );
