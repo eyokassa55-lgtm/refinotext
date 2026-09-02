@@ -208,6 +208,34 @@ const FRIENDSHIP_PLAIN_ESSAY = `Friendship makes hard days easier. Trust, honest
 
 True friends listen, tell the truth, and stay when plans fall apart. That kind of support is worth more than a long list of contacts.`;
 
+const HISTORY_ESSAY = `# History
+
+History is the study of events, people, and societies from the past. It helps us understand how the world has changed over time and how earlier generations shaped the present. By studying history, we can learn about important discoveries, cultures, conflicts, achievements, and challenges faced by people throughout different periods.
+
+One important purpose of history is to help us learn from the past. Historical events can show us the consequences of good and bad decisions. For example, studying wars and political conflicts can help societies understand the importance of peace, cooperation, and responsible leadership. History also teaches us about the achievements of scientists, explorers, artists, and other individuals who influenced human development.
+
+History is preserved through many sources, including books, documents, photographs, buildings, artifacts, and oral traditions. Historians examine these sources to understand what happened and why. They organize events in chronological order so that relationships between different events can be understood more clearly.`;
+
+const AMERICAN_HISTORY_ESSAY = `American History
+
+The history of the United States of America encompasses many different periods and influences. From Indigenous nations to a modern country, wars, laws, and social movements shaped that path.`;
+
+const INTELLIGENCE_ONLY_ESSAY = `Intelligence is the ability to learn from experience and adapt to new situations. Schools try to measure it with tests, but curiosity and judgment also matter.
+
+People can grow their skills through practice, sleep, and good teaching. A single exam score does not tell the whole story.`;
+
+const CLIMATE_ONLY_ESSAY = `Climate is the typical weather of a place over many years. Oceans, winds, and latitude shape how warm or wet a region stays.
+
+People plan crops, homes, and travel around that long-run pattern, not around one unusual week.`;
+
+const SOCIAL_ONLY_ESSAY = `Social life is how people spend time with friends, family, and neighbors. Shared meals, clubs, and daily talk keep those bonds alive.
+
+Online posts can help, but they are not the same as showing up in person.`;
+
+const WORK_ONLY_ESSAY = `Work is the time and skill people give to a job or a craft. Pay, purpose, and fair conditions all shape whether that effort feels worthwhile.
+
+A good workplace makes room for rest as well as output.`;
+
 function meaningPreservation(input: string, output: string) {
   const quality = assessRewriteQuality(input, output);
   const meaningCodes = quality.issues
@@ -621,6 +649,57 @@ Rainforests also illustrate a much broader set of global development debates. It
       friendshipTopic!.output === friendshipPair.output,
     `row=${friendshipTopic?.index}`,
   );
+  const americanHistoryPair = getTrainingPairs().find((pair) =>
+    /^american history\b/i.test(pair.input.trim()),
+  );
+  assert("dataset includes an American History pair", Boolean(americanHistoryPair));
+  const historyTopic = findTopicMatch(HISTORY_ESSAY);
+  assert(
+    "a general History draft does not return American History",
+    historyTopic === null || historyTopic.index !== americanHistoryPair!.index,
+    `row=${historyTopic?.index}`,
+  );
+  assert(
+    "a general History draft does not substitute a different country's history",
+    historyTopic === null,
+    `row=${historyTopic?.index} opening=${historyTopic ? getTrainingPairs()[historyTopic.index]?.input.slice(0, 80) : "none"}`,
+  );
+  const americanHistoryTopic = findTopicMatch(AMERICAN_HISTORY_ESSAY);
+  assert(
+    "an American History draft finds the stored American History human_text",
+    americanHistoryTopic?.kind === "topic" &&
+      americanHistoryTopic.index === americanHistoryPair!.index &&
+      americanHistoryTopic.output === americanHistoryPair!.output,
+    `row=${americanHistoryTopic?.index}`,
+  );
+  const intelligenceTopic = findTopicMatch(INTELLIGENCE_ONLY_ESSAY);
+  const intelligenceStored = intelligenceTopic ? getTrainingPairs()[intelligenceTopic.index] : null;
+  assert(
+    "an intelligence draft does not return the artificial intelligence essay",
+    !intelligenceStored || !/^artificial intelligence\b/i.test(intelligenceStored.input.trim()),
+    `row=${intelligenceTopic?.index}`,
+  );
+  const climateOnlyTopic = findTopicMatch(CLIMATE_ONLY_ESSAY);
+  const climateOnlyStored = climateOnlyTopic ? getTrainingPairs()[climateOnlyTopic.index] : null;
+  assert(
+    "a climate draft does not return the climate change essay",
+    !climateOnlyStored || !/^climate change\b/i.test(climateOnlyStored.input.trim()),
+    `row=${climateOnlyTopic?.index}`,
+  );
+  const socialOnlyTopic = findTopicMatch(SOCIAL_ONLY_ESSAY);
+  const socialOnlyStored = socialOnlyTopic ? getTrainingPairs()[socialOnlyTopic.index] : null;
+  assert(
+    "a social draft does not return the social media essay",
+    !socialOnlyStored || !/^social media\b/i.test(socialOnlyStored.input.trim()),
+    `row=${socialOnlyTopic?.index}`,
+  );
+  const workOnlyTopic = findTopicMatch(WORK_ONLY_ESSAY);
+  const workOnlyStored = workOnlyTopic ? getTrainingPairs()[workOnlyTopic.index] : null;
+  assert(
+    "a work draft does not return the hard work essay",
+    !workOnlyStored || !/^hard work\b/i.test(workOnlyStored.input.trim()),
+    `row=${workOnlyTopic?.index}`,
+  );
   assert("trimmed exact paste still hits the dataset", Boolean(findExactTrainingMatch(`\n${firstPair.input}\n`)));
 
   const newPrompt = buildTunedSystemInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -696,6 +775,34 @@ Rainforests also illustrate a much broader set of global development debates. It
       error instanceof Error ? error.message : "unknown",
     );
   }
+  try {
+    await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
+    assert("a general History draft does not invent American History", false);
+  } catch (error) {
+    assert(
+      "History draft returns no training match instead of a narrower history essay",
+      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
+      error instanceof Error ? error.message : "unknown",
+    );
+  }
+  try {
+    await runEngineHumanization({ text: INTELLIGENCE_ONLY_ESSAY, intensity: 75 });
+    assert("an intelligence draft does not invent an artificial intelligence essay", false);
+  } catch (error) {
+    assert(
+      "intelligence draft returns no training match instead of an AI essay",
+      error instanceof HumanizationFailedError && error.code === "NO_TRAINING_MATCH",
+      error instanceof Error ? error.message : "unknown",
+    );
+  }
+  const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns exact paired human_text for an American History draft",
+    engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(americanHistoryPair) &&
+      engineAmericanHistory.text === americanHistoryPair!.output,
+    `source=${engineAmericanHistory.source} row=${engineAmericanHistory.retrieval?.matches[0]?.index}`,
+  );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",

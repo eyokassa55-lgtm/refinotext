@@ -4,8 +4,11 @@
  * The 722-pair corpus lives in `data/training_data.jsonl`. Humanize reads
  * topic keywords from the user's draft (a title, optional #hashtag, or
  * opening words) and matches them against every stored ai_text. The first
- * pair for that topic is returned with its human_text unchanged. A hashtag
- * is not required. Unrelated drafts do not generate a new essay.
+ * pair for that same topic is returned with its human_text unchanged. A
+ * hashtag is not required. This same-topic rule applies to every stored pair:
+ * a narrower or related subject does not replace the user's meaning
+ * (History vs American History, intelligence vs artificial intelligence).
+ * Unrelated drafts do not generate a new essay.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

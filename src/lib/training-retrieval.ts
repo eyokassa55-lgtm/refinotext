@@ -5,9 +5,11 @@ import { findExactTrainingMatch, findNormalizedTrainingMatch, findExactTrainingO
 import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
- * Keyword search over stored ai_text. Humanize reads the user's draft for a
- * main topic and returns that row's paired human_text. It does not require a
- * word-for-word copy of a stored draft.
+ * Keyword search over stored ai_text. Every training pair keeps its own topic
+ * identity (all opening topic words). Humanize returns that row's paired
+ * human_text only when the user's draft is that same topic. A related or
+ * narrower subject does not replace the user's meaning. It does not require
+ * a word-for-word copy of a stored draft.
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
@@ -157,6 +159,8 @@ const TOPIC_SYNONYMS: Record<string, string[]> = {
   computing: ["computer", "computers"],
   smartphone: ["smartphones", "mobile", "phones"],
   smartphones: ["smartphone", "mobile"],
+  american: ["america"],
+  america: ["american"],
 };
 
 const TECHNOLOGY_TERMS = new Set([
@@ -348,7 +352,6 @@ const TOPIC_FRAMES = new Set([
   "evolution",
   "field",
   "future",
-  "history",
   "impact",
   "importance",
   "influence",
@@ -372,8 +375,8 @@ function isTopicKeyword(term: string): boolean {
   return term.length >= 4;
 }
 
-function topicVariants(term: string): string[] {
-  const variants = new Set<string>([term, ...(TOPIC_SYNONYMS[term] ?? [])]);
+function morphologicalKeys(term: string): string[] {
+  const variants = new Set<string>([term]);
   if (term.endsWith("ies") && term.length > 5) {
     variants.add(`${term.slice(0, -3)}y`);
   } else if (term.endsWith("ss") || term.endsWith("us") || term.endsWith("is")) {
@@ -383,6 +386,12 @@ function topicVariants(term: string): string[] {
   } else {
     variants.add(`${term}s`);
   }
+  return [...variants];
+}
+
+function topicVariants(term: string): string[] {
+  const variants = new Set<string>([term, ...(TOPIC_SYNONYMS[term] ?? [])]);
+  for (const key of morphologicalKeys(term)) variants.add(key);
   return [...variants];
 }
 
@@ -451,6 +460,41 @@ function expandCatalogTerms(term: string): string[] {
   return [...out];
 }
 
+const TOPIC_PHRASE_BREAK =
+  /\b(?:is|are|was|were|has|have|had|do|does|did|can|will|may|might|must|should|would|could|means|refers|plays|remains|becomes|became|makes|make|made)\b/i;
+
+function topicPhraseTokens(text: string): string[] {
+  const heading = extractHeadingLine(text);
+  if (heading) {
+    const headingTokens = tokenizeTopic(heading);
+    const headingKeywords = headingTokens.filter(isTopicKeyword);
+    const chosen = headingKeywords.length > 0 ? headingKeywords : headingTokens.filter((token) => token.length >= 3);
+    if (chosen.length > 0) return chosen.slice(0, 3);
+  }
+
+  const first = firstSentences(text, 1);
+  const parts = first.split(TOPIC_PHRASE_BREAK);
+  const phrase = parts[0]?.trim() ? parts[0]! : first;
+  const raw = skipTopicFrames(tokenizeTopic(phrase));
+  const keywords = raw.filter(isTopicKeyword);
+  const chosen = keywords.length > 0 ? keywords : raw.filter((token) => token.length >= 3);
+  return chosen.slice(0, 3);
+}
+
+type CatalogEntry = {
+  pair: TrainingPair;
+  primary: string;
+  required: string[];
+};
+
+function pushUniqueTerm(terms: string[], seen: Set<string>, term: string): void {
+  const normalized = term.toLowerCase();
+  if (!normalized || seen.has(normalized)) return;
+  if (!normalized.includes("_") && !isTopicKeyword(normalized) && normalized.length < 3) return;
+  seen.add(normalized);
+  terms.push(normalized);
+}
+
 /**
  * Topic keywords from a user draft. A hashtag is optional.
  * Uses the title/heading if present, otherwise the opening topic words.
@@ -458,64 +502,100 @@ function expandCatalogTerms(term: string): string[] {
 function topicLookupTerms(text: string): string[] {
   const terms: string[] = [];
   const seen = new Set<string>();
-  const push = (term: string) => {
-    const normalized = term.toLowerCase();
-    if (!normalized || seen.has(normalized)) return;
-    if (!normalized.includes("_") && !isTopicKeyword(normalized)) return;
-    seen.add(normalized);
-    terms.push(normalized);
-  };
 
-  for (const tag of extractHashtagTopics(text)) push(tag);
+  for (const tag of extractHashtagTopics(text)) pushUniqueTerm(terms, seen, tag);
 
-  const heading = extractHeadingLine(text);
-  if (heading) {
-    for (const token of tokenizeTopic(heading).filter(isTopicKeyword)) push(token);
+  const phrase = topicPhraseTokens(text);
+  for (const token of phrase) pushUniqueTerm(terms, seen, token);
+  if (phrase[0] && phrase[1]) pushUniqueTerm(terms, seen, `${phrase[0]}_${phrase[1]}`);
+  if (phrase[0] && phrase[1] && phrase[2]) {
+    pushUniqueTerm(terms, seen, `${phrase[0]}_${phrase[1]}_${phrase[2]}`);
   }
-
-  const first = skipTopicFrames(tokenizeTopic(firstSentences(text, 1)).filter(isTopicKeyword));
-  for (const token of first.slice(0, 2)) push(token);
-  if (first[0] && first[1]) push(`${first[0]}_${first[1]}`);
 
   return terms;
 }
 
-/** Index keys for a stored ai_text: heading/hashtag plus the lead topic word. */
+function storedTopicIdentity(text: string): { primary: string; required: string[] } | null {
+  const hashtags = extractHashtagTopics(text);
+  const phrase = topicPhraseTokens(text);
+  const primary = phrase[0] ?? hashtags[0];
+  if (!primary) return null;
+
+  return {
+    primary,
+    required: phrase.length >= 2 ? compactRequired(phrase) : [primary],
+  };
+}
+
 function storedTopicKeys(text: string): string[] {
   const terms: string[] = [];
   const seen = new Set<string>();
-  const push = (term: string) => {
-    const normalized = term.toLowerCase();
-    if (!normalized || seen.has(normalized)) return;
-    if (!normalized.includes("_") && !isTopicKeyword(normalized)) return;
-    seen.add(normalized);
-    terms.push(normalized);
-  };
-
-  for (const tag of extractHashtagTopics(text)) push(tag);
-
-  const heading = extractHeadingLine(text);
-  if (heading) {
-    for (const token of tokenizeTopic(heading).filter(isTopicKeyword)) push(token);
+  const identity = storedTopicIdentity(text);
+  for (const tag of extractHashtagTopics(text)) pushUniqueTerm(terms, seen, tag);
+  if (identity?.primary) pushUniqueTerm(terms, seen, identity.primary);
+  const phrase = topicPhraseTokens(text);
+  if (phrase[0] && phrase[1]) pushUniqueTerm(terms, seen, `${phrase[0]}_${phrase[1]}`);
+  if (phrase[0] && phrase[1] && phrase[2]) {
+    pushUniqueTerm(terms, seen, `${phrase[0]}_${phrase[1]}_${phrase[2]}`);
   }
-
-  const first = skipTopicFrames(tokenizeTopic(firstSentences(text, 1)).filter(isTopicKeyword));
-  if (first[0]) push(first[0]);
-  if (first[0] && first[1]) push(`${first[0]}_${first[1]}`);
-
   return terms;
 }
 
-let cachedTopicCatalog: Map<string, TrainingPair> | null = null;
+function userCoverageSet(userTerms: string[]): Set<string> {
+  const set = new Set<string>();
+  for (const term of userTerms) {
+    for (const key of morphologicalKeys(term)) set.add(key);
+    if (term.includes("_")) {
+      for (const part of term.split("_")) {
+        for (const key of morphologicalKeys(part)) set.add(key);
+      }
+    }
+  }
+  return set;
+}
 
-function getTopicCatalog(): Map<string, TrainingPair> {
+function compactRequired(phrase: string[]): string[] {
+  const unique = [...new Set(phrase)];
+  const hasAiWords = unique.includes("artificial") || unique.includes("intelligence");
+  return unique.filter((term) => !(term === "ai" && hasAiWords));
+}
+
+function coversRequired(required: string[], userTerms: Set<string>): boolean {
+  return required.every((term) => {
+    if (topicVariants(term).some((key) => userTerms.has(key))) return true;
+    if (term === "american" && userTerms.has("america")) return true;
+    if (term === "america" && userTerms.has("american")) return true;
+    if ((term === "technology" || term === "technological") && (userTerms.has("tech") || userTerms.has("technology"))) {
+      return true;
+    }
+    if (term === "tech" && (userTerms.has("technology") || userTerms.has("technological"))) return true;
+    if ((term === "artificial" || term === "intelligence") && userTerms.has("ai")) return true;
+    return false;
+  });
+}
+
+let cachedTopicCatalog: Map<string, CatalogEntry[]> | null = null;
+
+function getTopicCatalog(): Map<string, CatalogEntry[]> {
   if (cachedTopicCatalog) return cachedTopicCatalog;
 
-  const catalog = new Map<string, TrainingPair>();
+  const catalog = new Map<string, CatalogEntry[]>();
   for (const pair of getTrainingPairs()) {
+    const identity = storedTopicIdentity(pair.input);
+    if (!identity) continue;
+    const entry: CatalogEntry = {
+      pair,
+      primary: identity.primary,
+      required: identity.required,
+    };
     for (const term of storedTopicKeys(pair.input)) {
       for (const key of expandCatalogTerms(term)) {
-        if (!catalog.has(key)) catalog.set(key, pair);
+        const bucket = catalog.get(key);
+        if (bucket) {
+          if (!bucket.some((item) => item.pair.index === entry.pair.index)) bucket.push(entry);
+        } else {
+          catalog.set(key, [entry]);
+        }
       }
     }
   }
@@ -1078,25 +1158,42 @@ export function peekClosestTrainingScore(userText: string): { index: number; sco
 /**
  * Keyword search over all 722 stored pairs. Hashtags are optional.
  * Reads title, heading, or opening topic words from the user's draft,
- * finds the first training row for that topic, and returns that row's
- * paired human_text unchanged.
+ * finds the first training row for that same topic, and returns that row's
+ * paired human_text unchanged. Every pair uses its full topic identity, so a
+ * narrower or related stored subject does not replace the user's meaning.
  */
 export function findTopicMatch(userText: string): DatabaseTrainingMatch | null {
   const catalog = getTopicCatalog();
-  for (const term of topicLookupTerms(userText)) {
-    let pair: TrainingPair | undefined;
-    for (const key of expandCatalogTerms(term)) {
-      pair = catalog.get(key);
-      if (pair) break;
-    }
-    if (!pair) continue;
+  const userTerms = topicLookupTerms(userText);
+  const userTermSet = userCoverageSet(userTerms);
+  const seen = new Set<number>();
+  const candidates: CatalogEntry[] = [];
 
-    const match = lockedPair(pair, 0.92, "topic");
-    if (match.index !== pair.index || match.output !== pair.output) {
-      return null;
+  for (const term of userTerms) {
+    for (const key of expandCatalogTerms(term)) {
+      const bucket = catalog.get(key);
+      if (!bucket) continue;
+      for (const entry of bucket) {
+        if (seen.has(entry.pair.index)) continue;
+        if (!coversRequired(entry.required, userTermSet)) continue;
+        seen.add(entry.pair.index);
+        candidates.push(entry);
+      }
     }
-    return match;
   }
 
-  return null;
+  if (candidates.length === 0) return null;
+
+  candidates.sort((left, right) => {
+    const bySpecificity = right.required.length - left.required.length;
+    if (bySpecificity !== 0) return bySpecificity;
+    return left.pair.index - right.pair.index;
+  });
+
+  const best = candidates[0]!;
+  const match = lockedPair(best.pair, 0.92, "topic");
+  if (match.index !== best.pair.index || match.output !== best.pair.output) {
+    return null;
+  }
+  return match;
 }
