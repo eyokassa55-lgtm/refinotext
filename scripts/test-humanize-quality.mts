@@ -13,6 +13,7 @@ config();
 import { parseServiceAccountJson } from "../src/lib/vertex-auth";
 import {
   HUMAN_REWRITE_SYSTEM_INSTRUCTION,
+  HUMAN_REWRITE_V2_SYSTEM_INSTRUCTION,
   OG_REFINO_TRAINING_SYSTEM_INSTRUCTION,
   TUNED_TRAINING_SYSTEM_INSTRUCTION,
   buildAntiTemplateRewriteInstruction,
@@ -720,6 +721,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     /not a copy job/i.test(HUMAN_REWRITE_SYSTEM_INSTRUCTION) &&
       /related subject/i.test(HUMAN_REWRITE_SYSTEM_INSTRUCTION),
   );
+  assert(
+    "v2 rewrite instruction matches the ai_text to human_text JSONL",
+    HUMAN_REWRITE_V2_SYSTEM_INSTRUCTION.startsWith("Rewrite the AI draft into natural human prose"),
+  );
   const rewritePrompt = buildHumanRewriteInstruction({ text: NEW_ESSAY, intensity: 75 }, [
     { input: firstPair.input, output: firstPair.output },
   ]);
@@ -840,6 +845,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "bind prefers the rewrite job and does not fall back to lookup-tuned OG REFINO",
     bindSource.includes('DEFAULT_JOB_NAME = "OG REFINO rewrite"') &&
+      bindSource.includes("OG REFINO v3") &&
+      bindSource.includes("isRewriteMappingJob") &&
       bindSource.includes("VERTEX_HUMAN_TEXT_MODEL") &&
       bindSource.includes("Not binding an older lookup-tuned job"),
   );
@@ -937,7 +944,7 @@ async function runLiveTests() {
   if (isVertexConfigured()) {
     const vertex = requireVertexConfig();
     const tunedModel = redactModelName(vertex.model);
-    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts rewrite until VERTEX_HUMAN_TEXT_MODEL=1`);
+    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts use the rewrite-trained endpoint when VERTEX_HUMAN_TEXT_MODEL=1`);
     assert(
       "Vertex endpoint env is a resource id",
       tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),

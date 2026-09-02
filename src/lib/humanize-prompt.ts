@@ -269,7 +269,20 @@ Return only the full text.`;
 }
 
 /**
- * Rewrite instruction for unseen drafts and for OG REFINO rewrite training.
+ * Exact system line from OG REFINO v2 / v3 Vertex JSONL
+ * (`data/humanizer_train_v2.jsonl`, user=ai_text, model=human_text).
+ */
+export const HUMAN_REWRITE_V2_SYSTEM_INSTRUCTION = `Rewrite the AI draft into natural human prose.
+
+Keep the same topic, meaning, facts, names, numbers, dates, and paragraph breaks.
+Change sentence openings and rhythm so it reads like a person wrote it in one sitting.
+Ordinary words are better than polished template phrasing. A little repetition is fine.
+Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
+Never turn a multi-paragraph draft into a short summary.
+Return only the rewritten text.`;
+
+/**
+ * Rewrite instruction for OG REFINO rewrite (v4) training.
  * Teaches the gold human_text edit. Not a copy of the input, and not a
  * lookup of a different stored essay on a related topic.
  */
@@ -282,6 +295,13 @@ Do not replace the draft with a different essay on a related subject.
 Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
 Ordinary words are better than polished template phrasing. A little repetition is fine.
 Return only the rewritten text.`;
+
+/** System line that matches the bound rewrite-trained endpoint. */
+export function activeRewriteSystemInstruction(): string {
+  return process.env.VERTEX_REWRITE_PROMPT?.trim() === "v4"
+    ? HUMAN_REWRITE_SYSTEM_INSTRUCTION
+    : HUMAN_REWRITE_V2_SYSTEM_INSTRUCTION;
+}
 
 /**
  * Base role line for the Vertex tuned endpoint.
@@ -454,11 +474,14 @@ export function buildHumanRewriteInstruction(
   request: HumanizePromptRequest,
   examples: Array<{ input?: string; output: string }> = [],
 ): string {
+  const trainingAligned = process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
   const tone =
-    request.tone && request.tone !== "standard" ? `\n${tunedToneGuidance(request.tone)}` : "";
+    !trainingAligned && request.tone && request.tone !== "standard"
+      ? `\n${tunedToneGuidance(request.tone)}`
+      : "";
   const readability = request.readability?.trim();
   const readingNote =
-    readability && readability !== "General Audience"
+    !trainingAligned && readability && readability !== "General Audience"
       ? `\nMatch a ${readability} reading level while keeping the same claims.`
       : "";
 
@@ -482,7 +505,7 @@ ${clipStyleReference(demo.output)}
 `
     : "";
 
-  return `${HUMAN_REWRITE_SYSTEM_INSTRUCTION}${tone}${readingNote}
+  return `${activeRewriteSystemInstruction()}${tone}${readingNote}
 ${lengthNote}
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.
