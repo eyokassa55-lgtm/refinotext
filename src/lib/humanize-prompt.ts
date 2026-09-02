@@ -272,7 +272,7 @@ Return only the full text.`;
  * Rewrite instruction for unseen drafts and for OG REFINO v2 training.
  * This is a rewrite task, not “find the matching stored human_text.”
  */
-export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the AI draft into natural human prose.
+export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the draft into natural human prose.
 
 Keep the same topic, meaning, facts, names, numbers, dates, and paragraph breaks.
 Change sentence openings and rhythm so it reads like a person wrote it in one sitting.

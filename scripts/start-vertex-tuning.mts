@@ -4,10 +4,11 @@
  * Requires:
  * - GOOGLE_CLOUD_PROJECT
  * - GOOGLE_SERVICE_ACCOUNT_JSON (or ADC)
- * - TRAINING_DATA_GCS_URI=gs://bucket/path/training_data.jsonl
+ * - TRAINING_DATA_GCS_URI=gs://bucket/path/humanizer_trainOG_v3.jsonl
+ *   (exported human_text-only JSONL, not raw ai_text/human_text pairs)
  *
  * Optional:
- * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v2.jsonl
+ * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v3.jsonl
  *   (defaults to the training URI so validation is the full set, not a 90-row holdout)
  *
  * Run: npm run train:vertex
@@ -36,7 +37,7 @@ async function main() {
   const datasetUri = cleanEnv(process.env.TRAINING_DATA_GCS_URI);
   const validationUri =
     cleanEnv(process.env.VALIDATION_DATA_GCS_URI) ?? datasetUri;
-  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO v2";
+  const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO v3";
   const baseModel =
     cleanEnv(process.env.VERTEX_BASE_MODEL) ?? "gemini-2.5-flash-lite";
 
@@ -47,7 +48,7 @@ async function main() {
   }
   if (!datasetUri?.startsWith("gs://")) {
     console.error(
-      "Set TRAINING_DATA_GCS_URI to a gs:// path for data/training_data.jsonl before training.",
+      "Set TRAINING_DATA_GCS_URI to a gs:// path for the exported human_text Vertex JSONL before training.",
     );
     process.exitCode = 1;
     return;

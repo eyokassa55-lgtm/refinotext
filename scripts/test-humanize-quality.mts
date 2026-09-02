@@ -814,8 +814,15 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
   const exportSource = readFileSync(join(process.cwd(), "scripts", "export-vertex-training.mts"), "utf8");
   assert(
-    "v2 Vertex export writes the full set to validation, not a 90-row holdout",
-    exportSource.includes("humanizer_validation_v2.jsonl") && exportSource.includes("not a 90-row holdout"),
+    "v3 Vertex export writes the full set to validation, not a 90-row holdout",
+    exportSource.includes("humanizer_validation_v3.jsonl") && exportSource.includes("not a 90-row holdout"),
+  );
+  assert(
+    "Vertex export trains on human_text only and ignores ai_text",
+    exportSource.includes("human_text only") &&
+      exportSource.includes("row.output ?? row.human_text") &&
+      !exportSource.includes("row.input") &&
+      !exportSource.includes("row.ai_text"),
   );
   const trainSource = readFileSync(join(process.cwd(), "scripts", "start-vertex-tuning.mts"), "utf8");
   assert(

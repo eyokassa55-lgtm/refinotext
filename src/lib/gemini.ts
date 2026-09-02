@@ -414,7 +414,7 @@ function maxOutputTokensFor(text: string, requested?: number): number {
 }
 
 /**
- * Keep the live draft as close as possible to training `ai_text`:
+ * Keep the live draft as close as possible to training user text:
  * BOM/CRLF cleanup only. Do not wrap, prefix, or collapse paragraphs.
  */
 export function preserveSourceText(text: string): string {
