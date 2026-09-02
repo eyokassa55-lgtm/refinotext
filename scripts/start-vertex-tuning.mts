@@ -6,6 +6,10 @@
  * - GOOGLE_SERVICE_ACCOUNT_JSON (or ADC)
  * - TRAINING_DATA_GCS_URI=gs://bucket/path/training_data.jsonl
  *
+ * Optional:
+ * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v2.jsonl
+ *   (defaults to the training URI so validation is the full set, not a 90-row holdout)
+ *
  * Run: npm run train:vertex
  */
 import { config } from "dotenv";
@@ -30,6 +34,8 @@ async function main() {
     cleanEnv(process.env.VERTEX_AI_LOCATION) ??
     "us-central1";
   const datasetUri = cleanEnv(process.env.TRAINING_DATA_GCS_URI);
+  const validationUri =
+    cleanEnv(process.env.VALIDATION_DATA_GCS_URI) ?? datasetUri;
   const displayName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? "OG REFINO v2";
   const baseModel =
     cleanEnv(process.env.VERTEX_BASE_MODEL) ?? "gemini-2.5-flash-lite";
@@ -51,7 +57,8 @@ async function main() {
     .split(/\r?\n/)
     .filter(Boolean).length;
   console.log(`Local training rows: ${localRows}`);
-  console.log(`Dataset URI: ${datasetUri}`);
+  console.log(`Training URI: ${datasetUri}`);
+  console.log(`Validation URI: ${validationUri} (full set, not a 90-row holdout)`);
   console.log(`Job name: ${displayName}`);
   console.log(`Base model: ${baseModel}`);
 
@@ -73,7 +80,7 @@ async function main() {
     baseModel,
     supervisedTuningSpec: {
       trainingDatasetUri: datasetUri,
-      validationDatasetUri: datasetUri,
+      validationDatasetUri: validationUri,
     },
     tunedModelDisplayName: displayName,
   };

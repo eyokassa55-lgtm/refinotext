@@ -549,6 +549,16 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("exact match API source is database", toApiSource("EXACT_TRAINING_MATCH") === "database");
   assert("same-draft API source is database", toApiSource("DATABASE_SIMILARITY_MATCH") === "database");
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
+  const exportSource = readFileSync(join(process.cwd(), "scripts", "export-vertex-training.mts"), "utf8");
+  assert(
+    "v2 Vertex export writes the full set to validation, not a 90-row holdout",
+    exportSource.includes("humanizer_validation_v2.jsonl") && exportSource.includes("not a 90-row holdout"),
+  );
+  const trainSource = readFileSync(join(process.cwd(), "scripts", "start-vertex-tuning.mts"), "utf8");
+  assert(
+    "Vertex training job uses a full-set validation URI",
+    trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("not a 90-row holdout"),
+  );
 
   console.log("\n3e. Grubby MCP payload parsing");
   assert("uses the official Grubby MCP URL", GRUBBY_MCP_URL === "https://grubby.ai/api/mcp");

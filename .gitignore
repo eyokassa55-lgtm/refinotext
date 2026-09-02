@@ -44,3 +44,4 @@ next-env.d.ts
 
 # generated Vertex export (from npm run export:vertex-training)
 data/humanizer_train_v2.jsonl
+data/humanizer_validation_v2.jsonl

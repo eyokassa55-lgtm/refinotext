@@ -89,10 +89,14 @@ async function main() {
   const project = cleanEnv(process.env.GOOGLE_CLOUD_PROJECT);
   let bucket = cleanEnv(process.env.TRAINING_GCS_BUCKET) ?? (project ? defaultBucketName(project) : undefined);
   const object = cleanEnv(process.env.TRAINING_GCS_OBJECT) ?? "humanizer_trainOG_v2.jsonl";
+  const validationObject =
+    cleanEnv(process.env.VALIDATION_GCS_OBJECT) ?? "humanizer_validationOG_v2.jsonl";
   const localPath =
     cleanEnv(process.env.TRAINING_LOCAL_PATH) ??
     join(process.cwd(), "data", "humanizer_train_v2.jsonl");
-  const body = readFileSync(localPath);
+  const validationPath =
+    cleanEnv(process.env.VALIDATION_LOCAL_PATH) ??
+    join(process.cwd(), "data", "humanizer_validation_v2.jsonl");
 
   if (!project) {
     console.error("GOOGLE_CLOUD_PROJECT is missing.");
@@ -144,26 +148,35 @@ async function main() {
     bucket = used;
   }
 
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(object)}`;
-  const res = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/jsonl",
-    },
-    body,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`Upload failed [${res.status}]:`, text.slice(0, 500));
-    process.exitCode = 1;
-    return;
+  async function uploadObject(name: string, path: string) {
+    const fileBody = readFileSync(path);
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(name)}`;
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/jsonl",
+      },
+      body: fileBody,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Upload failed for ${name} [${res.status}]: ${text.slice(0, 500)}`);
+    }
+    const uri = `gs://${bucket}/${name}`;
+    console.log(`Uploaded ${fileBody.length} bytes to ${uri}`);
+    return uri;
   }
 
-  const uri = `gs://${bucket}/${object}`;
-  console.log(`Uploaded ${body.length} bytes to ${uri}`);
-  console.log(`Set TRAINING_DATA_GCS_URI=${uri}`);
+  try {
+    const trainUri = await uploadObject(object, localPath);
+    const validationUri = await uploadObject(validationObject, validationPath);
+    console.log(`Set TRAINING_DATA_GCS_URI=${trainUri}`);
+    console.log(`Set VALIDATION_DATA_GCS_URI=${validationUri}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
 }
 
 await main();
