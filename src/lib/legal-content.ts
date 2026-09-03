@@ -51,7 +51,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
           {
             title: "Writing you submit",
             content:
-              "When you run a rewrite, we process the text you paste, your selected tone, readability, and rewrite strength, and the generated output. We store rewrite records as needed to operate credits, prevent duplicate charges, and provide the service.",
+              "When you run a rewrite, we process the text you paste and the generated output. We store rewrite records as needed to operate credits, prevent duplicate charges, and provide the service.",
           },
           {
             title: "Usage and logs",
@@ -144,8 +144,6 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
           "RefinoText provides AI-assisted rewriting so drafts can read more clearly and naturally while aiming to preserve meaning. Current features include:",
         bullets: [
           "A web editor for pasting text and receiving a rewrite",
-          "Tone options: Standard, Academic, Conversational, and Executive",
-          "Readability and rewrite-strength controls",
           "Word-based credits (1 word pasted = 1 credit) and plan request limits",
         ],
       },

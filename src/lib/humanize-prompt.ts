@@ -474,17 +474,6 @@ export function buildHumanRewriteInstruction(
   request: HumanizePromptRequest,
   examples: Array<{ input?: string; output: string }> = [],
 ): string {
-  const trainingAligned = process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
-  const tone =
-    !trainingAligned && request.tone && request.tone !== "standard"
-      ? `\n${tunedToneGuidance(request.tone)}`
-      : "";
-  const readability = request.readability?.trim();
-  const readingNote =
-    !trainingAligned && readability && readability !== "General Audience"
-      ? `\nMatch a ${readability} reading level while keeping the same claims.`
-      : "";
-
   const draft = request.text?.trim() ?? "";
   const words = draft ? draft.split(/\s+/).filter(Boolean).length : 0;
   const paragraphs = draft ? draft.split(/\n\s*\n/).filter((part) => part.trim()).length : 0;
@@ -505,7 +494,7 @@ ${clipStyleReference(demo.output)}
 `
     : "";
 
-  return `${activeRewriteSystemInstruction()}${tone}${readingNote}
+  return `${activeRewriteSystemInstruction()}
 ${lengthNote}
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.

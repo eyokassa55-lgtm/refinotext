@@ -82,7 +82,7 @@ function unmatchedRewriteTemperature(backend: GenerateBackend): number {
   return backend === "tuned" ? 0.55 : 0.62;
 }
 
-function rewriteGenerationOptions(request: HumanizeRequest, temperature: number) {
+function rewriteGenerationOptions(temperature: number) {
   return {
     temperature,
     topP: REWRITE_TOP_P,
@@ -112,7 +112,7 @@ async function rewriteWithModel(
 ): Promise<string> {
   return generateText(request.text, {
     systemInstruction: options.systemInstruction,
-    ...rewriteGenerationOptions(request, options.temperature),
+    ...rewriteGenerationOptions(options.temperature),
     backend: options.backend,
     thinkingBudget: 0,
   });
@@ -175,11 +175,10 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
   const backend = unmatchedRewriteBackend();
   const temperature = unmatchedRewriteTemperature(backend);
   const vertex = getVertexConfig();
-  const systemInstruction = buildHumanRewriteInstruction(request, []);
+  const systemInstruction = buildHumanRewriteInstruction({ text: request.text }, []);
 
   console.info("[humanize] [MODEL_GENERATED]", {
     rows: getTrainingRowCount(),
-    tone: request.tone ?? "standard",
     backend,
     humanTextTuned: isHumanTextTunedReady(),
     model:
@@ -187,7 +186,6 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
         ? redactModelName(vertex.model)
         : redactModelName("gemini-2.5-flash"),
     location: vertex?.location,
-    intensity: request.intensity ?? 75,
   });
 
   const outputRaw = await rewriteWithModel(request, {

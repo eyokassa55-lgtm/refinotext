@@ -31,7 +31,7 @@ export function FeaturesSection() {
         <SectionHeader
           eyebrow="Features"
           title="Tools for clearer AI-assisted writing"
-          description="Tone, readability, and meaning-preserving rewrites for students, creators, and professionals."
+          description="Meaning-preserving rewrites for students, creators, and professionals."
           className="mb-14"
         />
 

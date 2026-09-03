@@ -12,12 +12,12 @@ export function HowItWorksSection() {
       <Container>
         <SectionHeader
           eyebrow="How it works"
-          title="Four steps to a clearer rewrite"
-          description="Paste a draft, choose tone, generate a rewrite, then review it yourself."
+          title="Three steps to a clearer rewrite"
+          description="Paste a draft, click Humanize, then review it yourself."
           className="mb-14"
         />
 
-        <ol className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {HOW_IT_WORKS.map((step, index) => (
             <li key={step.step} className="relative">
               {index < HOW_IT_WORKS.length - 1 && (

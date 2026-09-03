@@ -15,11 +15,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
-import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizerControls } from "./humanizer-controls";
-import { READABILITY_LEVELS } from "@/lib/landing-data";
 
 export function HumanizerWorkspace() {
   if (!isClerkEnabled) {
@@ -37,9 +35,6 @@ function HumanizerWorkspaceWithAuth() {
 function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [tone, setTone] = useState("standard");
-  const [intensity, setIntensity] = useState(75);
-  const [readability, setReadability] = useState<string>(READABILITY_LEVELS[1]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState<"input" | "output" | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -52,8 +47,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const requestKeyRef = useRef<string | null>(null);
 
   const inputWordCount = countWords(input);
-  const showConversationalHint =
-    looksLikeGenericEssay(input) && (tone === "standard" || tone === "academic");
   const outputWordCount = countWords(output);
 
   const notifyStatus = (msg: string) => {
@@ -80,9 +73,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     isProcessingRef.current = true;
     setIsProcessing(true);
 
-    // Fresh id on every click so Humanize always uses the current tone/level/intensity.
     requestIdRef.current = crypto.randomUUID();
-    requestKeyRef.current = `${text}\0${tone}\0${readability}\0${intensity}`;
+    requestKeyRef.current = text;
 
     try {
       const res = await fetch("/api/humanize", {
@@ -92,9 +84,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         },
         body: JSON.stringify({
           text,
-          tone,
-          readability,
-          intensity,
           requestId: requestIdRef.current,
         }),
       });
@@ -123,7 +112,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
-  }, [input, intensity, isSignedIn, readability, tone]);
+  }, [input, isSignedIn]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -429,7 +418,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                   </p>
                   <p className="mt-2 max-w-xs text-sm text-muted">
                     {isSignedIn
-                      ? "Paste your draft, choose settings, then click Humanize"
+                      ? "Paste your draft, then click Humanize"
                       : "Sign in first, then paste your draft and humanize"}
                   </p>
                 </div>
@@ -439,27 +428,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         </div>
       </div>
 
-      {showConversationalHint ? (
-        <p className="rounded-lg border border-border bg-mint-dark/40 px-3 py-2 text-xs leading-relaxed text-muted">
-          This draft reads like a generic topic essay. For a more natural rhythm, try{" "}
-          <button
-            type="button"
-            onClick={() => setTone("conversational")}
-            className="font-semibold text-primary underline-offset-2 hover:underline"
-          >
-            Conversational
-          </button>{" "}
-          tone. Intensity does not need to be at 100%.
-        </p>
-      ) : null}
-
       <HumanizerControls
-        tone={tone}
-        onToneChange={setTone}
-        intensity={intensity}
-        onIntensityChange={setIntensity}
-        readability={readability}
-        onReadabilityChange={setReadability}
         onRefine={handleRefine}
         isLoading={isProcessing}
         disabled={!input.trim()}

@@ -25,9 +25,9 @@ export const FEATURES = [
     icon: "sparkles",
   },
   {
-    title: "Multiple tone options",
+    title: "Same topic, same facts",
     description:
-      "Choose Standard, Academic, Conversational, or Executive tone to match your audience.",
+      "The rewrite keeps names, dates, numbers, and the original argument. It does not swap in a related essay.",
     icon: "palette",
   },
   {
@@ -83,18 +83,12 @@ export const HOW_IT_WORKS = [
   },
   {
     step: "02",
-    title: "Choose tone and readability",
+    title: "Click Humanize",
     description:
-      "Select Standard, Academic, Conversational, or Executive tone, then set readability and rewrite strength.",
+      "RefinoText rewrites the draft into natural prose while keeping the same topic, meaning, and facts.",
   },
   {
     step: "03",
-    title: "Generate a rewrite",
-    description:
-      "RefinoText rewrites the text for clarity, tone, and readability while aiming to preserve meaning.",
-  },
-  {
-    step: "04",
     title: "Review and copy",
     description:
       "Read the output, copy it, and keep editing in your own voice before you publish or submit it.",
@@ -139,8 +133,7 @@ export type PricingPlan = {
   href: string;
 };
 
-const SHARED_TONES =
-  "Standard, Academic, Conversational, and Executive tones";
+const SHARED_REWRITE = "Natural rewrite that keeps your meaning";
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
@@ -154,7 +147,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "500 credits per month (500 words)",
       "Up to 500 words per request",
-      SHARED_TONES,
+      SHARED_REWRITE,
       "Email support",
     ],
     cta: "Get started free",
@@ -172,7 +165,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "8,000 credits per month (8,000 words)",
       "Up to 600 words per request",
-      SHARED_TONES,
+      SHARED_REWRITE,
       "Email support",
     ],
     cta: "Continue to Polar checkout",
@@ -191,7 +184,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "40,000 credits per month (40,000 words)",
       "Up to 2,000 words per request",
-      SHARED_TONES,
+      SHARED_REWRITE,
       "Email support",
     ],
     cta: "Continue to Polar checkout",
@@ -209,7 +202,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       "90,000 credits per month (90,000 words)",
       "Up to 3,000 words per request",
-      SHARED_TONES,
+      SHARED_REWRITE,
       "Email support",
     ],
     cta: "Continue to Polar checkout",
@@ -261,12 +254,12 @@ export const FAQ_ITEMS = [
   {
     question: "What does RefinoText do?",
     answer:
-      "You paste text, choose tone and readability, and receive a rewritten version. Typical controls are Standard, Academic, Conversational, or Executive tone, a readability level, and rewrite strength. The product does not claim to beat AI detectors or to make writing undetectable.",
+      "You paste text and receive a rewritten version that aims to keep your meaning. The product does not claim to beat AI detectors or to make writing undetectable.",
   },
   {
     question: "How does it work?",
     answer:
-      "Sign in, paste your draft into the editor, choose settings, and run a rewrite. Credits are charged on the words you paste in, at 1 word = 1 credit, not on the length of the output. You can then copy the result and keep editing it yourself.",
+      "Sign in, paste your draft into the editor, and run a rewrite. Credits are charged on the words you paste in, at 1 word = 1 credit, not on the length of the output. You can then copy the result and keep editing it yourself.",
   },
   {
     question: "What do users receive?",

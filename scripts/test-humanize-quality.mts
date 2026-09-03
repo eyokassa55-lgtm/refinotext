@@ -742,7 +742,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("Humanize engine rewrites unmatched drafts instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
   assert(
     "unmatched drafts use the human_text rewrite instruction, not OG lookup",
-    engineSource.includes("buildHumanRewriteInstruction(request, [])") &&
+    engineSource.includes("buildHumanRewriteInstruction({ text: request.text }, [])") &&
       !engineSource.includes("buildOgRefinoInferenceInstruction"),
   );
   assert(

@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     return errorResponse("Invalid request body.", "INVALID_BODY", 400);
   }
 
-  const { text, tone, readability, intensity } = parsed;
+  const { text } = parsed;
 
   let check;
   try {
@@ -155,13 +155,7 @@ export async function POST(req: NextRequest) {
     where: { requestId },
   });
 
-  if (
-    previous &&
-    previous.inputText === text &&
-    (previous.tone ?? null) === (tone ?? null) &&
-    (previous.readability ?? null) === (readability ?? null) &&
-    (previous.intensity ?? null) === (intensity ?? null)
-  ) {
+  if (previous && previous.inputText === text) {
     return humanizeSuccess({
       id: previous.id,
       output: previous.outputText,
@@ -176,7 +170,7 @@ export async function POST(req: NextRequest) {
   let output: string;
   let source: "database" | "model";
   try {
-    const result = await runHumanization({ text, tone, readability, intensity });
+    const result = await runHumanization({ text });
     output = result.text;
     source = toApiSource(result.source);
   } catch (error) {
@@ -204,9 +198,9 @@ export async function POST(req: NextRequest) {
       wordCount: check.wordCount,
       text,
       output,
-      tone: tone ?? null,
-      readability: readability ?? null,
-      intensity: intensity ?? null,
+      tone: null,
+      readability: null,
+      intensity: null,
     });
 
     return humanizeSuccess({
