@@ -758,6 +758,12 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("Humanize engine does not use word-for-word ai_text matching", !engineSource.includes("findDatabaseMatch"));
   assert("Humanize engine rewrites unmatched drafts instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
   assert(
+    "Humanize engine rejects a half-length summary",
+    engineSource.includes("REJECT_SHORT_RATIO = 0.8") &&
+      engineSource.includes("RETRY_SHORT_RATIO = 0.85") &&
+      engineSource.includes("MAX_REWRITE_REPAIRS = 2"),
+  );
+  assert(
     "unmatched drafts use the human_text rewrite instruction, not OG lookup",
     engineSource.includes("buildHumanRewriteInstruction({ text: request.text }, [])") &&
       !engineSource.includes("buildOgRefinoInferenceInstruction"),

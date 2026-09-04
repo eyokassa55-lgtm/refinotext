@@ -398,7 +398,7 @@ export function assessRewriteQuality(
 
   const inCount = countWords(input);
   const outCount = countWords(output);
-  if (inCount >= 40 && outCount < inCount * 0.55 && !isHighlyRepetitive(input)) {
+  if (inCount >= 40 && outCount < inCount * 0.8 && !isHighlyRepetitive(input)) {
     issues.push({
       code: "TOO_SHORT",
       message: "The rewrite removed too much information.",

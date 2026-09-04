@@ -479,7 +479,7 @@ export function buildHumanRewriteInstruction(
   const paragraphs = draft ? draft.split(/\n\s*\n/).filter((part) => part.trim()).length : 0;
   const lengthNote =
     words > 0
-      ? `The user's draft is ${words} words in ${Math.max(1, paragraphs)} paragraph(s). Your rewrite must stay within about 15% of that word count and keep those paragraph breaks. A short summary is not allowed.`
+      ? `The user's draft is ${words} words in ${Math.max(1, paragraphs)} paragraph(s). Write about ${words} words — stay within 15% of that count and keep those paragraph breaks. A half-length summary is not a rewrite and is not allowed.`
       : "Keep approximately the same length as the user's draft.";
 
   const demo = examples.find((example) => example.input?.trim() && example.output.trim());

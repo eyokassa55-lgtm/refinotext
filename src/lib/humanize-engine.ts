@@ -64,6 +64,11 @@ export class HumanizationFailedError extends Error {
 }
 
 const REWRITE_TOP_P = 0.95;
+/** Retry if the rewrite falls below this share of the draft's word count. */
+const RETRY_SHORT_RATIO = 0.85;
+/** Reject after retries if still shorter than this. A half-length summary is not a rewrite. */
+const REJECT_SHORT_RATIO = 0.8;
+const MAX_REWRITE_REPAIRS = 2;
 
 /**
  * Unmatched drafts use the rewrite-trained Vertex endpoint after
@@ -150,7 +155,7 @@ function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
 function rewritePenalty(input: string, output: string): number {
   const inWords = countWords(input);
   const outWords = countWords(output);
-  const tooShort = inWords >= 40 && outWords < inWords * 0.7;
+  const tooShort = inWords >= 40 && outWords < inWords * RETRY_SHORT_RATIO;
   const tooLong = inWords >= 40 && outWords > inWords * 1.55;
   const copy = phraseCopyRatio(input, output);
   const quality = assessRewriteQuality(input, output);
@@ -213,12 +218,16 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
   }
 
   const inputWords = countWords(request.text);
-  const tooShort = inputWords >= 40 && countWords(output) < inputWords * 0.7;
-  const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
-  const droppedFacts = missingFactsForRetry(request.text, output);
+  const isShort = (text: string) => inputWords >= 40 && countWords(text) < inputWords * RETRY_SHORT_RATIO;
+  let tooShort = isShort(output);
+  let copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
+  let droppedFacts = missingFactsForRetry(request.text, output);
 
-  if (tooShort || copiedTooClosely || droppedFacts.length > 0) {
-    console.info("[humanize] retrying once because the rewrite is truncated, copied, or missing facts", {
+  for (let attempt = 0; attempt < MAX_REWRITE_REPAIRS; attempt += 1) {
+    if (!tooShort && !copiedTooClosely && droppedFacts.length === 0) break;
+
+    console.info("[humanize] retrying because the rewrite is truncated, copied, or missing facts", {
+      attempt: attempt + 1,
       tooShort,
       copiedTooClosely,
       droppedFacts,
@@ -229,29 +238,35 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
 
     const repairInstruction = tooShort
       ? `${systemInstruction}
-The last version was ${countWords(output)} words. That is a summary and is not allowed.
-Write the full rewrite of the user's draft, close to ${inputWords} words, with the same paragraph breaks.
-Keep every name, date, and number. Do not switch topics. Do not add a title.`
+The last version was ${countWords(output)} words for a ${inputWords}-word draft. That is a summary and is not allowed.
+Write the full rewrite, about ${inputWords} words, with the same paragraph breaks.
+Keep every name, date, number, and claim. Do not switch topics. Do not add a title.`
       : droppedFacts.length > 0
         ? `${systemInstruction}
 The last version dropped these details from the draft: ${droppedFacts.join("; ")}.
-Put every one of them back. Rewrite the sentences around them. Do not delete informal opening lines.`
+Put every one of them back. Rewrite the sentences around them. Do not delete informal opening lines.
+Keep about ${inputWords} words.`
         : `${systemInstruction}
-The last version copied the draft. Change the sentence openings. Keep every fact, name, number, and paragraph break.`;
+The last version copied the draft. Change the sentence openings. Keep every fact, name, number, paragraph break, and about ${inputWords} words.`;
 
     const repaired = stripModelChrome(
       await rewriteWithModel(request, {
         backend,
-        temperature: Math.max(0.35, temperature - 0.12),
+        temperature: Math.max(0.28, temperature - 0.08 * (attempt + 1)),
         systemInstruction: repairInstruction,
       }),
     );
-    if (repaired) {
-      const preferRepair =
-        (tooShort && countWords(repaired) > countWords(output)) ||
-        rewritePenalty(request.text, repaired) < rewritePenalty(request.text, output);
-      if (preferRepair) output = repaired;
-    }
+    if (!repaired) break;
+
+    const preferRepair =
+      (tooShort && countWords(repaired) > countWords(output)) ||
+      rewritePenalty(request.text, repaired) < rewritePenalty(request.text, output);
+    if (!preferRepair) break;
+
+    output = repaired;
+    tooShort = isShort(output);
+    copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
+    droppedFacts = missingFactsForRetry(request.text, output);
   }
 
   const quality = assessRewriteQuality(request.text, output);
@@ -268,7 +283,7 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 
   output = quality.output || output;
 
-  if (inputWords >= 40 && countWords(output) < inputWords * 0.55) {
+  if (inputWords >= 40 && countWords(output) < inputWords * REJECT_SHORT_RATIO) {
     throw new HumanizationFailedError(
       "The rewrite was too short. Please try again.",
       "TEXT_TOO_SHORT",
