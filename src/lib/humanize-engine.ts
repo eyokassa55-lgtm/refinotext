@@ -13,6 +13,7 @@ import {
 import { buildHumanRewriteInstruction } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
+  missingFactsForRetry,
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
@@ -154,7 +155,15 @@ function rewritePenalty(input: string, output: string): number {
   const copy = phraseCopyRatio(input, output);
   const quality = assessRewriteQuality(input, output);
   const blocking = quality.issues.some((issue) =>
-    ["REFUSAL", "LEAK", "UNRELATED", "COPIED_RETRIEVED", "GENERIC"].includes(issue.code),
+    [
+      "REFUSAL",
+      "LEAK",
+      "UNRELATED",
+      "COPIED_RETRIEVED",
+      "GENERIC",
+      "MISSING_FACTS",
+      "MISSING_NAMES",
+    ].includes(issue.code),
   );
   const collapsed = quality.issues.some(
     (issue) => issue.code === "TOO_SHORT" || issue.code === "PARAGRAPH_DRIFT",
@@ -206,11 +215,13 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
   const inputWords = countWords(request.text);
   const tooShort = inputWords >= 40 && countWords(output) < inputWords * 0.7;
   const copiedTooClosely = phraseCopyRatio(request.text, output) >= 0.22;
+  const droppedFacts = missingFactsForRetry(request.text, output);
 
-  if (tooShort || copiedTooClosely) {
-    console.info("[humanize] retrying once because the rewrite is truncated or copied", {
+  if (tooShort || copiedTooClosely || droppedFacts.length > 0) {
+    console.info("[humanize] retrying once because the rewrite is truncated, copied, or missing facts", {
       tooShort,
       copiedTooClosely,
+      droppedFacts,
       backend,
       inWords: inputWords,
       outWords: countWords(output),
@@ -220,8 +231,12 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
       ? `${systemInstruction}
 The last version was ${countWords(output)} words. That is a summary and is not allowed.
 Write the full rewrite of the user's draft, close to ${inputWords} words, with the same paragraph breaks.
-Do not switch topics. Do not add a title.`
-      : `${systemInstruction}
+Keep every name, date, and number. Do not switch topics. Do not add a title.`
+      : droppedFacts.length > 0
+        ? `${systemInstruction}
+The last version dropped these details from the draft: ${droppedFacts.join("; ")}.
+Put every one of them back. Rewrite the sentences around them. Do not delete informal opening lines.`
+        : `${systemInstruction}
 The last version copied the draft. Change the sentence openings. Keep every fact, name, number, and paragraph break.`;
 
     const repaired = stripModelChrome(

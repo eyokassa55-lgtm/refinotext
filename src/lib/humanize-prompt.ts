@@ -496,6 +496,7 @@ ${clipStyleReference(demo.output)}
 
   return `${activeRewriteSystemInstruction()}
 ${lengthNote}
+Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.
 Return only the rewritten user draft.`;

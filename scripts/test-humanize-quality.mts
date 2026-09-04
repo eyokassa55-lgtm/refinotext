@@ -31,8 +31,10 @@ import {
 } from "../src/lib/humanize-voice";
 import {
   assessRewriteQuality,
+  extractDates,
   extractNumbers,
   extractProperNames,
+  extractStatedNames,
   lengthRatio,
   phraseCopyRatio,
   stripModelChrome,
@@ -365,6 +367,21 @@ Rainforests also illustrate a much broader set of global development debates. It
 
   assert("extracts 4812 from 4,812", extractNumbers("4,812 commuters").includes("4812"));
   assert("extracts Priya Nandakumar", extractProperNames(source).includes("Priya Nandakumar"));
+  assert("extracts slash dates", extractDates("date 12/3/2027").includes("12/3/2027"));
+  assert(
+    "extracts a lowercase name after my name is",
+    extractStatedNames("my name is eyosoft kassa date 12/3/2027").some((name) =>
+      /eyosoft kassa/i.test(name),
+    ),
+  );
+  const droppedIntro = assessRewriteQuality(
+    "# Trees\nmy name is eyosoft kassa date 12/3/2027 sine i was kid\n\nTrees talk through roots.",
+    "Trees communicate through their roots.",
+  );
+  assert(
+    "flags a dropped name and date from an informal opening",
+    droppedIntro.issues.some((issue) => issue.code === "MISSING_FACTS" || issue.code === "MISSING_NAMES"),
+  );
 
   console.log("\n2b. Template voice detection");
   const aiEssay =

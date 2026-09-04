@@ -154,6 +154,20 @@ export function extractNumbers(text: string): string[] {
   return [...new Set(matches.map(normalizeNumber).filter(Boolean))];
 }
 
+export function extractDates(text: string): string[] {
+  const matches = text.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g) ?? [];
+  return [...new Set(matches)];
+}
+
+export function extractStatedNames(text: string): string[] {
+  const names = [...extractProperNames(text)];
+  const intro = text.match(
+    /\bmy name is\s+([a-z][a-z0-9.'-]{1,}(?:\s+[a-z][a-z0-9.'-]{1,}){0,3})\b/i,
+  );
+  if (intro?.[1]) names.unshift(intro[1].trim());
+  return [...new Set(names)];
+}
+
 function normalizeNumber(value: string): string {
   return value.replace(/[$,€£\s]/g, "").toLowerCase();
 }
@@ -349,7 +363,18 @@ export function assessRewriteQuality(
     });
   }
 
-  const missingNames = extractProperNames(input).filter((name) => {
+  const missingDates = extractDates(input).filter((value) => {
+    const re = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    return !re.test(output);
+  });
+  if (missingDates.length > 0) {
+    issues.push({
+      code: "MISSING_FACTS",
+      message: "The rewrite dropped dates from the source.",
+    });
+  }
+
+  const missingNames = extractStatedNames(input).filter((name) => {
     const re = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     return !re.test(output);
   });
@@ -461,8 +486,12 @@ export function assessRewriteQuality(
 
 export function missingFactsForRetry(input: string, output: string): string[] {
   const missing = [
+    ...extractDates(input).filter((value) => {
+      const re = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      return !re.test(output);
+    }),
     ...extractNumbers(input).filter((value) => !output.replace(/[$,€£\s]/g, "").toLowerCase().includes(value)),
-    ...extractProperNames(input).filter((name) => {
+    ...extractStatedNames(input).filter((name) => {
       const re = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       return !re.test(output);
     }),
