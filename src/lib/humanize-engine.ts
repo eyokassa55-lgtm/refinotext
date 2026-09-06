@@ -18,6 +18,7 @@ import {
   stripModelChrome,
 } from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
+import { findTopicMatch, type DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -70,10 +71,8 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Every given draft uses the TOPN1 Vertex endpoint after `npm run bind:vertex`.
- * Training taught ai_text → human_text. Serving does not look up stored
- * ai_text or paste a stored human_text essay. Until VERTEX_HUMAN_TEXT_MODEL=1,
- * a publisher Gemini model rewrites with the same instruction.
+ * Same-topic hits return the stored gold human_text unchanged.
+ * Only drafts with no stored topic use TOPN1 after `npm run bind:vertex`.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -125,6 +124,30 @@ async function rewriteWithModel(
 
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
+}
+
+function databaseRetrieval(hit: DatabaseTrainingMatch): HumanizeRetrievalSummary {
+  return {
+    band: "high",
+    matches: [{ index: hit.index, score: hit.score }],
+  };
+}
+
+/**
+ * Return the stored gold human_text from the matched row. Never rewrite it.
+ */
+function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
+  console.info("[humanize] [TOPIC_MATCH]", {
+    row: hit.index,
+    kind: hit.kind,
+    score: hit.score,
+    rows: getTrainingRowCount(),
+  });
+  return {
+    text: hit.output,
+    source: "TOPIC_TRAINING_MATCH",
+    retrieval: databaseRetrieval(hit),
+  };
 }
 
 function rewritePenalty(input: string, output: string): number {
@@ -274,6 +297,9 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  const topicHit = findTopicMatch(request.text);
+  if (topicHit) return resolveStoredHit(topicHit);
+
   if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
     console.error("[humanize] No Vertex credentials or Gemini API key is configured");
     throw new HumanizationFailedError(

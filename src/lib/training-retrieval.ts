@@ -5,9 +5,11 @@ import { findExactTrainingMatch, findNormalizedTrainingMatch, findExactTrainingO
 import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-schema";
 
 /**
- * Keyword search over stored ai_text. Used by tests and training helpers.
- * Humanize does not call this at serve time — it rewrites the given draft
- * on TOPN1 instead of pasting a stored human_text.
+ * Keyword search over stored ai_text. Every training pair keeps its own topic
+ * identity (all opening topic words). Humanize returns that row's paired
+ * human_text only when the user's draft is that same topic. A related or
+ * narrower subject does not replace the user's meaning. It does not require
+ * a word-for-word copy of a stored draft.
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
