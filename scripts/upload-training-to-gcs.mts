@@ -39,7 +39,7 @@ async function persistTrainingUris(trainUri: string, validationUri: string) {
   let text = await fs.readFile(envPath, "utf8");
   text = upsertLine(text, "TRAINING_DATA_GCS_URI", trainUri);
   text = upsertLine(text, "VALIDATION_DATA_GCS_URI", validationUri);
-  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "OG REFINO rewrite");
+  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "TOPN1");
   await fs.writeFile(envPath, text, "utf8");
   console.log("Wrote TRAINING_DATA_GCS_URI, VALIDATION_DATA_GCS_URI, and TUNED_MODEL_JOB_NAME in .env.local");
 }

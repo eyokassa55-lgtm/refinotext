@@ -866,10 +866,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const bindSource = readFileSync(join(process.cwd(), "scripts", "bind-tuned-endpoint.mts"), "utf8");
   assert(
-    "bind prefers the rewrite job and does not fall back to lookup-tuned OG REFINO",
-    bindSource.includes('DEFAULT_JOB_NAME = "OG REFINO rewrite"') &&
-      bindSource.includes("OG REFINO v3") &&
-      bindSource.includes("isRewriteMappingJob") &&
+    "bind uses TOPN1 only and does not fall back to lookup-tuned OG REFINO",
+    bindSource.includes('DEFAULT_JOB_NAME = "TOPN1"') &&
+      bindSource.includes("isTopn1Job") &&
+      bindSource.includes("Humanize binds TOPN1 only") &&
       bindSource.includes("VERTEX_HUMAN_TEXT_MODEL") &&
       bindSource.includes("Not binding an older lookup-tuned job"),
   );

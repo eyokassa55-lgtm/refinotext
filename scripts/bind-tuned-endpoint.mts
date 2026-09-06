@@ -1,14 +1,7 @@
 /**
- * Binds Humanize to a rewrite-trained Vertex endpoint in .env.local.
- *
- * Preference order:
- * 1. TUNED_MODEL_JOB_NAME (default: OG REFINO rewrite)
- * 2. OG REFINO rewrite
- * 3. OG REFINO v3 (trained on humanizer_train_v2.jsonl)
- * 4. OG REFINO v2 (same ai_text → human_text mapping)
- *
- * Never binds lookup-tuned OG REFINO or identity human_text jobs.
- * Sets VERTEX_HUMAN_TEXT_MODEL=1 for every rewrite-mapping bind.
+ * Binds Humanize to the TOPN1 Vertex endpoint in .env.local.
+ * Does not fall back to OG REFINO, rewrite, v3, v2, or lookup jobs.
+ * Sets VERTEX_HUMAN_TEXT_MODEL=1.
  * Never prints private keys.
  */
 import { config } from "dotenv";
@@ -20,8 +13,7 @@ config();
 
 const { getGoogleAuthOptions } = await import("../src/lib/vertex-auth");
 
-const DEFAULT_JOB_NAME = "OG REFINO rewrite";
-const FALLBACK_REWRITE_JOBS = ["OG REFINO rewrite", "OG REFINO v3", "OG REFINO v2"];
+const DEFAULT_JOB_NAME = "TOPN1";
 
 type TuningJob = {
   displayName?: string;
@@ -29,6 +21,7 @@ type TuningJob = {
   state?: string;
   createTime?: string;
   tunedModel?: { endpoint?: string; model?: string };
+  supervisedTuningSpec?: { trainingDatasetUri?: string };
 };
 
 function cleanEnv(value: string | undefined): string | undefined {
@@ -63,56 +56,30 @@ function nameEquals(actual: string, expected: string): boolean {
   return pattern.test(actual);
 }
 
-function isLookupOrIdentityJob(name: string): boolean {
-  const trimmed = name.trim();
-  if (/^OG REFINO$/i.test(trimmed)) return true;
-  if (/human_text/i.test(trimmed)) return true;
-  if (/^REFINO TEXT$/i.test(trimmed)) return true;
-  if (/^refino text$/i.test(trimmed)) return true;
-  if (/^refino correct$/i.test(trimmed)) return true;
-  return false;
+function isTopn1Job(name: string): boolean {
+  return /^TOPN1$/i.test(name.trim());
 }
 
-function isRewriteMappingJob(name: string): boolean {
-  if (isLookupOrIdentityJob(name)) return false;
-  if (/rewrite/i.test(name)) return true;
-  if (/^OG REFINO v[23]$/i.test(name)) return true;
-  return false;
-}
-
-function rewritePromptVersion(name: string): "v2" | "v4" {
-  return /rewrite/i.test(name) ? "v4" : "v2";
+function rewritePromptVersion(job: TuningJob): "v2" | "v4" {
+  const uri = job.supervisedTuningSpec?.trainingDatasetUri ?? "";
+  if (/v4/i.test(uri) || /rewrite/i.test(uri)) return "v4";
+  return "v2";
 }
 
 function newestFirst(left: TuningJob, right: TuningJob): number {
   return String(right.createTime ?? "").localeCompare(String(left.createTime ?? ""));
 }
 
-function pickRewriteTrainedJob(
-  jobs: TuningJob[],
-  preferredName: string,
-): TuningJob | undefined {
-  const succeeded = jobs
+function pickTopn1Job(jobs: TuningJob[], preferredName: string): TuningJob | undefined {
+  return jobs
     .filter(
       (job) =>
         job.state === "JOB_STATE_SUCCEEDED" &&
         Boolean(job.tunedModel?.endpoint?.trim()) &&
-        isRewriteMappingJob(jobName(job)),
+        isTopn1Job(jobName(job)) &&
+        nameEquals(jobName(job), preferredName),
     )
-    .sort(newestFirst);
-
-  const byName = (expected: string): TuningJob | undefined =>
-    succeeded.filter((job) => nameEquals(jobName(job), expected)).sort(newestFirst)[0];
-
-  const preferred = byName(preferredName);
-  if (preferred) return preferred;
-
-  for (const name of FALLBACK_REWRITE_JOBS) {
-    const job = byName(name);
-    if (job) return job;
-  }
-
-  return succeeded[0];
+    .sort(newestFirst)[0];
 }
 
 async function main() {
@@ -121,12 +88,17 @@ async function main() {
     cleanEnv(process.env.GOOGLE_CLOUD_LOCATION) ??
     cleanEnv(process.env.VERTEX_AI_LOCATION) ??
     "us-central1";
-  const preferredName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME) ?? DEFAULT_JOB_NAME;
+  const envName = cleanEnv(process.env.TUNED_MODEL_JOB_NAME);
+  const preferredName = DEFAULT_JOB_NAME;
 
   if (!project) {
     console.error("GOOGLE_CLOUD_PROJECT is missing.");
     process.exitCode = 1;
     return;
+  }
+
+  if (envName && !isTopn1Job(envName)) {
+    console.log(`Ignoring TUNED_MODEL_JOB_NAME="${envName}"; Humanize binds TOPN1 only.`);
   }
 
   const authOptions = getGoogleAuthOptions();
@@ -157,37 +129,38 @@ async function main() {
   }
 
   const jobs = body.tuningJobs ?? [];
-  console.log(`Listed ${jobs.length} tuning job(s). Preferred name: "${preferredName}"`);
+  console.log(`Listed ${jobs.length} tuning job(s). Binding "${preferredName}" only.`);
   for (const job of jobs) {
     console.log(
       `  ${jobName(job) || "(unnamed)"} state=${job.state ?? "unknown"} endpoint=${job.tunedModel?.endpoint ? redact(job.tunedModel.endpoint) : "no"}`,
     );
   }
 
-  const selected = pickRewriteTrainedJob(jobs, preferredName);
+  const selected = pickTopn1Job(jobs, preferredName);
   const endpoint = selected?.tunedModel?.endpoint?.trim();
   const selectedName = selected ? jobName(selected) : "";
 
-  if (!endpoint || !selected || !isRewriteMappingJob(selectedName)) {
+  if (!endpoint || !selected || !isTopn1Job(selectedName)) {
     console.error(
-      "No succeeded rewrite-trained job with an endpoint was found (OG REFINO rewrite, v3, or v2). Not binding an older lookup-tuned job.",
+      "No succeeded TOPN1 job with an endpoint was found. Not binding an older lookup-tuned job.",
     );
     process.exitCode = 1;
     return;
   }
 
-  const promptVersion = rewritePromptVersion(selectedName);
+  const promptVersion = rewritePromptVersion(selected);
   const envPath = ".env.local";
   let text = await fs.readFile(envPath, "utf8");
   text = upsertLine(text, "TUNED_MODEL_ENDPOINT", endpoint);
   text = upsertLine(text, "VERTEX_AI_TUNED_ENDPOINT", endpoint);
   text = upsertLine(text, "VERTEX_HUMAN_TEXT_MODEL", "1");
   text = upsertLine(text, "VERTEX_REWRITE_PROMPT", promptVersion);
+  text = upsertLine(text, "TUNED_MODEL_JOB_NAME", "TOPN1");
   await fs.writeFile(envPath, text, "utf8");
 
   console.log(`Bound Humanize to "${selectedName}" ${redact(endpoint)}`);
   console.log(
-    `Wrote TUNED_MODEL_ENDPOINT, VERTEX_AI_TUNED_ENDPOINT, VERTEX_HUMAN_TEXT_MODEL=1, and VERTEX_REWRITE_PROMPT=${promptVersion} in .env.local`,
+    `Wrote TUNED_MODEL_ENDPOINT, VERTEX_AI_TUNED_ENDPOINT, VERTEX_HUMAN_TEXT_MODEL=1, VERTEX_REWRITE_PROMPT=${promptVersion}, and TUNED_MODEL_JOB_NAME=TOPN1 in .env.local`,
   );
 }
 

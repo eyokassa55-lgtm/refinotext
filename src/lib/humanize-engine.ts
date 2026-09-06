@@ -71,10 +71,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Unmatched drafts use the rewrite-trained Vertex endpoint after
- * `npm run bind:vertex` (OG REFINO rewrite, v3, or v2). Until
- * VERTEX_HUMAN_TEXT_MODEL=1, a publisher Gemini model rewrites with the same
- * instruction. The lookup-tuned OG REFINO endpoint must not see new drafts.
+ * Unmatched drafts use the TOPN1 Vertex endpoint after `npm run bind:vertex`.
+ * Until VERTEX_HUMAN_TEXT_MODEL=1, a publisher Gemini model rewrites with the
+ * same instruction. Older OG REFINO endpoints must not see new drafts.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
