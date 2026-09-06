@@ -496,7 +496,9 @@ ${clipStyleReference(demo.output)}
 
   return `${activeRewriteSystemInstruction()}
 ${lengthNote}
+Rewrite the draft the user just gave. Apply the same edit you learned from training: stiff ai_text in, natural human_text out.
 Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
+Do not look up a stored essay. Do not paste a human_text from the dataset. The output must be a rewrite of this given draft.
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.
 Return only the rewritten user draft.`;

@@ -543,39 +543,6 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const { runHumanization: runEngineHumanization } = await import("../src/lib/humanize-engine");
-  const engineExact = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
-  const engineExactPair = getTrainingPairs()[engineExact.retrieval?.matches[0]?.index ?? -1];
-  assert(
-    "Humanize engine uses keyword match even for a stored ai_text paste",
-    engineExact.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineExactPair) &&
-      engineExact.text === engineExactPair!.output &&
-      /^success\b/i.test(engineExactPair!.input.trim()),
-    `source=${engineExact.source} row=${engineExact.retrieval?.matches[0]?.index}`,
-  );
-  const engineNear = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
-  const engineNearPair = getTrainingPairs()[engineNear.retrieval?.matches[0]?.index ?? -1];
-  assert(
-    "Humanize engine returns a stored technology human_text by keyword",
-    engineNear.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineNearPair) &&
-      engineNear.text === engineNearPair!.output &&
-      /\btechnolog/i.test(engineNearPair!.input.slice(0, 480)),
-    `source=${engineNear.source} row=${engineNear.retrieval?.matches[0]?.index}`,
-  );
-
-  const engineHuman = await runEngineHumanization({ text: firstPair.output, intensity: 75 });
-  const engineHumanPair = getTrainingPairs()[engineHuman.retrieval?.matches[0]?.index ?? -1];
-  assert(
-    "pasting stored human_text still returns exact paired human_text from a keyword hit",
-    engineHuman.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineHumanPair) &&
-      engineHuman.text === engineHumanPair!.output &&
-      Buffer.from(engineHuman.text, "utf8").equals(Buffer.from(engineHumanPair!.output, "utf8")),
-    `source=${engineHuman.source} row=${engineHuman.retrieval?.matches[0]?.index}`,
-  );
-
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
     "C same-topic different essay is not a database match",
@@ -746,6 +713,12 @@ Rainforests also illustrate a much broader set of global development debates. It
     { input: firstPair.input, output: firstPair.output },
   ]);
   assert("rewrite prompt keeps facts and paragraph breaks", /paragraph breaks/i.test(rewritePrompt));
+  assert(
+    "rewrite prompt uses the given draft and the learned human_text edit",
+    /rewrite the draft the user just gave/i.test(rewritePrompt) &&
+      /ai_text in, natural human_text out/i.test(rewritePrompt) &&
+      /do not look up a stored essay/i.test(rewritePrompt),
+  );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
   const ogCue = buildOgRefinoInferenceInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -754,9 +727,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
-  assert("Humanize engine looks up by keyword topic only", engineSource.includes("findTopicMatch"));
-  assert("Humanize engine does not use word-for-word ai_text matching", !engineSource.includes("findDatabaseMatch"));
-  assert("Humanize engine rewrites unmatched drafts instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
+  assert("Humanize engine does not look up stored ai_text", !engineSource.includes("findTopicMatch") && !engineSource.includes("findDatabaseMatch"));
+  assert("Humanize engine rewrites the given draft instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
   assert(
     "Humanize engine rejects a half-length summary",
     engineSource.includes("REJECT_SHORT_RATIO = 0.8") &&
@@ -764,7 +736,7 @@ Rainforests also illustrate a much broader set of global development debates. It
       engineSource.includes("MAX_REWRITE_REPAIRS = 2"),
   );
   assert(
-    "unmatched drafts use the human_text rewrite instruction, not OG lookup",
+    "every given draft uses the human_text rewrite instruction, not OG lookup",
     engineSource.includes("buildHumanRewriteInstruction({ text: request.text }, [])") &&
       !engineSource.includes("buildOgRefinoInferenceInstruction"),
   );
@@ -774,40 +746,17 @@ Rainforests also illustrate a much broader set of global development debates. It
       engineSource.includes("unmatchedRewriteBackend()") &&
       !engineSource.includes('backend: "tuned"'),
   );
-  assert("Humanize engine returns stored human_text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
-  const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns exact paired human_text for a #technology draft",
-    engineHashTech.source === "TOPIC_TRAINING_MATCH" &&
-      engineHashTech.text === techPair.output &&
-      Buffer.from(engineHashTech.text, "utf8").equals(Buffer.from(techPair.output, "utf8")),
-    `source=${engineHashTech.source} row=${engineHashTech.retrieval?.matches[0]?.index}`,
+    "Humanize engine does not paste stored human_text",
+    !engineSource.includes("resolveStoredHit") &&
+      !engineSource.includes("hit.output") &&
+      !engineSource.includes("tryDeterministicEntityMerge"),
   );
-  const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns exact paired human_text for a related Success draft",
-    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      engineSuccess.text === firstPair.output &&
-      Buffer.from(engineSuccess.text, "utf8").equals(Buffer.from(firstPair.output, "utf8")),
-    `source=${engineSuccess.source} row=${engineSuccess.retrieval?.matches[0]?.index}`,
-  );
-  const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
-  assert(
-    "Humanize returns exact paired human_text for a technology draft with no hashtag",
-    enginePlainTech.source === "TOPIC_TRAINING_MATCH" &&
-      enginePlainTech.text === techPair.output &&
-      Buffer.from(enginePlainTech.text, "utf8").equals(Buffer.from(techPair.output, "utf8")),
-    `source=${enginePlainTech.source} row=${enginePlainTech.retrieval?.matches[0]?.index}`,
-  );
-  const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
-  const engineEducationPair = getTrainingPairs()[engineEducation.retrieval?.matches[0]?.index ?? -1];
-  assert(
-    "Humanize returns exact paired human_text for an education draft with no hashtag",
-    engineEducation.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(engineEducationPair) &&
-      engineEducation.text === engineEducationPair!.output &&
-      /\beducation\b/i.test(engineEducationPair!.input.slice(0, 480)),
-    `source=${engineEducation.source} row=${engineEducation.retrieval?.matches[0]?.index}`,
+    "Humanize always rewrites the given draft on the tuned model",
+    engineSource.includes("return await runModelHumanization(request)") &&
+      !engineSource.includes("findTopicMatch") &&
+      !engineSource.includes("resolveStoredHit"),
   );
   assert(
     "unrelated Harborline draft is not a stored topic and is rewritten, not 404",
@@ -821,13 +770,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     "an intelligence draft is not a stored topic and is rewritten, not an AI essay",
     findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null && engineSource.includes("runModelHumanization"),
   );
-  const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns exact paired human_text for an American History draft",
-    engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(americanHistoryPair) &&
-      engineAmericanHistory.text === americanHistoryPair!.output,
-    `source=${engineAmericanHistory.source} row=${engineAmericanHistory.retrieval?.matches[0]?.index}`,
+    "an American History draft is rewritten by TOPN1, not pasted from storage",
+    engineSource.includes("runModelHumanization") && !engineSource.includes("findTopicMatch"),
   );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
@@ -967,7 +912,7 @@ async function runLiveTests() {
   if (isVertexConfigured()) {
     const vertex = requireVertexConfig();
     const tunedModel = redactModelName(vertex.model);
-    console.log(`  Vertex credentials present (${tunedModel}); unmatched drafts use the rewrite-trained endpoint when VERTEX_HUMAN_TEXT_MODEL=1`);
+    console.log(`  Vertex credentials present (${tunedModel}); given drafts use TOPN1 when VERTEX_HUMAN_TEXT_MODEL=1`);
     assert(
       "Vertex endpoint env is a resource id",
       tunedModel.startsWith("endpoints/") || tunedModel.startsWith("models/"),
@@ -1000,8 +945,8 @@ async function runLiveTests() {
     });
     assert(
       `${sample.id} ${sample.name}`,
-      result.source === "TOPIC_TRAINING_MATCH" &&
-        result.text === successPair.output,
+      result.source === "FINE_TUNED_MODEL" &&
+        result.text !== successPair.output,
       `source=${result.source}`,
     );
   } catch (error) {
