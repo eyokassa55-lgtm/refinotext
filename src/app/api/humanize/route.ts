@@ -66,6 +66,7 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
     case "INVALID_SERVICE_ACCOUNT":
       return 401;
     case "TEXT_TOO_SHORT":
+    case "NO_TRAINING_MATCH":
     case "GRUBBY_LIMIT":
       return 400;
     case "GRUBBY_QUOTA":

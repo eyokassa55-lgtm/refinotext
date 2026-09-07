@@ -159,6 +159,11 @@ Planting trees, cutting waste, and using cleaner power can reduce harm, but they
 
 Young people often lead cleanup projects and ask for clearer rules. Those efforts count, especially when they are paired with measurements that show whether air and water are actually improving.`;
 
+const DIGITAL_MARKETPLACE_ESSAY = `# The Digital Marketplace: Navigating the Promises and Perils of E-Commerce
+E-commerce has transformed the way people buy and sell goods and services. Instead of visiting physical stores, consumers can use websites and mobile applications to search for products, compare prices, place orders, and have items delivered right to their doors.
+E-commerce offers convenience and a global market. Small businesses can reach customers far from their town. It also creates risks: fraudulent sellers, fake products, privacy concerns, and packaging waste.
+`;
+
 const BUSINESS_ESSAY = `A small business grows when it understands its customers, controls costs, and keeps a reputation for reliable work. Fancy branding cannot replace on-time delivery and honest pricing.
 
 Digital tools help with invoices, inventory, and marketing, yet they do not remove the need for a simple plan. Owners still have to decide which products to keep, which to drop, and how much cash to hold for slow months.
@@ -543,7 +548,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const { runHumanization: runEngineHumanization } = await import("../src/lib/humanize-engine");
+  const { HumanizationFailedError, runHumanization: runEngineHumanization } = await import(
+    "../src/lib/humanize-engine"
+  );
   const engineExact = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
   const engineExactPair = getTrainingPairs()[engineExact.retrieval?.matches[0]?.index ?? -1];
   assert(
@@ -670,6 +677,30 @@ Rainforests also illustrate a much broader set of global development debates. It
   const americanHistoryPair = getTrainingPairs().find((pair) =>
     /^american history\b/i.test(pair.input.trim()),
   );
+  const ecommercePair = getTrainingPairs().find((pair) =>
+    /^the rise of e-commerce\b/i.test(pair.input.trim()),
+  );
+  assert("dataset includes an e-commerce pair", Boolean(ecommercePair));
+  const marketplaceTopic = findTopicMatch(DIGITAL_MARKETPLACE_ESSAY);
+  assert(
+    "a Digital Marketplace e-commerce draft finds the stored e-commerce human_text",
+    marketplaceTopic?.kind === "topic" &&
+      Boolean(ecommercePair) &&
+      marketplaceTopic.index === ecommercePair!.index &&
+      marketplaceTopic.output === ecommercePair!.output,
+    `row=${marketplaceTopic?.index} stored=${ecommercePair?.index}`,
+  );
+  const engineMarketplace = await runEngineHumanization({
+    text: DIGITAL_MARKETPLACE_ESSAY,
+    intensity: 75,
+  });
+  assert(
+    "Humanize returns gold e-commerce human_text for a Digital Marketplace draft",
+    engineMarketplace.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(ecommercePair) &&
+      engineMarketplace.text === ecommercePair!.output,
+    `source=${engineMarketplace.source} row=${engineMarketplace.retrieval?.matches[0]?.index}`,
+  );
   assert("dataset includes an American History pair", Boolean(americanHistoryPair));
   const historyTopic = findTopicMatch(HISTORY_ESSAY);
   assert(
@@ -755,8 +786,12 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert("Humanize engine looks up by keyword topic only", engineSource.includes("findTopicMatch"));
-  assert("Humanize engine does not use word-for-word ai_text matching", !engineSource.includes("findDatabaseMatch"));
-  assert("Humanize engine rewrites unmatched drafts instead of returning 404", engineSource.includes("runModelHumanization") && !engineSource.includes("NO_TRAINING_MATCH"));
+  assert("Humanize engine can return gold human_text for a near-exact stored draft", engineSource.includes("findDatabaseMatch"));
+  assert(
+    "Humanize engine does not send a new topic to TOPN1",
+    engineSource.includes("NO_TRAINING_MATCH") &&
+      !engineSource.slice(engineSource.indexOf("export async function runHumanization")).includes("runModelHumanization"),
+  );
   assert(
     "Humanize engine rejects a half-length summary",
     engineSource.includes("REJECT_SHORT_RATIO = 0.8") &&
@@ -809,17 +844,41 @@ Rainforests also illustrate a much broader set of global development debates. It
       /\beducation\b/i.test(engineEducationPair!.input.slice(0, 480)),
     `source=${engineEducation.source} row=${engineEducation.retrieval?.matches[0]?.index}`,
   );
+  let harborlineError: unknown;
+  try {
+    await runEngineHumanization({ text: NEW_TOPIC, intensity: 75 });
+  } catch (error) {
+    harborlineError = error;
+  }
   assert(
-    "unrelated Harborline draft is not a stored topic and is rewritten, not 404",
-    findTopicMatch(NEW_TOPIC) === null && engineSource.includes("runModelHumanization"),
+    "unrelated Harborline draft does not get a model rewrite",
+    findTopicMatch(NEW_TOPIC) === null &&
+      harborlineError instanceof HumanizationFailedError &&
+      harborlineError.code === "NO_TRAINING_MATCH",
   );
+  let historyError: unknown;
+  try {
+    await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
+  } catch (error) {
+    historyError = error;
+  }
   assert(
-    "a general History draft is not a stored topic and is rewritten, not American History",
-    findTopicMatch(HISTORY_ESSAY) === null && engineSource.includes("runModelHumanization"),
+    "a general History draft is not rewritten as American History and has no gold row",
+    findTopicMatch(HISTORY_ESSAY) === null &&
+      historyError instanceof HumanizationFailedError &&
+      historyError.code === "NO_TRAINING_MATCH",
   );
+  let intelligenceError: unknown;
+  try {
+    await runEngineHumanization({ text: INTELLIGENCE_ONLY_ESSAY, intensity: 75 });
+  } catch (error) {
+    intelligenceError = error;
+  }
   assert(
-    "an intelligence draft is not a stored topic and is rewritten, not an AI essay",
-    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null && engineSource.includes("runModelHumanization"),
+    "an intelligence draft is not rewritten as an AI essay and has no gold row",
+    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null &&
+      intelligenceError instanceof HumanizationFailedError &&
+      intelligenceError.code === "NO_TRAINING_MATCH",
   );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(

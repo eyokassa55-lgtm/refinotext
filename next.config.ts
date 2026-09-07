@@ -8,10 +8,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   outputFileTracingRoot: path.join(__dirname),
   outputFileTracingIncludes: {
-    "/api/humanize": ["./data/training_data.jsonl"],
-    "/src/app/api/humanize/route": ["./data/training_data.jsonl"],
-    "src/app/api/humanize/route.ts": ["./data/training_data.jsonl"],
+    "/api/humanize": ["./data/training_data.jsonl", "./data/wikipedia_750.jsonl"],
+    "/api/wikipedia": ["./data/wikipedia_750.jsonl"],
+    "/src/app/api/humanize/route": ["./data/training_data.jsonl", "./data/wikipedia_750.jsonl"],
+    "src/app/api/humanize/route.ts": ["./data/training_data.jsonl", "./data/wikipedia_750.jsonl"],
     "/src/app/api/humanize/route.js": ["./data/training_data.jsonl"],
+    "/src/app/api/wikipedia/route": ["./data/wikipedia_750.jsonl"],
   },
   serverExternalPackages: [
     "@prisma/client",

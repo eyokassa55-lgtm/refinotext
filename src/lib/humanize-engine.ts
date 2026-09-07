@@ -18,7 +18,12 @@ import {
   stripModelChrome,
 } from "@/lib/humanize-quality";
 import { getTrainingRowCount } from "@/lib/training-lookup";
-import { findTopicMatch, type DatabaseTrainingMatch } from "@/lib/training-retrieval";
+import {
+  findDatabaseMatch,
+  findTopicMatch,
+  type DatabaseTrainingMatch,
+} from "@/lib/training-retrieval";
+import { findWikipediaMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -71,8 +76,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Same-topic hits return the stored gold human_text unchanged.
- * Only drafts with no stored topic use TOPN1 after `npm run bind:vertex`.
+ * Humanize returns stored gold human_text only.
+ * Same-topic or near-exact stored drafts are served unchanged.
+ * New topics are not sent to TOPN1.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -300,18 +306,15 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
   const topicHit = findTopicMatch(request.text);
   if (topicHit) return resolveStoredHit(topicHit);
 
-  if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
-    console.error("[humanize] No Vertex credentials or Gemini API key is configured");
-    throw new HumanizationFailedError(
-      "The writing service is not configured. Please try again later.",
-      "MISSING_API_KEY",
-      503,
-    );
-  }
+  const storedHit = findDatabaseMatch(request.text);
+  if (storedHit) return resolveStoredHit(storedHit);
 
-  try {
-    return await runModelHumanization(request);
-  } catch (error) {
-    throw wrapAsError(error);
-  }
+  const wikipediaHit = findWikipediaMatch(request.text);
+  if (wikipediaHit) return resolveStoredHit(wikipediaHit);
+
+  throw new HumanizationFailedError(
+    "This draft does not match a stored topic, so there is no gold rewrite to return.",
+    "NO_TRAINING_MATCH",
+    422,
+  );
 }

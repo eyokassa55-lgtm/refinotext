@@ -8,8 +8,8 @@
  * hashtag is not required. This same-topic rule applies to every stored pair:
  * a narrower or related subject does not replace the user's meaning
  * (History vs American History, intelligence vs artificial intelligence).
- * Unmatched drafts are rewritten by the Vertex model trained on
- * ai_text → human_text (or a publisher Gemini model until that job is bound).
+ * Unmatched drafts do not go to TOPN1. Humanize only returns gold
+ * human_text for a same-topic or near-exact stored draft.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

@@ -49,3 +49,11 @@ data/humanizer_train_v3.jsonl
 data/humanizer_validation_v3.jsonl
 data/humanizer_train_v4.jsonl
 data/humanizer_validation_v4.jsonl
+
+# python
+__pycache__/
+*.pyc
+
+# duplicate Wikipedia exports at the repo root (canonical copies live in data/)
+/wikipedia_750.jsonl
+/wikipedia_750.xlsx

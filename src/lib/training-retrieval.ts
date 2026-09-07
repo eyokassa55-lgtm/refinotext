@@ -7,9 +7,9 @@ import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-
 /**
  * Keyword search over stored ai_text. Every training pair keeps its own topic
  * identity (all opening topic words). Humanize returns that row's paired
- * human_text only when the user's draft is that same topic. A related or
- * narrower subject does not replace the user's meaning. It does not require
- * a word-for-word copy of a stored draft.
+ * gold human_text only when the user's draft is that same topic. A related or
+ * narrower subject does not replace the user's meaning. New topics are not
+ * sent to TOPN1.
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
@@ -161,6 +161,8 @@ const TOPIC_SYNONYMS: Record<string, string[]> = {
   smartphones: ["smartphone", "mobile"],
   american: ["america"],
   america: ["american"],
+  "e-commerce": ["ecommerce"],
+  ecommerce: ["e-commerce"],
 };
 
 const TECHNOLOGY_TERMS = new Set([
@@ -418,10 +420,25 @@ function extractHeadingLine(text: string): string | null {
     .replace(/^\*\*(.+)\*\*$/, "$1")
     .trim();
   const words = heading.split(/\s+/).filter(Boolean);
-  if (words.length >= 1 && words.length <= 8 && !/[.?!]$/.test(heading)) {
+  if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(heading)) {
     return heading;
   }
   return null;
+}
+
+function titleClauses(heading: string): string[] {
+  return heading
+    .split(/[:–—]/)
+    .flatMap((part) => part.split(/\s+and\s+/i))
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function subjectKeywords(phrase: string): string[] {
+  const raw = skipTopicFrames(tokenizeTopic(phrase)).map((token) =>
+    token.replace(/-/g, "") === "ecommerce" ? "e-commerce" : token,
+  );
+  return raw.filter((token) => isTopicKeyword(token) && !TOPIC_FRAMES.has(token));
 }
 
 function extractHashtagTopics(text: string): string[] {
@@ -466,19 +483,25 @@ const TOPIC_PHRASE_BREAK =
 function topicPhraseTokens(text: string): string[] {
   const heading = extractHeadingLine(text);
   if (heading) {
-    const headingTokens = tokenizeTopic(heading);
-    const headingKeywords = headingTokens.filter(isTopicKeyword);
-    const chosen = headingKeywords.length > 0 ? headingKeywords : headingTokens.filter((token) => token.length >= 3);
-    if (chosen.length > 0) return chosen.slice(0, 3);
+    const fromTitle = titleClauses(heading).flatMap((clause) => subjectKeywords(clause));
+    const first = firstSentences(text, 1);
+    const parts = first.split(TOPIC_PHRASE_BREAK);
+    const phrase = parts[0]?.trim() ? parts[0]! : first;
+    const fromBody = subjectKeywords(phrase);
+    const seen = new Set<string>();
+    const chosen: string[] = [];
+    for (const token of [...fromTitle, ...fromBody]) {
+      if (seen.has(token)) continue;
+      seen.add(token);
+      chosen.push(token);
+    }
+    if (chosen.length > 0) return chosen.slice(0, 8);
   }
 
   const first = firstSentences(text, 1);
   const parts = first.split(TOPIC_PHRASE_BREAK);
   const phrase = parts[0]?.trim() ? parts[0]! : first;
-  const raw = skipTopicFrames(tokenizeTopic(phrase));
-  const keywords = raw.filter(isTopicKeyword);
-  const chosen = keywords.length > 0 ? keywords : raw.filter((token) => token.length >= 3);
-  return chosen.slice(0, 3);
+  return subjectKeywords(phrase).slice(0, 8);
 }
 
 type CatalogEntry = {
@@ -517,6 +540,18 @@ function topicLookupTerms(text: string): string[] {
 
 function storedTopicIdentity(text: string): { primary: string; required: string[] } | null {
   const hashtags = extractHashtagTopics(text);
+  const heading = extractHeadingLine(text);
+  if (heading) {
+    const firstClause = titleClauses(heading)[0];
+    const headingSubject = firstClause ? subjectKeywords(firstClause) : [];
+    if (headingSubject[0]) {
+      return {
+        primary: headingSubject[0],
+        required: headingSubject.length >= 2 ? compactRequired(headingSubject) : [headingSubject[0]],
+      };
+    }
+  }
+
   const phrase = topicPhraseTokens(text);
   const primary = phrase[0] ?? hashtags[0];
   if (!primary) return null;

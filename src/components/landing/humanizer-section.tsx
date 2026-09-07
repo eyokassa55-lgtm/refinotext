@@ -16,7 +16,7 @@ export function HumanizerSection() {
             id="humanizer-heading"
             eyebrow="Humanizer"
             title="Revise AI-assisted drafts in the editor"
-            description="Paste your draft on the left. A rewrite appears on the right after you click Humanize. Sign in is required to run a rewrite."
+            description="Paste your draft on the left, or load a Wikipedia sample. A rewrite appears on the right after you click Humanize. Sign in is required to run a rewrite."
           />
         </Container>
       </div>
