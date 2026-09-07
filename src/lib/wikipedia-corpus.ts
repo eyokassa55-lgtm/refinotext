@@ -25,22 +25,6 @@ type WikipediaRow = WikipediaArticle & {
   output: string;
 };
 
-const STOPWORDS = new Set([
-  "the",
-  "of",
-  "and",
-  "in",
-  "a",
-  "an",
-  "to",
-  "for",
-  "on",
-  "by",
-  "at",
-]);
-
-const ROMAN = new Set(["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]);
-
 function candidatePaths(): string[] {
   const filename = WIKIPEDIA_DATASET_FILENAME;
   return [
@@ -193,21 +177,6 @@ export function getWikipediaArticle(id: number): WikipediaArticle | null {
   };
 }
 
-function titleTokens(title: string): string[] {
-  return title
-    .toLowerCase()
-    .replace(/[()]/g, " ")
-    .split(/[^a-z0-9]+/)
-    .filter((token) => {
-      if (!token || STOPWORDS.has(token)) return false;
-      return token.length > 2 || /^\d+$/.test(token) || ROMAN.has(token);
-    });
-}
-
-function openingText(text: string): string {
-  return text.trim().split(/\n+/).slice(0, 4).join(" ").slice(0, 480);
-}
-
 function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["kind"]): DatabaseTrainingMatch {
   return {
     index: WIKIPEDIA_INDEX_OFFSET + row.id,
@@ -219,8 +188,9 @@ function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["
 }
 
 /**
- * Match a draft to a Wikipedia article by exact excerpt or by article title.
- * Training-pair topic hits should be checked first so the 722 gold essays win.
+ * Wikipedia samples match only when the user pasted that excerpt.
+ * Mentioning words from a related article (environment → water pollution)
+ * is not a hit. Those drafts are rewritten so the user's meaning is kept.
  */
 export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | null {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -234,30 +204,7 @@ export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | nu
   }
 
   const normalized = normalizeInsignificant(userText);
-  if (normalized) {
-    const hit = index.byNormalizedOutput.get(normalized);
-    if (hit) return toMatch(hit, 0.999, "near_exact");
-  }
-
-  const opening = openingText(userText).toLowerCase();
-  const openingTokens = new Set(titleTokens(opening));
-  if (openingTokens.size === 0) return null;
-
-  let best: { row: WikipediaRow; score: number } | null = null;
-  for (const row of index.rows) {
-    const required = titleTokens(row.topic);
-    if (required.length === 0) continue;
-    const covered = required.every((token) => openingTokens.has(token));
-    if (!covered) continue;
-    if (required.length === 1) {
-      const primary = [...openingTokens][0];
-      if (primary !== required[0] && !opening.startsWith(required[0])) continue;
-    }
-    const score = 0.9 + Math.min(required.length, 5) * 0.01;
-    if (!best || required.length > titleTokens(best.row.topic).length || score > best.score) {
-      best = { row, score };
-    }
-  }
-
-  return best ? toMatch(best.row, Number(best.score.toFixed(4)), "topic") : null;
+  if (!normalized) return null;
+  const hit = index.byNormalizedOutput.get(normalized);
+  return hit ? toMatch(hit, 0.999, "near_exact") : null;
 }

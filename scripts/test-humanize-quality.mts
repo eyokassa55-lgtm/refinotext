@@ -153,6 +153,13 @@ Access still varies. Some schools have reliable internet, current books, and eno
 
 Lifelong learning also matters. Adults change jobs more often than earlier generations, so short courses, libraries, and online lessons can keep knowledge from stopping at graduation.`;
 
+const ENVIRONMENT_HEADING_ESSAY = `# The Environment
+
+The environment is everything that surrounds us, including the air we breathe, the water we drink, the land we live on, and the plants and animals we share the planet with. It is the natural system that supports life.
+
+Human activities such as deforestation, pollution, and burning fossil fuels are damaging this system. These actions contribute to climate change and put the health of people, wildlife, and future generations at risk.
+`;
+
 const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
 
 Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
@@ -488,6 +495,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "../src/lib/training-lookup"
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
+  const { findWikipediaMatch } = await import("../src/lib/wikipedia-corpus");
   const { toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
@@ -548,7 +556,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     `kind=${truncatedHit?.kind} row=${truncatedHit?.index}`,
   );
 
-  const { HumanizationFailedError, runHumanization: runEngineHumanization } = await import(
+  const { runHumanization: runEngineHumanization } = await import(
     "../src/lib/humanize-engine"
   );
   const engineExact = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
@@ -788,9 +796,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("Humanize engine looks up by keyword topic only", engineSource.includes("findTopicMatch"));
   assert("Humanize engine can return gold human_text for a near-exact stored draft", engineSource.includes("findDatabaseMatch"));
   assert(
-    "Humanize engine does not send a new topic to TOPN1",
-    engineSource.includes("NO_TRAINING_MATCH") &&
-      !engineSource.slice(engineSource.indexOf("export async function runHumanization")).includes("runModelHumanization"),
+    "Humanize engine rewrites unmatched drafts instead of substituting a related article",
+    engineSource.includes("runModelHumanization") &&
+      engineSource.slice(engineSource.indexOf("export async function runHumanization")).includes("runModelHumanization"),
   );
   assert(
     "Humanize engine rejects a half-length summary",
@@ -844,41 +852,43 @@ Rainforests also illustrate a much broader set of global development debates. It
       /\beducation\b/i.test(engineEducationPair!.input.slice(0, 480)),
     `source=${engineEducation.source} row=${engineEducation.retrieval?.matches[0]?.index}`,
   );
-  let harborlineError: unknown;
-  try {
-    await runEngineHumanization({ text: NEW_TOPIC, intensity: 75 });
-  } catch (error) {
-    harborlineError = error;
-  }
+  const environmentHeadingTopic = findTopicMatch(ENVIRONMENT_HEADING_ESSAY);
+  const environmentHeadingStored = environmentHeadingTopic
+    ? getTrainingPairs()[environmentHeadingTopic.index]
+    : null;
   assert(
-    "unrelated Harborline draft does not get a model rewrite",
+    "an Environment heading does not return a water-pollution essay",
+    !environmentHeadingStored ||
+      !/^water pollution\b/i.test(environmentHeadingStored.input.trim()),
+    `row=${environmentHeadingTopic?.index} opening=${environmentHeadingStored?.input.slice(0, 80) ?? "none"}`,
+  );
+  const environmentWiki = findWikipediaMatch(ENVIRONMENT_HEADING_ESSAY);
+  assert(
+    "an Environment draft does not load the Wikipedia water-pollution article",
+    environmentWiki === null,
+    `wiki=${environmentWiki?.index}`,
+  );
+  const wikiExcerpt = findWikipediaMatch(
+    (await import("../src/lib/wikipedia-corpus")).getWikipediaArticle(0)?.source_text ?? "",
+  );
+  assert(
+    "a pasted Wikipedia excerpt still matches that same article",
+    wikiExcerpt?.kind === "exact" || wikiExcerpt?.kind === "near_exact",
+    `kind=${wikiExcerpt?.kind ?? "none"}`,
+  );
+  assert(
+    "unrelated Harborline draft is not a stored topic and is rewritten, not substituted",
     findTopicMatch(NEW_TOPIC) === null &&
-      harborlineError instanceof HumanizationFailedError &&
-      harborlineError.code === "NO_TRAINING_MATCH",
+      findWikipediaMatch(NEW_TOPIC) === null &&
+      engineSource.includes("runModelHumanization"),
   );
-  let historyError: unknown;
-  try {
-    await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
-  } catch (error) {
-    historyError = error;
-  }
   assert(
-    "a general History draft is not rewritten as American History and has no gold row",
-    findTopicMatch(HISTORY_ESSAY) === null &&
-      historyError instanceof HumanizationFailedError &&
-      historyError.code === "NO_TRAINING_MATCH",
+    "a general History draft is not rewritten as American History",
+    findTopicMatch(HISTORY_ESSAY) === null && engineSource.includes("runModelHumanization"),
   );
-  let intelligenceError: unknown;
-  try {
-    await runEngineHumanization({ text: INTELLIGENCE_ONLY_ESSAY, intensity: 75 });
-  } catch (error) {
-    intelligenceError = error;
-  }
   assert(
-    "an intelligence draft is not rewritten as an AI essay and has no gold row",
-    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null &&
-      intelligenceError instanceof HumanizationFailedError &&
-      intelligenceError.code === "NO_TRAINING_MATCH",
+    "an intelligence draft is not rewritten as an AI essay",
+    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null && engineSource.includes("runModelHumanization"),
   );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(

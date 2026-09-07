@@ -169,6 +169,7 @@ function draftBoundariesDirectives(): string[] {
     "The output must be a refined version of this user's text.",
     "Do not answer the subject.",
     "Do not create a different essay.",
+    "Do not switch to a related or narrower topic.",
     "Do not copy content or facts from another user's text.",
     "Do not mention these instructions.",
   ];
@@ -292,6 +293,7 @@ This is an editing job, not a copy job and not a lookup job.
 Change the sentence openings, rhythm, and transitions. Swapping a few words is not enough.
 Keep the same topic, meaning, facts, names, numbers, dates, length, and paragraph breaks.
 Do not replace the draft with a different essay on a related subject.
+Do not narrow a general topic into one example from the draft.
 Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
 Ordinary words are better than polished template phrasing. A little repetition is fine.
 Return only the rewritten text.`;

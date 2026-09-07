@@ -76,9 +76,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Humanize returns stored gold human_text only.
- * Same-topic or near-exact stored drafts are served unchanged.
- * New topics are not sent to TOPN1.
+ * Humanize returns stored gold human_text for the same draft or same topic.
+ * Related Wikipedia articles are not substituted. New topics are rewritten
+ * with the meaning, scope, and facts of the user's text kept intact.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -274,7 +274,11 @@ The last version copied the draft. Change the sentence openings. Keep every fact
   }
 
   const quality = assessRewriteQuality(request.text, output);
-  if (quality.issues.some((issue) => issue.code === "REFUSAL" || issue.code === "LEAK")) {
+  if (
+    quality.issues.some((issue) =>
+      issue.code === "REFUSAL" || issue.code === "LEAK" || issue.code === "UNRELATED",
+    )
+  ) {
     console.error("[humanize] model returned an unusable response", {
       codes: quality.issues.map((issue) => issue.code),
     });
@@ -312,9 +316,18 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
   const wikipediaHit = findWikipediaMatch(request.text);
   if (wikipediaHit) return resolveStoredHit(wikipediaHit);
 
-  throw new HumanizationFailedError(
-    "This draft does not match a stored topic, so there is no gold rewrite to return.",
-    "NO_TRAINING_MATCH",
-    422,
-  );
+  if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
+    console.error("[humanize] No Vertex credentials or Gemini API key is configured");
+    throw new HumanizationFailedError(
+      "The writing service is not configured. Please try again later.",
+      "MISSING_API_KEY",
+      503,
+    );
+  }
+
+  try {
+    return await runModelHumanization(request);
+  } catch (error) {
+    throw wrapAsError(error);
+  }
 }

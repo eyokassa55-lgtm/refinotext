@@ -8,8 +8,8 @@
  * hashtag is not required. This same-topic rule applies to every stored pair:
  * a narrower or related subject does not replace the user's meaning
  * (History vs American History, intelligence vs artificial intelligence).
- * Unmatched drafts do not go to TOPN1. Humanize only returns gold
- * human_text for a same-topic or near-exact stored draft.
+ * Unmatched drafts are rewritten in place so the user's topic and meaning
+ * stay intact. Wikipedia samples match only when that excerpt was pasted.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

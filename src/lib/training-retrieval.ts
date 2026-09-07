@@ -8,8 +8,8 @@ import { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD } from "@/lib/training-
  * Keyword search over stored ai_text. Every training pair keeps its own topic
  * identity (all opening topic words). Humanize returns that row's paired
  * gold human_text only when the user's draft is that same topic. A related or
- * narrower subject does not replace the user's meaning. New topics are not
- * sent to TOPN1.
+ * narrower subject does not replace the user's meaning. Body words in a titled
+ * draft are not topic keywords (Environment is not Water pollution).
  */
 
 export { DATABASE_MATCH_THRESHOLD, TOPIC_MATCH_THRESHOLD };
@@ -483,19 +483,10 @@ const TOPIC_PHRASE_BREAK =
 function topicPhraseTokens(text: string): string[] {
   const heading = extractHeadingLine(text);
   if (heading) {
+    // A title is the draft's topic. Do not pull body nouns ("water", "pollution")
+    // into the lookup, or a general Environment essay matches Water pollution.
     const fromTitle = titleClauses(heading).flatMap((clause) => subjectKeywords(clause));
-    const first = firstSentences(text, 1);
-    const parts = first.split(TOPIC_PHRASE_BREAK);
-    const phrase = parts[0]?.trim() ? parts[0]! : first;
-    const fromBody = subjectKeywords(phrase);
-    const seen = new Set<string>();
-    const chosen: string[] = [];
-    for (const token of [...fromTitle, ...fromBody]) {
-      if (seen.has(token)) continue;
-      seen.add(token);
-      chosen.push(token);
-    }
-    if (chosen.length > 0) return chosen.slice(0, 8);
+    if (fromTitle.length > 0) return fromTitle.slice(0, 8);
   }
 
   const first = firstSentences(text, 1);
