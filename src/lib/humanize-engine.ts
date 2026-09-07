@@ -18,7 +18,7 @@ import {
   stripModelChrome,
 } from "@/lib/humanize-quality";
 import { type DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findWikipediaMatch, getWikipediaRowCount } from "@/lib/wikipedia-corpus";
+import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -141,7 +141,7 @@ function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
     row: hit.index,
     kind: hit.kind,
     score: hit.score,
-    rows: getWikipediaRowCount(),
+    source: "wikipedia-live",
   });
   return {
     text: hit.output,
@@ -190,7 +190,6 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
   const systemInstruction = buildHumanRewriteInstruction({ text: request.text }, []);
 
   console.info("[humanize] [MODEL_GENERATED]", {
-    rows: getWikipediaRowCount(),
     backend,
     humanTextTuned: isHumanTextTunedReady(),
     model:
@@ -301,7 +300,7 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const wikipediaHit = findWikipediaMatch(request.text);
+  const wikipediaHit = await findWikipediaLiveMatch(request.text);
   if (wikipediaHit) return resolveStoredHit(wikipediaHit);
 
   throw new HumanizationFailedError(

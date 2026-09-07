@@ -220,6 +220,14 @@ Used carefully, these tools help people get more done. Used carelessly, they can
 
 const SUCCESS_PLAIN_ESSAY = SUCCESS_CHATGPT_ESSAY.replace(/^# Success\s*/, "").trim();
 
+const PREAMBLE_SUCCESS_ESSAY = `In today's competitive world, success is often defined by money, status, or fame.
+
+Hard work, patience, and learning from failure still matter more than a single lucky break.`;
+
+const PREAMBLE_ENVIRONMENT_ESSAY = `In today's world, the environment is threatened by water pollution, deforestation, and climate change.
+
+Rivers, forests, and cities are part of the same system.`;
+
 const CLIMATE_PLAIN_ESSAY = `Climate change is heating the planet. Ice melts, seas rise, and storms get worse.
 
 Cutting fossil fuels and planting trees can slow the damage. Cities can also prepare hospitals and cooling centers.`;
@@ -500,8 +508,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "../src/lib/training-lookup"
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
-  const { findWikipediaMatch, getWikipediaArticle, getWikipediaArticleByTopic, getWikipediaRowCount } =
-    await import("../src/lib/wikipedia-corpus");
+  const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
@@ -577,54 +584,28 @@ Rainforests also illustrate a much broader set of global development debates. It
       );
     }
   }
-  const wikipediaEducation = getWikipediaArticleByTopic("Education");
-  const wikipediaEnvironment = getWikipediaArticleByTopic("Environment");
-  const wikipediaAi = getWikipediaArticleByTopic("Artificial intelligence");
-  const wikipediaWater = getWikipediaArticleByTopic("Water pollution");
-  const wikipediaSuccess = getWikipediaArticleByTopic("Success");
-  const wikipediaTechnology = getWikipediaArticleByTopic("Technology");
-  const wikipediaHistory = getWikipediaArticleByTopic("History");
-  const wikipediaClimateChange = getWikipediaArticleByTopic("Climate change");
-  const wikipediaUsHistory = getWikipediaArticleByTopic("History of the United States");
-  const wikipediaIntelligence = getWikipediaArticleByTopic("Intelligence");
-  assert("Wikipedia corpus includes Education", Boolean(wikipediaEducation));
-  assert("Wikipedia corpus includes Environment", Boolean(wikipediaEnvironment));
-  assert("Wikipedia corpus includes Artificial intelligence", Boolean(wikipediaAi));
-  assert("Wikipedia corpus includes Water pollution", Boolean(wikipediaWater));
-  assert("Wikipedia corpus includes Success", Boolean(wikipediaSuccess));
-  assert("Wikipedia corpus includes Technology", Boolean(wikipediaTechnology));
-  assert("Wikipedia corpus includes History", Boolean(wikipediaHistory));
-  assert("Wikipedia corpus includes Climate change", Boolean(wikipediaClimateChange));
-  assert("Wikipedia corpus includes History of the United States", Boolean(wikipediaUsHistory));
   assert(
-    "Wikipedia corpus has 3000 articles",
-    getWikipediaRowCount() === 3000,
-    `rows=${getWikipediaRowCount()}`,
+    "Natural environment is the same topic as Environment",
+    titleMatchesUserTopic("Natural environment", ["environment"]),
   );
-  const wikiExcerptPaste = getWikipediaArticle(0)?.source_text ?? "";
-  const engineExcerpt = await runEngineHumanization({ text: wikiExcerptPaste, intensity: 75 });
   assert(
-    "Humanize returns the pasted Wikipedia excerpt unchanged",
-    engineExcerpt.source === "TOPIC_TRAINING_MATCH" &&
-      engineExcerpt.text === wikiExcerptPaste,
-    `source=${engineExcerpt.source}`,
+    "Artificial intelligence is not the same topic as intelligence",
+    !titleMatchesUserTopic("Artificial intelligence", ["intelligence"]),
   );
   const engineStoredSuccess = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
   assert(
-    "a Success draft returns Wikipedia Success, not training human_text",
+    "a Success draft returns live Wikipedia Success, not training human_text",
     engineStoredSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaSuccess) &&
-      engineStoredSuccess.text === wikipediaSuccess!.source_text &&
+      /success/i.test(engineStoredSuccess.text.slice(0, 400)) &&
       engineStoredSuccess.text !== firstPair.output,
-    `source=${engineStoredSuccess.source}`,
+    `source=${engineStoredSuccess.source} opening=${engineStoredSuccess.text.slice(0, 80)}`,
   );
   const engineStoredTech = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
   assert(
-    "a Technology draft returns Wikipedia Technology, not training human_text",
+    "a Technology draft returns live Wikipedia Technology, not training human_text",
     engineStoredTech.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaTechnology) &&
-      engineStoredTech.text === wikipediaTechnology!.source_text,
-    `source=${engineStoredTech.source}`,
+      /technolog/i.test(engineStoredTech.text.slice(0, 400)),
+    `source=${engineStoredTech.source} opening=${engineStoredTech.text.slice(0, 80)}`,
   );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
@@ -822,7 +803,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
-  assert("Humanize engine looks up Wikipedia by same-topic title", engineSource.includes("findWikipediaMatch"));
+  assert("Humanize engine looks up topics on live Wikipedia", engineSource.includes("findWikipediaLiveMatch"));
   assert(
     "Humanize engine does not fall back to training_data.jsonl",
     !engineSource.includes("findTopicMatch") && !engineSource.includes("findDatabaseMatch"),
@@ -830,47 +811,57 @@ Rainforests also illustrate a much broader set of global development debates. It
   const runHumanizationFn = engineSource.slice(engineSource.indexOf("export async function runHumanization"));
   assert(
     "Humanize engine does not rewrite unmatched drafts",
-    runHumanizationFn.includes("NO_WIKIPEDIA_MATCH") && !runHumanizationFn.includes("runModelHumanization"),
+    runHumanizationFn.includes("NO_WIKIPEDIA_MATCH") &&
+      !runHumanizationFn.includes("runModelHumanization") &&
+      !runHumanizationFn.includes("findWikipediaMatch("),
   );
-  assert("Humanize engine returns stored Wikipedia text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
+  assert("Humanize engine returns Wikipedia text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
+  const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
+  assert(
+    "Humanize looks up articles on live English Wikipedia, not a local 3000-article file",
+    wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
+      engineSource.includes("findWikipediaLiveMatch") &&
+      !runHumanizationFn.includes("findWikipediaMatch(") &&
+      !runHumanizationFn.includes("getIndex("),
+  );
+  const pickerSource = readFileSync(
+    join(process.cwd(), "src", "components", "humanizer", "wikipedia-picker.tsx"),
+    "utf8",
+  );
+  assert(
+    "Wikipedia picker searches the full encyclopedia instead of listing 3000 titles",
+    pickerSource.includes("/api/wikipedia?q=") &&
+      pickerSource.includes("Search any English Wikipedia topic") &&
+      !pickerSource.includes("listWikipediaArticles"),
+  );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Technology for a #technology draft",
-    engineHashTech.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaTechnology) &&
-      engineHashTech.text === wikipediaTechnology!.source_text,
-    `source=${engineHashTech.source}`,
+    "Humanize returns live Wikipedia Technology for a #technology draft",
+    engineHashTech.source === "TOPIC_TRAINING_MATCH" && /technology is the application/i.test(engineHashTech.text),
+    `source=${engineHashTech.source} opening=${engineHashTech.text.slice(0, 80)}`,
   );
   const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Success for a Success draft",
-    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaSuccess) &&
-      engineSuccess.text === wikipediaSuccess!.source_text,
-    `source=${engineSuccess.source}`,
+    "Humanize returns live Wikipedia Success for a Success draft",
+    engineSuccess.source === "TOPIC_TRAINING_MATCH" && /success is the state or condition/i.test(engineSuccess.text),
+    `source=${engineSuccess.source} opening=${engineSuccess.text.slice(0, 80)}`,
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Technology for a technology draft",
-    enginePlainTech.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaTechnology) &&
-      enginePlainTech.text === wikipediaTechnology!.source_text,
+    "Humanize returns live Wikipedia Technology for a technology draft",
+    enginePlainTech.source === "TOPIC_TRAINING_MATCH" && /technology is the application/i.test(enginePlainTech.text),
     `source=${enginePlainTech.source}`,
   );
   const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns the Wikipedia Education article for an education draft",
-    engineEducation.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaEducation) &&
-      engineEducation.text === wikipediaEducation!.source_text,
+    "Humanize returns the live Wikipedia Education article for an education draft",
+    engineEducation.source === "TOPIC_TRAINING_MATCH" && /education is the transmission/i.test(engineEducation.text),
     `source=${engineEducation.source}`,
   );
   const engineAi = await runEngineHumanization({ text: AI_TECH_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns the Wikipedia Artificial intelligence article for an AI draft",
-    engineAi.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaAi) &&
-      engineAi.text === wikipediaAi!.source_text,
+    "Humanize returns the live Wikipedia Artificial intelligence article for an AI draft",
+    engineAi.source === "TOPIC_TRAINING_MATCH" && /artificial intelligence/i.test(engineAi.text),
     `source=${engineAi.source}`,
   );
   const environmentHeadingTopic = findTopicMatch(ENVIRONMENT_HEADING_ESSAY);
@@ -883,12 +874,11 @@ Rainforests also illustrate a much broader set of global development debates. It
       !/^water pollution\b/i.test(environmentHeadingStored.input.trim()),
     `row=${environmentHeadingTopic?.index} opening=${environmentHeadingStored?.input.slice(0, 80) ?? "none"}`,
   );
-  const environmentWiki = findWikipediaMatch(ENVIRONMENT_HEADING_ESSAY);
+  const environmentWiki = await findWikipediaLiveMatch(ENVIRONMENT_HEADING_ESSAY);
   assert(
-    "an Environment heading matches the Wikipedia Environment article",
+    "an Environment heading matches live Wikipedia Natural environment",
     environmentWiki?.kind === "topic" &&
-      Boolean(wikipediaEnvironment) &&
-      environmentWiki.output === wikipediaEnvironment!.source_text &&
+      /natural environment/i.test(environmentWiki.output) &&
       !/^water pollution/i.test(environmentWiki.output),
     `kind=${environmentWiki?.kind ?? "none"} opening=${environmentWiki?.output.slice(0, 80) ?? "none"}`,
   );
@@ -896,72 +886,82 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Humanize returns Wikipedia Environment, not Water pollution",
     engineEnvironment.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaEnvironment) &&
-      engineEnvironment.text === wikipediaEnvironment!.source_text &&
+      /natural environment/i.test(engineEnvironment.text) &&
       !/^water pollution/i.test(engineEnvironment.text),
     `source=${engineEnvironment.source} opening=${engineEnvironment.text.slice(0, 80)}`,
   );
-  const untitledEnvironment = findWikipediaMatch(ENVIRONMENT_ESSAY);
+  const untitledEnvironment = await findWikipediaLiveMatch(ENVIRONMENT_ESSAY);
   assert(
     "an untitled Environment draft still matches Wikipedia Environment",
-    untitledEnvironment?.output === wikipediaEnvironment!.source_text,
+    Boolean(untitledEnvironment) && /natural environment/i.test(untitledEnvironment!.output),
     `kind=${untitledEnvironment?.kind ?? "none"}`,
   );
-  const waterWiki = findWikipediaMatch(WATER_POLLUTION_HEADING_ESSAY);
+  const waterWiki = await findWikipediaLiveMatch(WATER_POLLUTION_HEADING_ESSAY);
   assert(
     "a Water pollution heading matches the Wikipedia Water pollution article",
-    waterWiki?.kind === "topic" &&
-      Boolean(wikipediaWater) &&
-      waterWiki.output === wikipediaWater!.source_text,
+    waterWiki?.kind === "topic" && /water pollution/i.test(waterWiki.output),
     `kind=${waterWiki?.kind ?? "none"}`,
-  );
-  const wikiExcerpt = findWikipediaMatch(wikiExcerptPaste);
-  assert(
-    "a pasted Wikipedia excerpt still matches that same article",
-    wikiExcerpt?.kind === "exact" || wikiExcerpt?.kind === "near_exact",
-    `kind=${wikiExcerpt?.kind ?? "none"}`,
   );
   assert(
     "unrelated Harborline draft has no Wikipedia article and is not rewritten",
-    findTopicMatch(NEW_TOPIC) === null &&
-      findWikipediaMatch(NEW_TOPIC) === null &&
-      engineSource.includes("NO_WIKIPEDIA_MATCH"),
+    findTopicMatch(NEW_TOPIC) === null && engineSource.includes("NO_WIKIPEDIA_MATCH"),
   );
   await expectNoWiki("Harborline draft is not rewritten or substituted", NEW_TOPIC);
-  const historyWiki = findWikipediaMatch(HISTORY_ESSAY);
+  const historyWiki = await findWikipediaLiveMatch(HISTORY_ESSAY);
   assert(
     "a general History draft matches Wikipedia History, not US history",
-    historyWiki?.output === wikipediaHistory!.source_text &&
-      historyWiki.output !== wikipediaUsHistory!.source_text,
-    `kind=${historyWiki?.kind ?? "none"}`,
+    Boolean(historyWiki) &&
+      /study of the past/i.test(historyWiki!.output) &&
+      !/history of the land which became the united states/i.test(historyWiki!.output),
+    `kind=${historyWiki?.kind ?? "none"} opening=${historyWiki?.output.slice(0, 80) ?? "none"}`,
   );
   const engineHistory = await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
   assert(
     "Humanize returns Wikipedia History for a History draft",
-    engineHistory.source === "TOPIC_TRAINING_MATCH" &&
-      engineHistory.text === wikipediaHistory!.source_text,
+    engineHistory.source === "TOPIC_TRAINING_MATCH" && /study of the past/i.test(engineHistory.text),
     `source=${engineHistory.source}`,
   );
-  const intelligenceWiki = findWikipediaMatch(INTELLIGENCE_ONLY_ESSAY);
+  const intelligenceWiki = await findWikipediaLiveMatch(INTELLIGENCE_ONLY_ESSAY);
   assert(
     "an intelligence draft matches Wikipedia Intelligence, not Artificial intelligence",
-    intelligenceWiki?.output === wikipediaIntelligence!.source_text &&
-      intelligenceWiki.output !== wikipediaAi!.source_text,
-    `kind=${intelligenceWiki?.kind ?? "none"}`,
+    Boolean(intelligenceWiki) &&
+      /capacity for abstraction/i.test(intelligenceWiki!.output) &&
+      !/artificial intelligence \(ai\)/i.test(intelligenceWiki!.output),
+    `kind=${intelligenceWiki?.kind ?? "none"} opening=${intelligenceWiki?.output.slice(0, 80) ?? "none"}`,
   );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(
     "Humanize returns Wikipedia History of the United States for an American History draft",
     engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
-      Boolean(wikipediaUsHistory) &&
-      engineAmericanHistory.text === wikipediaUsHistory!.source_text,
-    `source=${engineAmericanHistory.source}`,
+      /united states/i.test(engineAmericanHistory.text) &&
+      !/history is the systematic study of the past/i.test(engineAmericanHistory.text),
+    `source=${engineAmericanHistory.source} opening=${engineAmericanHistory.text.slice(0, 80)}`,
   );
-  const climateWiki = findWikipediaMatch(CLIMATE_PLAIN_ESSAY);
+  const climateWiki = await findWikipediaLiveMatch(CLIMATE_PLAIN_ESSAY);
   assert(
     "a Climate change draft matches Wikipedia Climate change",
-    Boolean(wikipediaClimateChange) && climateWiki?.output === wikipediaClimateChange!.source_text,
+    Boolean(climateWiki) && /climate change/i.test(climateWiki!.output),
     `kind=${climateWiki?.kind ?? "none"}`,
+  );
+  const preambleSuccess = await findWikipediaLiveMatch(PREAMBLE_SUCCESS_ESSAY);
+  assert(
+    "a ChatGPT-style Success draft still matches Wikipedia Success",
+    Boolean(preambleSuccess) && /success is the state or condition/i.test(preambleSuccess!.output),
+    `kind=${preambleSuccess?.kind ?? "none"}`,
+  );
+  const preambleEnvironment = await findWikipediaLiveMatch(PREAMBLE_ENVIRONMENT_ESSAY);
+  assert(
+    "a ChatGPT-style Environment draft matches Environment, not Water pollution",
+    Boolean(preambleEnvironment) &&
+      /natural environment/i.test(preambleEnvironment!.output) &&
+      !/^water pollution/i.test(preambleEnvironment!.output),
+    `kind=${preambleEnvironment?.kind ?? "none"} opening=${preambleEnvironment?.output.slice(0, 80) ?? "none"}`,
+  );
+  const enginePreambleSuccess = await runEngineHumanization({ text: PREAMBLE_SUCCESS_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns Wikipedia Success for a preamble Success draft",
+    /success is the state or condition/i.test(enginePreambleSuccess.text),
+    `source=${enginePreambleSuccess.source}`,
   );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
@@ -1094,7 +1094,6 @@ async function runLiveTests() {
     requireVertexConfig,
   } = await import("../src/lib/gemini");
   const { runHumanization } = await import("../src/lib/humanize-engine");
-  const { getWikipediaArticleByTopic } = await import("../src/lib/wikipedia-corpus");
 
   console.log("\n4. Live Humanize provider cases");
 
@@ -1122,7 +1121,6 @@ async function runLiveTests() {
   }
 
   const { HumanizationFailedError } = await import("../src/lib/humanize-engine");
-  const environmentArticle = getWikipediaArticleByTopic("Environment");
   const sample = { id: "T6", name: "environment-topic", text: ENVIRONMENT_HEADING_ESSAY };
 
   try {
@@ -1135,8 +1133,7 @@ async function runLiveTests() {
     assert(
       `${sample.id} ${sample.name}`,
       result.source === "TOPIC_TRAINING_MATCH" &&
-        Boolean(environmentArticle) &&
-        result.text === environmentArticle!.source_text &&
+        /natural environment/i.test(result.text) &&
         !/^water pollution/i.test(result.text),
       `source=${result.source}`,
     );

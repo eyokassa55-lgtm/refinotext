@@ -1,22 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getWikipediaArticle, listWikipediaArticles } from "@/lib/wikipedia-corpus";
+import { lookupWikipediaArticle } from "@/lib/wikipedia-corpus";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
-  const idParam = request.nextUrl.searchParams.get("id");
-  if (idParam !== null) {
-    const id = Number.parseInt(idParam, 10);
-    if (!Number.isInteger(id) || id < 0) {
-      return NextResponse.json({ error: "Invalid article id.", code: "INVALID_ID" }, { status: 400 });
-    }
-    const article = getWikipediaArticle(id);
-    if (!article) {
-      return NextResponse.json({ error: "Article not found.", code: "NOT_FOUND" }, { status: 404 });
-    }
-    return NextResponse.json(article);
+  const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  if (!query) {
+    return NextResponse.json(
+      { error: "Add a Wikipedia topic to search.", code: "MISSING_QUERY" },
+      { status: 400 },
+    );
   }
 
-  return NextResponse.json({ articles: listWikipediaArticles() });
+  const article = await lookupWikipediaArticle(query);
+  if (!article) {
+    return NextResponse.json({ error: "Article not found.", code: "NOT_FOUND" }, { status: 404 });
+  }
+  return NextResponse.json(article);
 }

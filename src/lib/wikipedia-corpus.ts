@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
 
-/** On-disk name is historical; this file holds 3000 Wikipedia articles. */
+/** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
 export const WIKIPEDIA_EDITOR_MAX_CHARS = 2400;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;
@@ -187,6 +187,64 @@ const LEADING_TOPIC_FRAMES = new Set([
   "understanding",
 ]);
 
+/** Hedging words in "In today's world, success is..." — not the topic. */
+const TOPIC_PREAMBLE = new Set([
+  "today",
+  "todays",
+  "nowadays",
+  "currently",
+  "recently",
+  "rapidly",
+  "increasingly",
+  "often",
+  "always",
+  "however",
+  "furthermore",
+  "moreover",
+  "therefore",
+  "thus",
+  "hence",
+  "indeed",
+  "clearly",
+  "simply",
+  "basically",
+  "actually",
+  "really",
+  "quite",
+  "still",
+  "already",
+  "especially",
+  "particularly",
+  "generally",
+  "typically",
+  "usually",
+  "commonly",
+  "competitive",
+  "evolving",
+  "modern",
+  "world",
+  "society",
+  "people",
+  "humanity",
+  "life",
+  "lives",
+]);
+
+/**
+ * Extra title words that still mean the same topic
+ * (Environment → Natural environment). Not "artificial" (intelligence ≠ AI).
+ */
+const TITLE_QUALIFIERS = new Set([
+  "natural",
+  "biophysical",
+  "overview",
+  "introduction",
+  "concept",
+  "human",
+  "general",
+  "basic",
+]);
+
 const TOPIC_PHRASE_BREAK =
   /\b(?:is|are|was|were|has|have|had|do|does|did|can|will|may|might|must|should|would|could|means|refers|plays|remains|becomes|became|makes|make|made)\b/i;
 
@@ -235,14 +293,36 @@ function extractHeadingLine(text: string): string | null {
   return null;
 }
 
-function userTopicKeys(text: string): string[] {
-  const keys: string[] = [];
+function skipPreamble(tokens: string[]): string[] {
+  let index = 0;
+  while (
+    index < tokens.length &&
+    (LEADING_TOPIC_FRAMES.has(tokens[index]!) || TOPIC_PREAMBLE.has(tokens[index]!))
+  ) {
+    index += 1;
+  }
+  return tokens.slice(index);
+}
+
+function openingClause(text: string): string {
+  const body = text.trim().replace(/^#{1,6}\s*[^\n]+\n+/, "");
+  const first = body.split(/(?<=[.!?])\s+/).filter((part) => part.trim())[0] ?? body;
+  const parts = first.split(TOPIC_PHRASE_BREAK);
+  return (parts[0]?.trim() ? parts[0]! : first).trim();
+}
+
+function userTopicPhrases(text: string): string[] {
+  const phrases: string[] = [];
   const seen = new Set<string>();
   const add = (raw: string) => {
-    const key = topicKey(tokenizeTopic(raw));
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    keys.push(key);
+    const cleaned = raw.replace(/\s+/g, " ").trim();
+    if (!cleaned) return;
+    const key = topicKey(tokenizeTopic(cleaned));
+    if (!key) return;
+    const seenKey = cleaned.toLowerCase();
+    if (seen.has(seenKey)) return;
+    seen.add(seenKey);
+    phrases.push(cleaned);
   };
 
   const heading = extractHeadingLine(text);
@@ -260,13 +340,46 @@ function userTopicKeys(text: string): string[] {
   // Titled drafts keep the heading as the topic. Body nouns must not
   // pull in a related article (Environment is not Water pollution).
   if (!heading) {
-    const body = text.trim();
-    const first = body.split(/(?<=[.!?])\s+/).filter((part) => part.trim())[0] ?? body;
-    const parts = first.split(TOPIC_PHRASE_BREAK);
-    add(parts[0]?.trim() ? parts[0]! : first);
+    const clause = openingClause(text);
+    add(clause);
+    const commaParts = clause.split(",").map((part) => part.trim()).filter(Boolean);
+    const afterComma = commaParts[commaParts.length - 1];
+    if (afterComma && commaParts.length >= 2 && tokenizeTopic(afterComma).length <= 4) {
+      add(afterComma);
+    }
+    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(clause)));
+    if (stripped.length >= 1 && stripped.length <= 3) {
+      add(stripped.join(" "));
+    }
   }
 
-  return keys;
+  return phrases;
+}
+
+function userTopicKeys(text: string): string[] {
+  return userTopicPhrases(text).map((phrase) => topicKey(tokenizeTopic(phrase)));
+}
+
+function tokensFromKey(key: string): string[] {
+  return key.split("\u0001").filter(Boolean);
+}
+
+export function titleMatchesUserTopic(title: string, userKeys: Iterable<string>): boolean {
+  const titleKey = topicKey(tokenizeTopic(title));
+  if (!titleKey) return false;
+  const titleTokens = new Set(tokensFromKey(titleKey));
+  for (const userKey of userKeys) {
+    if (!userKey) continue;
+    if (userKey === titleKey) return true;
+    const userTokens = new Set(tokensFromKey(userKey));
+    if (userTokens.size === 0) continue;
+    if (![...userTokens].every((token) => titleTokens.has(token))) continue;
+    const extra = [...titleTokens].filter((token) => !userTokens.has(token));
+    if (extra.length > 0 && extra.every((token) => TITLE_QUALIFIERS.has(token))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function titleLabels(row: WikipediaRow): string[] {
@@ -387,5 +500,205 @@ export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | nu
     if (topicHit) return toMatch(topicHit, 0.99, "topic");
   }
 
+  return null;
+}
+
+const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
+const WIKIPEDIA_LIVE_INDEX = 90_000;
+const WIKIPEDIA_USER_AGENT =
+  "RefinoText/1.0 (https://refinotext.com; same-topic Wikipedia lookup for Humanize)";
+
+const pageCache = new Map<string, WikipediaRow | null>();
+const searchCache = new Map<string, string[]>();
+
+export function isWikipediaLiveLookupEnabled(): boolean {
+  return true;
+}
+
+type WikiApiPage = {
+  missing?: boolean;
+  invalid?: boolean;
+  title?: string;
+  extract?: string;
+  fullurl?: string;
+  pageprops?: { disambiguation?: unknown };
+};
+
+async function wikiQuery(params: Record<string, string>): Promise<Record<string, unknown> | null> {
+  const url = new URL(WIKIPEDIA_API);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("formatversion", "2");
+  url.searchParams.set("utf8", "1");
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": WIKIPEDIA_USER_AGENT,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function liveRowFromExtract(title: string, extract: string, pageUrl: string): WikipediaRow | null {
+  const output = excerpt(extract);
+  if (output.length < 400) return null;
+  return {
+    id: WIKIPEDIA_LIVE_INDEX,
+    topic: title,
+    category: "general",
+    source_url: pageUrl,
+    source_text: output,
+    input: `${title}\n\n${output}`,
+    output,
+    aliases: [],
+  };
+}
+
+function isDisambiguation(page: WikiApiPage): boolean {
+  return Boolean(page.pageprops && "disambiguation" in page.pageprops);
+}
+
+async function fetchWikipediaPage(title: string): Promise<WikipediaRow | null> {
+  const cacheKey = title.trim().toLowerCase();
+  if (pageCache.has(cacheKey)) return pageCache.get(cacheKey) ?? null;
+
+  const data = await wikiQuery({
+    prop: "extracts|info|pageprops",
+    explaintext: "1",
+    exsectionformat: "plain",
+    inprop: "url",
+    ppprop: "disambiguation",
+    redirects: "1",
+    titles: title,
+  });
+  const query = data?.query as { pages?: WikiApiPage[] } | undefined;
+  const page = query?.pages?.[0];
+  if (!page || page.missing || page.invalid || isDisambiguation(page)) {
+    pageCache.set(cacheKey, null);
+    return null;
+  }
+  const canonical = page.title?.trim();
+  const extract = page.extract?.trim();
+  const pageUrl = page.fullurl?.trim();
+  if (!canonical || !extract || !pageUrl) {
+    pageCache.set(cacheKey, null);
+    return null;
+  }
+  if (!pageUrl.startsWith("https://en.wikipedia.org/wiki/")) {
+    pageCache.set(cacheKey, null);
+    return null;
+  }
+  const row = liveRowFromExtract(canonical, extract, pageUrl);
+  pageCache.set(cacheKey, row);
+  if (canonical.toLowerCase() !== cacheKey) {
+    pageCache.set(canonical.toLowerCase(), row);
+  }
+  return row;
+}
+
+async function searchWikipediaTitles(query: string): Promise<string[]> {
+  const cacheKey = query.trim().toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const data = await wikiQuery({
+    list: "search",
+    srsearch: query,
+    srnamespace: "0",
+    srlimit: "8",
+  });
+  const queryData = data?.query as { search?: Array<{ title?: string }> } | undefined;
+  const titles: string[] = [];
+  for (const hit of queryData?.search ?? []) {
+    const title = hit.title?.trim();
+    if (title) titles.push(title);
+  }
+  searchCache.set(cacheKey, titles);
+  return titles;
+}
+
+function liveSearchQueries(text: string): string[] {
+  const phrases = userTopicPhrases(text);
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: string) => {
+    const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
+    const words = normalized.split(" ").filter(Boolean);
+    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 8) return;
+    seen.add(normalized);
+    queries.push(value.trim());
+  };
+  for (const phrase of phrases) {
+    push(phrase);
+    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(phrase)));
+    if (stripped.length >= 1 && stripped.length <= 3) {
+      push(stripped.join(" "));
+    }
+  }
+  return queries.sort((left, right) => left.length - right.length).slice(0, 4);
+}
+
+/**
+ * Look up the same topic on live English Wikipedia (the full encyclopedia).
+ * Related titles are not substituted.
+ */
+export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
+  if (typeof userText !== "string" || userText.trim().length === 0) return null;
+  const userKeys = new Set(userTopicKeys(userText));
+  if (userKeys.size === 0) return null;
+
+  for (const query of liveSearchQueries(userText)) {
+    const queryKey = topicKey(tokenizeTopic(query));
+    if (!queryKey || !userKeys.has(queryKey)) continue;
+
+    const exact = await fetchWikipediaPage(query);
+    if (exact) {
+      if (titleMatchesUserTopic(exact.topic, userKeys) || topicKey(tokenizeTopic(exact.topic)) === queryKey) {
+        return toMatch(exact, 0.97, "topic");
+      }
+      // Wikipedia redirected the user's topic (Hard work → Diligence).
+      return toMatch(exact, 0.96, "topic");
+    }
+
+    for (const title of await searchWikipediaTitles(query)) {
+      if (!titleMatchesUserTopic(title, userKeys) && topicKey(tokenizeTopic(title)) !== queryKey) {
+        continue;
+      }
+      const page = await fetchWikipediaPage(title);
+      if (page) return toMatch(page, 0.95, "topic");
+    }
+  }
+
+  return null;
+}
+
+function toArticle(row: WikipediaRow): WikipediaArticle {
+  return {
+    id: row.id,
+    topic: row.topic,
+    category: row.category,
+    source_url: row.source_url,
+    source_text: row.source_text,
+  };
+}
+
+export async function lookupWikipediaArticle(query: string): Promise<WikipediaArticle | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  const exact = await fetchWikipediaPage(trimmed);
+  if (exact) return toArticle(exact);
+  for (const title of await searchWikipediaTitles(trimmed)) {
+    const page = await fetchWikipediaPage(title);
+    if (page) return toArticle(page);
+  }
   return null;
 }

@@ -85,7 +85,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText returns the Wikipedia article for that same topic. It does not rewrite unmatched drafts or swap in a related subject.",
+      "RefinoText looks up that topic on the full English Wikipedia and returns the article. It does not swap in a related subject.",
   },
   {
     step: "03",

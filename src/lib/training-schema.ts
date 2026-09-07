@@ -1,10 +1,9 @@
 /**
  * Dataset contract for Humanize keyword lookup.
  *
- * Humanize uses `data/wikipedia_750.jsonl` (3000 Wikipedia articles). It
- * returns the Wikipedia article whose title (or alias) is the same topic
- * as the user's draft. Body words never select a related article. Unmatched
- * drafts are not rewritten and do not fall back to `training_data.jsonl`.
+ * Humanize looks up the draft's topic on live English Wikipedia and
+ * returns that article. Body words never select a related article.
+ * Unmatched drafts are not rewritten and do not use `training_data.jsonl`.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
