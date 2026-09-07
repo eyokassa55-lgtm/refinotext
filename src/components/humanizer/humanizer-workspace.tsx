@@ -15,7 +15,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
-import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizerControls } from "./humanizer-controls";
 import { HumanizedOutputView } from "./humanized-output-view";
@@ -94,6 +93,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
       if (!res.ok) {
         const apiError = data as ApiErrorResponse;
+        if (apiError.code === "NO_WIKIPEDIA_MATCH") {
+          setError(null);
+          return;
+        }
         setError(apiError.error || "Humanization failed. Please try again.");
         return;
       }
@@ -209,23 +212,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         className="hidden"
       />
 
-      <div className="flex min-h-[560px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         <WikipediaPicker onLoad={handleLoadWikipedia} disabled={isProcessing} />
-        {(statusMsg || error) && (
-          <div
-            className={cn(
-              "mx-4 mt-4 rounded-xl border px-4 py-2 text-xs font-medium",
-              error
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-accent/20 bg-accent-light/80 text-primary",
-            )}
-          >
-            {error ?? statusMsg}
-          </div>
-        )}
 
         <div className="grid min-h-0 flex-1 lg:grid-cols-2">
-          <div className="relative flex min-h-[280px] flex-col p-4 lg:pr-3">
+          <div className="relative flex min-h-0 flex-col p-4 lg:pr-3">
             <div
               className="pointer-events-none absolute bottom-5 right-0 top-5 hidden w-px rounded-full bg-border lg:block"
               aria-hidden
@@ -340,11 +331,16 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
           </div>
 
-          <div className="flex min-h-[280px] flex-col border-t border-border p-4 lg:border-t-0 lg:pl-3">
+          <div className="flex min-h-0 flex-col border-t border-border p-4 lg:border-t-0 lg:pl-3">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <h3 className="text-sm font-semibold text-foreground">
-                Humanized Output
-              </h3>
+              <div className="flex min-w-0 items-center gap-2">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Humanized Output
+                </h3>
+                {statusMsg && output ? (
+                  <span className="truncate text-[11px] text-muted">{statusMsg}</span>
+                ) : null}
+              </div>
               <div className="flex items-center gap-1">
                 {isClerkEnabled ? (
                   <>
@@ -427,10 +423,15 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     Your humanized text will appear here
                   </p>
                   <p className="mt-2 max-w-xs text-sm text-muted">
-                    {isSignedIn
-                      ? "Paste your draft, then click Humanize"
-                      : "Sign in first, then paste your draft and humanize"}
+                    {error
+                      ? error
+                      : isSignedIn
+                        ? "Paste your draft, then click Humanize"
+                        : "Sign in first, then paste your draft and humanize"}
                   </p>
+                  {statusMsg && !error ? (
+                    <p className="mt-2 max-w-xs text-xs text-muted">{statusMsg}</p>
+                  ) : null}
                 </div>
               )}
             </div>

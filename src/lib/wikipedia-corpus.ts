@@ -283,6 +283,23 @@ function openingClause(text: string): string {
   return (parts[0]?.trim() ? parts[0]! : first).trim();
 }
 
+function headingRelatedPhrases(heading: string): string[] {
+  const extras: string[] = [];
+  const firstClause = heading.split(/[:–—]/)[0]?.trim();
+  if (firstClause) {
+    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(firstClause)));
+    if (stripped.length >= 1 && stripped.length <= 4) extras.push(stripped.join(" "));
+  }
+  for (const match of heading.matchAll(/\bof\s+([^:–—,]+)/gi)) {
+    const tail = match[1]?.trim();
+    if (tail && tokenizeTopic(tail).length <= 4) extras.push(tail);
+  }
+  for (const match of heading.matchAll(/\b[\p{L}]+-[\p{L}]+\b/gu)) {
+    extras.push(match[0]!);
+  }
+  return extras;
+}
+
 function userTopicPhrases(text: string): string[] {
   const phrases: string[] = [];
   const seen = new Set<string>();
@@ -302,6 +319,7 @@ function userTopicPhrases(text: string): string[] {
     add(heading);
     const firstClause = heading.split(/[:–—]/)[0]?.trim();
     if (firstClause) add(firstClause);
+    for (const extra of headingRelatedPhrases(heading)) add(extra);
   }
 
   const head = text.trim().split(/\n/).slice(0, 6).join("\n");
@@ -616,7 +634,7 @@ function liveSearchQueries(text: string): string[] {
       push(stripped.join(" "));
     }
   }
-  return queries.sort((left, right) => left.length - right.length).slice(0, 4);
+  return queries.sort((left, right) => left.length - right.length).slice(0, 6);
 }
 
 function userTokenSet(userKeys: Iterable<string>): Set<string> {
@@ -663,20 +681,22 @@ async function findRelatedWikipediaPage(
   userText: string,
   userKeys: Set<string>,
 ): Promise<WikipediaRow | null> {
-  const userTokens = userTokenSet(userKeys);
-  if (userTokens.size === 0) return null;
+  const allTokens = userTokenSet(userKeys);
+  if (allTokens.size === 0) return null;
   const bigrams = userBigrams(userText);
-  const minOverlap = Math.min(2, userTokens.size);
 
   let best: { row: WikipediaRow; score: number; rank: number } | null = null;
 
   for (const query of liveSearchQueries(userText)) {
+    const queryTokens = new Set(skipLeadingFrames(tokenizeTopic(query)));
+    const scoreTokens = queryTokens.size > 0 ? queryTokens : allTokens;
+    const minOverlap = scoreTokens.size >= 4 ? 2 : 1;
     const titles = await searchWikipediaTitles(query, 12);
     const ranked = titles
       .map((title, index) => ({
         title,
         rank: index + 1,
-        ...relatedTitleScore(title, userTokens, bigrams),
+        ...relatedTitleScore(title, scoreTokens, bigrams),
       }))
       .filter((item) => item.overlap >= minOverlap)
       .sort((left, right) => right.score - left.score || left.rank - right.rank)
@@ -685,7 +705,7 @@ async function findRelatedWikipediaPage(
     for (const candidate of ranked) {
       const page = await fetchWikipediaPage(candidate.title);
       if (!page) continue;
-      const scored = relatedTitleScore(page.topic, userTokens, bigrams);
+      const scored = relatedTitleScore(page.topic, scoreTokens, bigrams);
       if (scored.overlap < minOverlap) continue;
       if (
         !best ||

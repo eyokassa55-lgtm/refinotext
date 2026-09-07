@@ -742,9 +742,18 @@ Rainforests also illustrate a much broader set of global development debates. It
       marketplaceTopic.output === ecommercePair!.output,
     `row=${marketplaceTopic?.index} stored=${ecommercePair?.index}`,
   );
-  await expectNoWiki(
-    "Humanize does not return training e-commerce text for a Digital Marketplace draft",
-    DIGITAL_MARKETPLACE_ESSAY,
+  const engineMarketplace = await runEngineHumanization({
+    text: DIGITAL_MARKETPLACE_ESSAY,
+    intensity: 75,
+  });
+  assert(
+    "Humanize returns a related Wikipedia article for a Digital Marketplace draft",
+    engineMarketplace.source === "TOPIC_TRAINING_MATCH" &&
+      engineMarketplace.text !== ecommercePair!.output &&
+      /e-commerce|electronic commerce|online shopping|digital marketplace/i.test(
+        engineMarketplace.text,
+      ),
+    `source=${engineMarketplace.source} opening=${engineMarketplace.text.slice(0, 80)}`,
   );
   assert("dataset includes an American History pair", Boolean(americanHistoryPair));
   const historyTopic = findTopicMatch(HISTORY_ESSAY);
@@ -860,6 +869,15 @@ Rainforests also illustrate a much broader set of global development debates. It
     pickerSource.includes("/api/wikipedia?q=") &&
       pickerSource.includes("Search any English Wikipedia topic") &&
       !pickerSource.includes("listWikipediaArticles"),
+  );
+  const workspaceSource = readFileSync(
+    join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),
+    "utf8",
+  );
+  assert(
+    "Humanize editor does not show a red Wikipedia-match banner",
+    !workspaceSource.includes("border-red-200") &&
+      workspaceSource.includes('apiError.code === "NO_WIKIPEDIA_MATCH"'),
   );
   const outputViewSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanized-output-view.tsx"),
