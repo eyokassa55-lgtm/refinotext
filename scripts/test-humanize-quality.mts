@@ -228,6 +228,16 @@ const PREAMBLE_ENVIRONMENT_ESSAY = `In today's world, the environment is threate
 
 Rivers, forests, and cities are part of the same system.`;
 
+const QUIET_STRENGTH_OF_CONSISTENCY_ESSAY = `The Quiet Strength of Consistency
+
+Consistency is often treated as a quiet habit rather than a dramatic talent. People who keep the same standard from one day to the next build trust, skill, and a record that luck cannot explain. Small repeated choices add up because they happen when nobody is watching.
+
+A person who writes a page every morning, or keeps a promise after the excitement has faded, is practicing the same idea. The work is not loud. It is the decision to return to the task after a dull week, a missed goal, or a day when motivation is gone.
+
+Teams also depend on consistency. Customers, students, and colleagues notice whether a standard holds. When the standard slips, repair costs more than the original effort. When it holds, people can plan around it.
+
+The strength is quiet because it does not need a speech. It needs a pattern that survives boredom, distraction, and the wish to start over with a new plan.`;
+
 const DISCIPLINE_OF_BOREDOM_ESSAY = `The Discipline of Boredom
 
 Boredom is often treated as something to escape—a signal that nothing interesting is happening. People fill the gap with noise, tasks, and constant stimulation. The result is that empty time feels like a problem rather than a chance to notice what the mind does when nothing is asked of it.
@@ -527,7 +537,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { applyInputTitle, formatWikipediaEditorText, splitHumanizeOutput } = await import(
+  const { applyInputTitle, formatWikipediaEditorText, hasLatexDump, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
   );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
@@ -550,6 +560,67 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/==/.test(formattedWiki) &&
       !/\nSee also\n/i.test(formattedWiki) &&
       !formattedParts.paragraphs.some((paragraph) => /^history$/i.test(paragraph.trim())),
+  );
+  const mathDump = `In deductive logic, a consistent theory is one that does not lead to a logical contradiction. A theory 
+
+
+      
+        T
+      
+    
+    {\\displaystyle T}
+  
+ is consistent if there is no formula 
+
+
+      
+        φ
+      
+    
+    {\\displaystyle \\varphi }
+  
+ such that both 
+
+
+      
+        φ
+      
+    
+    {\\displaystyle \\varphi }
+  
+ and its negation 
+
+
+      
+        ¬
+        φ
+      
+    
+    {\\displaystyle \\lnot \\varphi }
+  
+ are elements of the set of consequences of 
+
+
+      
+        T
+      
+    
+    {\\displaystyle T}
+  
+. Let A {\\displaystyle A} be a set of closed sentences.`;
+  const cleanedMath = stripWikiMath(mathDump);
+  const formattedMath = formatWikipediaEditorText("Consistency", mathDump);
+  assert(
+    "Wikipedia math markup is removed from editor output",
+    !/displaystyle/.test(cleanedMath) &&
+      !/\\varphi/.test(cleanedMath) &&
+      !/\\lnot/.test(cleanedMath) &&
+      /A theory T is consistent/.test(cleanedMath.replace(/\s+/g, " ")) &&
+      !/displaystyle/.test(formattedMath) &&
+      !hasLatexDump(cleanedMath) &&
+      !hasLatexDump(formattedMath) &&
+      formattedMath.includes("\n\n") &&
+      !formattedMath.split(/\n\n/).some((paragraph) => /^[,eEgG]\.?/.test(paragraph.trim())),
   );
   const titledFromInput = applyInputTitle(
     formattedWiki,
@@ -948,6 +1019,22 @@ Rainforests also illustrate a much broader set of global development debates. It
       !/^# /.test(engineBoredom.text) &&
       /boredom/i.test(engineBoredom.text),
     `source=${engineBoredom.source} opening=${engineBoredom.text.slice(0, 80)}`,
+  );
+  const engineConsistency = await runEngineHumanization({
+    text: QUIET_STRENGTH_OF_CONSISTENCY_ESSAY,
+    intensity: 75,
+  });
+  assert(
+    "Humanize output is plain paragraphs without Wikipedia math markup",
+    engineConsistency.source === "TOPIC_TRAINING_MATCH" &&
+      engineConsistency.text.startsWith("The Quiet Strength of Consistency\n\n") &&
+      !hasLatexDump(engineConsistency.text) &&
+      !/displaystyle/.test(engineConsistency.text) &&
+      !/\{\s*\\/.test(engineConsistency.text) &&
+      !/\\[a-zA-Z]+/.test(engineConsistency.text) &&
+      engineConsistency.text.includes("\n\n") &&
+      /consistenc/i.test(engineConsistency.text),
+    `source=${engineConsistency.source} opening=${engineConsistency.text.slice(0, 160)}`,
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
   assert(

@@ -62,7 +62,7 @@ function toParagraphs(text: string): string[] {
   const blocks = text
     .split(/\n\s*\n/)
     .map((block) => block.replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
+    .filter((block) => Boolean(block) && !isBrokenSentence(block));
   if (blocks.length >= 2) return blocks;
 
   const block = blocks[0];
@@ -70,9 +70,32 @@ function toParagraphs(text: string): string[] {
   return splitLongBlock(block);
 }
 
+function dropUnclosedParens(text: string): string {
+  const lastOpen = text.lastIndexOf("(");
+  const lastClose = text.lastIndexOf(")");
+  if (lastOpen > lastClose) {
+    const before = text.slice(0, lastOpen).replace(/[ ,;:]+$/g, "").trim();
+    if (!before) return "";
+    return /[.!?]$/.test(before) ? before : `${before}.`;
+  }
+  return text.trim();
+}
+
+function isBrokenSentence(sentence: string): boolean {
+  const trimmed = sentence.trim();
+  if (!trimmed) return true;
+  if (/^[,);:]/.test(trimmed)) return true;
+  if (/^[eg]\.\s/i.test(trimmed)) return true;
+  if (/^[a-z]/.test(trimmed)) return true;
+  return false;
+}
+
 function splitLongBlock(block: string): string[] {
-  const sentences = block.match(/[^.!?]+[.!?]+(?:["”']\s*|\s+|$)/g);
-  if (!sentences || sentences.length < 3) return [block];
+  const sentences = (block.match(/[^.!?]+[.!?]+(?:["”']\s*|\s+|$)/g) ?? [block])
+    .map((sentence) => dropUnclosedParens(sentence.replace(/\s+/g, " ").trim()))
+    .filter((sentence) => sentence && !isBrokenSentence(sentence));
+  if (sentences.length === 0) return [];
+  if (sentences.length < 3) return [sentences.join(" ")];
 
   const paragraphs: string[] = [];
   let buffer = "";
@@ -87,7 +110,7 @@ function splitLongBlock(block: string): string[] {
     }
   }
   if (buffer.trim()) paragraphs.push(buffer.trim());
-  return paragraphs.length > 0 ? paragraphs : [block];
+  return paragraphs.length > 0 ? paragraphs : [sentences.join(" ")];
 }
 
 function stripNavAndHeadings(text: string): string {
@@ -118,13 +141,178 @@ function stripNavAndHeadings(text: string): string {
   return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function polishProse(text: string): string {
+function matchBalancedBrace(text: string, openIndex: number): number {
+  if (text[openIndex] !== "{") return -1;
+  let depth = 0;
+  for (let i = openIndex; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function latexToPlain(inner: string): string {
+  let text = inner.replace(/^\\(?:displaystyle|textstyle|scriptstyle)\s*/, "");
+  const replacements: Array<[RegExp, string]> = [
+    [/\\varphi\b|\\phi\b/g, "φ"],
+    [/\\ell\b/g, "ℓ"],
+    [/\\lnot\b|\\neg\b/g, "¬"],
+    [/\\not\s*/g, "¬"],
+    [/\\in\b/g, "∈"],
+    [/\\langle\b/g, "⟨"],
+    [/\\rangle\b/g, "⟩"],
+    [/\\leq\b/g, "≤"],
+    [/\\geq\b/g, "≥"],
+    [/\\neq\b|\\ne\b/g, "≠"],
+    [/\\times\b/g, "×"],
+    [/\\cdot\b/g, "·"],
+    [/\\infty\b/g, "∞"],
+    [/\\forall\b/g, "∀"],
+    [/\\exists\b/g, "∃"],
+    [/\\subseteq\b/g, "⊆"],
+    [/\\subset\b/g, "⊂"],
+    [/\\emptyset\b|\\varnothing\b/g, "∅"],
+    [/\\rightarrow\b|\\to\b/g, "→"],
+    [/\\Rightarrow\b/g, "⇒"],
+    [/\\leftrightarrow\b/g, "↔"],
+    [/\\land\b|\\wedge\b/g, "∧"],
+    [/\\lor\b|\\vee\b/g, "∨"],
+    [/\\alpha\b/g, "α"],
+    [/\\beta\b/g, "β"],
+    [/\\gamma\b/g, "γ"],
+    [/\\delta\b/g, "δ"],
+    [/\\theta\b/g, "θ"],
+    [/\\lambda\b/g, "λ"],
+    [/\\mu\b/g, "μ"],
+    [/\\pi\b/g, "π"],
+    [/\\sigma\b/g, "σ"],
+    [/\\omega\b/g, "ω"],
+    [/\\mathbb\{([^}]+)\}/g, "$1"],
+    [/\\mathrm\{([^}]+)\}/g, "$1"],
+    [/\\operatorname\{([^}]+)\}/g, "$1"],
+    [/\\text\{([^}]+)\}/g, "$1"],
+    [/\\mathbf\{([^}]+)\}/g, "$1"],
+    [/\\mathit\{([^}]+)\}/g, "$1"],
+    [/\\overline\{([^}]+)\}/g, "$1"],
+    [/\\frac\{([^}]+)\}\{([^}]+)\}/g, "$1/$2"],
+    [/\\left\b|\\right\b/g, ""],
+    [/\\,|\\;|\\!|\\quad|\\qquad|\\ /g, " "],
+  ];
+  for (const [pattern, replacement] of replacements) {
+    text = text.replace(pattern, replacement);
+  }
   return text
+    .replace(/\\[a-zA-Z]+\*?/g, "")
+    .replace(/[{}]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isMathPreviewLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (trimmed.length > 48) return false;
+  if (/\{\\(?:display|text|script)style\b/.test(trimmed)) return true;
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.some((word) => /^[A-Za-z]{3,}$/.test(word))) return false;
+  return words.length <= 4;
+}
+
+function rewindMathPreview(prefix: string): number {
+  const lines = prefix.split("\n");
+  let cut = lines.length;
+  while (cut > 0 && isMathPreviewLine(lines[cut - 1]!)) {
+    cut -= 1;
+  }
+  return lines.slice(0, cut).join("\n").length;
+}
+
+/** Remove Wikipedia plaintext math dumps such as `{\displaystyle A}` and the duplicate layout above them. */
+export function stripWikiMath(text: string): string {
+  let out = text.replace(/\r\n/g, "\n");
+  out = out.replace(/<math\b[^>]*>[\s\S]*?<\/math>/gi, " ");
+
+  const markers = /\{\s*\\(?:displaystyle|textstyle|scriptstyle)\b/;
+  for (let guard = 0; guard < 500; guard += 1) {
+    const found = out.match(markers);
+    if (!found || found.index === undefined) break;
+    const start = found.index;
+    const close = matchBalancedBrace(out, start);
+    if (close < 0) {
+      out = out.slice(0, start) + out.slice(start + 1);
+      continue;
+    }
+    const plain = latexToPlain(out.slice(start + 1, close));
+    const from = rewindMathPreview(out.slice(0, start));
+    out = `${out.slice(0, from)} ${plain ? `${plain} ` : ""}${out.slice(close + 1)}`;
+  }
+
+  return scrubLatexDump(
+    out
+      .replace(/\\[a-zA-Z]+\*?/g, "")
+      .replace(/\{\s*\}/g, "")
+      .replace(/\[\d+\]/g, "")
+      .replace(/&nbsp;|&#160;/gi, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/^[,\s"“”]+/gm, "")
+      .replace(/,\s*,+/g, ",")
+      .replace(/\(\s*\)/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[^\S\n]{2,}/g, " ")
+      .trim(),
+  );
+}
+
+export function hasLatexDump(text: string): boolean {
+  return /\\(?:displaystyle|textstyle|scriptstyle)\b|\{\s*\\[a-zA-Z]/i.test(text);
+}
+
+function scrubLatexDump(text: string): string {
+  let out = text;
+  for (let i = 0; i < 8; i += 1) {
+    const next = out
+      .replace(/\{\s*\\(?:displaystyle|textstyle|scriptstyle)\b[^}]*\}/gi, " ")
+      .replace(/\\(?:displaystyle|textstyle|scriptstyle)\b/gi, "")
+      .replace(/\{\s*\\[a-zA-Z]+[^}]*\}/g, " ")
+      .replace(/\\[a-zA-Z]+\*?/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+function repairExtractGaps(text: string): string {
+  return text
+    .replace(/⟨\s+/g, "⟨")
+    .replace(/\s+⟩/g, "⟩")
+    .replace(/¬\s+/g, "¬")
+    .replace(/,\s+(?![A-Z])[^()<>.]{8,220}\)/g, "")
+    .replace(/\(\s*(?:i\.e\.|e\.g\.|viz\.)?\s*\)/gi, "")
+    .replace(/\(\s*,/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/\(\s+/g, "(")
+    .replace(/(^|[.!?]\s+),\s+/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function polishProse(text: string): string {
+  return repairExtractGaps(stripWikiMath(text))
     .replace(/\[\d+\]/g, "")
     .replace(/\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/(^|\n),\s*/g, "$1")
     .trim();
 }
 
@@ -160,7 +348,9 @@ export function formatWikipediaEditorText(
   const heading = title.replace(/^#+\s*/, "").trim();
   const cleaned = polishProse(stripNavAndHeadings(extract));
   const paragraphs = toParagraphs(cleaned);
-  const body = clipToBudget(paragraphs.join("\n\n"), maxChars);
+  let body = clipToBudget(paragraphs.join("\n\n"), maxChars);
+  body = scrubLatexDump(body);
+  if (hasLatexDump(body)) body = scrubLatexDump(stripWikiMath(body));
   if (!heading || body.length < 80) return body;
   return `# ${heading}\n\n${body}`;
 }

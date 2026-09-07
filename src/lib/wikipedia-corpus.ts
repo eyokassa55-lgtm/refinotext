@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { formatWikipediaEditorText } from "@/lib/humanize-output";
+import { formatWikipediaEditorText, hasLatexDump } from "@/lib/humanize-output";
 
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
@@ -26,6 +26,7 @@ type WikipediaRow = WikipediaArticle & {
   input: string;
   output: string;
   aliases: string[];
+  mathHeavy?: boolean;
 };
 
 function candidatePaths(): string[] {
@@ -541,6 +542,7 @@ async function wikiQuery(params: Record<string, string>): Promise<Record<string,
 function liveRowFromExtract(title: string, extract: string, pageUrl: string): WikipediaRow | null {
   const output = formatWikipediaEditorText(title, extract, WIKIPEDIA_EDITOR_MAX_CHARS);
   if (output.length < 400) return null;
+  if (hasLatexDump(output)) return null;
   return {
     id: WIKIPEDIA_LIVE_INDEX,
     topic: title,
@@ -550,6 +552,7 @@ function liveRowFromExtract(title: string, extract: string, pageUrl: string): Wi
     input: `${title}\n\n${output}`,
     output,
     aliases: [],
+    mathHeavy: (extract.match(/\\displaystyle/g) ?? []).length >= 3,
   };
 }
 
@@ -614,6 +617,15 @@ async function searchWikipediaTitles(query: string, limit = 12): Promise<string[
   }
   searchCache.set(cacheKey, titles);
   return titles;
+}
+
+function userDraftHasLatex(text: string): boolean {
+  return /\\displaystyle|\{\s*\\display|\\varphi|\\frac\{/i.test(text);
+}
+
+function preferProsePage(userText: string, page: WikipediaRow): boolean {
+  if (!page.mathHeavy) return true;
+  return userDraftHasLatex(userText);
 }
 
 function liveSearchQueries(text: string): string[] {
@@ -704,7 +716,7 @@ async function findRelatedWikipediaPage(
 
     for (const candidate of ranked) {
       const page = await fetchWikipediaPage(candidate.title);
-      if (!page) continue;
+      if (!page || !preferProsePage(userText, page)) continue;
       const scored = relatedTitleScore(page.topic, scoreTokens, bigrams);
       if (scored.overlap < minOverlap) continue;
       if (
@@ -729,17 +741,21 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   const userKeys = new Set(userTopicKeys(userText));
   if (userKeys.size === 0) return null;
 
+  let mathFallback: WikipediaRow | null = null;
+
   for (const query of liveSearchQueries(userText)) {
     const queryKey = topicKey(tokenizeTopic(query));
     if (!queryKey || !userKeys.has(queryKey)) continue;
 
     const exact = await fetchWikipediaPage(query);
     if (exact) {
-      if (titleMatchesUserTopic(exact.topic, userKeys) || topicKey(tokenizeTopic(exact.topic)) === queryKey) {
+      if (!preferProsePage(userText, exact)) {
+        mathFallback ??= exact;
+      } else if (titleMatchesUserTopic(exact.topic, userKeys) || topicKey(tokenizeTopic(exact.topic)) === queryKey) {
         return toMatch(exact, 0.97, "topic");
+      } else {
+        return toMatch(exact, 0.96, "topic");
       }
-      // Wikipedia redirected the user's topic (Hard work → Diligence).
-      return toMatch(exact, 0.96, "topic");
     }
 
     for (const title of await searchWikipediaTitles(query)) {
@@ -747,12 +763,18 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
         continue;
       }
       const page = await fetchWikipediaPage(title);
-      if (page) return toMatch(page, 0.95, "topic");
+      if (!page) continue;
+      if (!preferProsePage(userText, page)) {
+        mathFallback ??= page;
+        continue;
+      }
+      return toMatch(page, 0.95, "topic");
     }
   }
 
   const related = await findRelatedWikipediaPage(userText, userKeys);
   if (related) return toMatch(related, 0.84, "topic");
+  if (mathFallback) return toMatch(mathFallback, 0.8, "topic");
 
   return null;
 }
