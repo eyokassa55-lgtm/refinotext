@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Collect 750 unique English Wikipedia articles via the public MediaWiki API.
+"""Collect 3000 unique English Wikipedia articles via the public MediaWiki API.
 
 Uses only https://en.wikipedia.org/w/api.php (no API key, no HTML scraping).
-Writes data/wikipedia_750.jsonl and data/wikipedia_750.xlsx.
+Writes data/wikipedia_750.jsonl and data/wikipedia_750.xlsx (3000 rows).
+Resumes from an existing JSONL file when present.
 """
 
 from __future__ import annotations
@@ -32,10 +33,12 @@ USER_AGENT = (
     "Python-requests"
 )
 
-TARGET_COUNT = 750
+TARGET_COUNT = 3000
 MIN_EXTRACT_CHARS = 500
+STORE_MAX_CHARS = 4000
 EXCEL_MAX_CELL = 32767
 REQUEST_DELAY_SECONDS = 0.2
+CHECKPOINT_EVERY = 50
 MAX_RETRIES = 6
 TIMEOUT_SECONDS = 45
 
@@ -479,6 +482,107 @@ TITLE_SKIP_SUBSTRINGS = (
     " roster",
 )
 
+# Exact Wikipedia titles that student/essay drafts use as headings.
+# Aliases keep "# Hard work" and "American History" on the canonical article.
+PINNED_TITLES: list[tuple[str, str, list[str]]] = [
+    ("Technology", "technology", []),
+    ("Success", "general", []),
+    ("History", "history", []),
+    ("Climate change", "environment", ["Climate Change"]),
+    ("Friendship", "culture", []),
+    ("Nature", "environment", []),
+    ("Creativity", "culture", []),
+    ("Discipline", "general", []),
+    ("Time", "general", []),
+    ("Leadership", "civics", []),
+    ("Diligence", "general", ["Hard work"]),
+    ("Failure", "general", []),
+    ("Happiness", "general", []),
+    ("Health", "general", []),
+    ("Internet", "technology", ["The Internet"]),
+    ("Social media", "technology", ["Social Media"]),
+    ("Science", "general", []),
+    ("Culture", "culture", []),
+    ("Sport", "sports", ["Sports"]),
+    ("Economics", "economics", ["Economy"]),
+    ("Democracy", "civics", []),
+    ("Mathematics", "general", []),
+    ("Philosophy", "general", []),
+    ("Motivation", "general", []),
+    ("Communication", "general", []),
+    ("Globalization", "economics", []),
+    ("Pollution", "environment", []),
+    ("Love", "culture", []),
+    ("Family", "culture", []),
+    ("Knowledge", "education", []),
+    ("Intelligence", "general", []),
+    ("Society", "civics", []),
+    ("Government", "civics", []),
+    ("Law", "civics", []),
+    ("Art", "culture", []),
+    ("Music", "culture", []),
+    ("Literature", "culture", []),
+    ("War", "history", []),
+    ("Peace", "civics", []),
+    ("Freedom", "civics", []),
+    ("Justice", "civics", []),
+    ("Poverty", "economics", []),
+    ("Unemployment", "economics", []),
+    ("Tourism", "economics", []),
+    ("Agriculture", "economics", []),
+    ("Energy", "environment", []),
+    ("Water", "environment", []),
+    ("Air pollution", "environment", []),
+    ("Recycling", "environment", []),
+    ("Biodiversity", "environment", []),
+    ("Evolution", "biology", []),
+    ("Computer", "technology", []),
+    ("Smartphone", "technology", []),
+    ("Education", "education", []),
+    ("University", "education", []),
+    ("Student", "education", []),
+    ("Teacher", "education", []),
+    ("Business", "economics", []),
+    ("Marketing", "economics", []),
+    ("E-commerce", "economics", ["Electronic commerce", "E-Commerce"]),
+    ("History of the United States", "history", ["American History", "American history"]),
+    ("Artificial intelligence", "technology", ["AI"]),
+    ("Physics", "physics", []),
+    ("Chemistry", "chemistry", []),
+    ("Biology", "biology", []),
+    ("Geography", "geography", []),
+    ("Psychology", "general", []),
+    ("Medicine", "general", []),
+    ("Religion", "culture", []),
+    ("Language", "culture", []),
+    ("Writing", "culture", []),
+    ("Reading", "education", []),
+    ("Homework", "education", []),
+    ("School", "education", []),
+    ("Climate", "environment", []),
+    ("Weather", "environment", []),
+    ("Forest", "environment", []),
+    ("Ocean", "geography", []),
+    ("River", "geography", []),
+    ("City", "geography", []),
+    ("Country", "civics", []),
+    ("Human rights", "civics", []),
+    ("Constitution", "civics", []),
+    ("Election", "civics", []),
+    ("Money", "economics", []),
+    ("Trade", "economics", []),
+    ("Inflation", "economics", []),
+    ("Bank", "economics", []),
+    ("Computer science", "technology", []),
+    ("Software", "technology", []),
+    ("Robot", "technology", []),
+    ("Robotics", "technology", []),
+    ("Space exploration", "physics", []),
+    ("Solar System", "physics", []),
+    ("Earth", "geography", []),
+    ("Natural environment", "environment", ["The Environment", "Environment"]),
+]
+
 
 def topic_quotas(total: int) -> dict[str, int]:
     base, extra = divmod(total, len(TOPIC_ORDER))
@@ -562,6 +666,39 @@ def should_skip_extract(extract: str) -> bool:
     if text.lower().startswith("redirect"):
         return True
     return False
+
+
+def strip_nav_sections(text: str) -> str:
+    markers = (
+        "\nSee also\n",
+        "\nReferences\n",
+        "\nExternal links\n",
+        "\nFurther reading\n",
+        "\nNotes\n",
+    )
+    out = text.strip()
+    lowered = out.lower()
+    cut_at = None
+    for marker in markers:
+        index = lowered.find(marker.lower())
+        if index >= 400:
+            cut_at = index if cut_at is None else min(cut_at, index)
+    if cut_at is not None:
+        out = out[:cut_at].strip()
+    return out
+
+
+def store_excerpt(text: str, max_chars: int = STORE_MAX_CHARS) -> str:
+    cleaned = strip_nav_sections(text)
+    if len(cleaned) <= max_chars:
+        return cleaned
+    snippet = cleaned[:max_chars]
+    paragraph = snippet.rfind("\n\n")
+    sentence = snippet.rfind(". ")
+    cut = max(paragraph, sentence)
+    if cut >= 500:
+        return snippet[: sentence + 1 if sentence == cut else cut].strip()
+    return snippet.strip()
 
 
 class WikiClient:
@@ -679,7 +816,7 @@ class WikiClient:
                 titles.append(title)
         return titles
 
-    def fetch_article(self, title: str) -> dict[str, Any] | None:
+    def fetch_article(self, title: str, *, allow_skipped_title: bool = False) -> dict[str, Any] | None:
         data = self.get(
             {
                 "action": "query",
@@ -711,7 +848,7 @@ class WikiClient:
         if should_skip_extract(extract):
             return None
         canonical_title = page.get("title") or title
-        if should_skip_title(canonical_title):
+        if should_skip_title(canonical_title) and not allow_skipped_title:
             return None
         url = page.get("fullurl") or article_url(canonical_title)
         return {
@@ -764,33 +901,33 @@ def gather_candidates(client: WikiClient, topic: str, needed: int) -> list[str]:
     progress(f"  Collecting candidate titles for {topic}...")
     for seed in SEARCH_SEEDS.get(topic, []):
         try:
-            for title in client.search_titles(seed, limit=1):
+            for title in client.search_titles(seed, limit=3):
                 add(title, priority)
         except RuntimeError as exc:
             progress(f"  Search skipped for {seed!r}: {exc}")
-        if len(priority) >= needed + 20:
+        if len(priority) >= needed + 80:
             break
 
-    if len(priority) < needed + 40:
+    if len(priority) < needed + 80:
         for category in TOPIC_CATEGORIES.get(topic, []):
             try:
-                pages = client.category_members(category, "page", limit=80)
+                pages = client.category_members(category, "page", limit=160)
                 random.shuffle(pages)
                 for title in pages:
                     add(title, backup)
-                if len(priority) + len(backup) < needed * 5:
-                    subcats = client.category_members(category, "subcat", limit=20)
+                if len(priority) + len(backup) < needed * 4:
+                    subcats = client.category_members(category, "subcat", limit=30)
                     random.shuffle(subcats)
-                    for subcat in subcats[:8]:
+                    for subcat in subcats[:12]:
                         if SKIP_SUBCAT_RE.search(subcat):
                             continue
-                        sub_pages = client.category_members(subcat, "page", limit=30)
+                        sub_pages = client.category_members(subcat, "page", limit=50)
                         random.shuffle(sub_pages)
                         for title in sub_pages:
                             add(title, backup)
             except RuntimeError as exc:
                 progress(f"  Category skipped {category}: {exc}")
-            if len(priority) + len(backup) >= needed * 6:
+            if len(priority) + len(backup) >= needed * 5:
                 break
 
     random.shuffle(priority)
@@ -803,35 +940,216 @@ def gather_candidates(client: WikiClient, topic: str, needed: int) -> list[str]:
     return candidates
 
 
-def collect_articles(total: int) -> list[dict[str, str]]:
+def load_existing_articles(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        topic = raw.get("topic")
+        text = raw.get("source_text")
+        url = raw.get("source_url")
+        category = raw.get("category")
+        if not all(isinstance(value, str) and value.strip() for value in (topic, text, url, category)):
+            continue
+        assert isinstance(topic, str) and isinstance(text, str)
+        assert isinstance(url, str) and isinstance(category, str)
+        excerpt = store_excerpt(text)
+        if len(excerpt) < MIN_EXTRACT_CHARS:
+            continue
+        record: dict[str, str] = {
+            "topic": topic.strip(),
+            "source_text": excerpt,
+            "source_url": url.strip(),
+            "category": category.strip(),
+        }
+        aliases = raw.get("aliases")
+        if isinstance(aliases, list):
+            cleaned = [item.strip() for item in aliases if isinstance(item, str) and item.strip()]
+            if cleaned:
+                record["aliases"] = json.dumps(cleaned)
+                record["_aliases"] = "\n".join(cleaned)
+        rows.append(record)
+    return rows
+
+
+def aliases_of(row: dict[str, str]) -> list[str]:
+    packed = row.get("_aliases")
+    if packed:
+        return [item for item in packed.split("\n") if item]
+    raw = row.get("aliases")
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, str)]
+    return []
+
+
+def set_aliases(row: dict[str, str], aliases: list[str]) -> None:
+    unique: list[str] = []
+    seen = {normalize_title(row["topic"])}
+    for alias in aliases:
+        key = normalize_title(alias)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(alias.strip())
+    if unique:
+        row["_aliases"] = "\n".join(unique)
+    else:
+        row.pop("_aliases", None)
+        row.pop("aliases", None)
+
+
+def merge_aliases(row: dict[str, str], extras: list[str]) -> None:
+    set_aliases(row, [*aliases_of(row), *extras])
+
+
+def index_existing(articles: list[dict[str, str]]) -> tuple[set[str], set[str], list[set[str]], Counter]:
+    urls = {row["source_url"] for row in articles}
+    title_keys: set[str] = set()
+    token_sets: list[set[str]] = []
+    counts: Counter = Counter()
+    for row in articles:
+        title_keys.add(normalize_title(row["topic"]))
+        for alias in aliases_of(row):
+            title_keys.add(normalize_title(alias))
+        token_sets.append(significant_tokens(row["topic"]))
+        counts[row["category"]] += 1
+    return urls, title_keys, token_sets, counts
+
+
+def collect_articles(
+    total: int,
+    existing: list[dict[str, str]] | None = None,
+    checkpoint_path: Path | None = None,
+) -> list[dict[str, str]]:
     random.seed()
     quotas = topic_quotas(total)
     client = WikiClient()
-    articles: list[dict[str, str]] = []
+    articles: list[dict[str, str]] = list(existing or [])
+    urls, title_keys, token_sets, counts = index_existing(articles)
     page_ids: set[int] = set()
-    urls: set[str] = set()
-    title_keys: set[str] = set()
-    token_sets: list[set[str]] = []
-    counts = Counter()
+
+    def checkpoint() -> None:
+        if checkpoint_path and len(articles) % CHECKPOINT_EVERY == 0:
+            write_jsonl(checkpoint_path, articles)
+            progress(f"  checkpoint {len(articles)} rows -> {checkpoint_path.name}")
+
+    def accept(
+        article: dict[str, Any],
+        category: str,
+        extra_aliases: list[str] | None = None,
+        *,
+        pinned: bool = False,
+    ) -> bool:
+        pageid = article.get("pageid")
+        canonical = str(article["title"])
+        url = str(article["url"])
+        if pageid in page_ids or url in urls:
+            existing_row = next((row for row in articles if row["source_url"] == url), None)
+            if existing_row and extra_aliases:
+                merge_aliases(existing_row, extra_aliases)
+            return False
+        if not pinned:
+            if is_near_duplicate(canonical, token_sets, title_keys):
+                return False
+            if should_skip_title(canonical):
+                return False
+        excerpt = store_excerpt(str(article["extract"]))
+        if len(excerpt) < MIN_EXTRACT_CHARS:
+            return False
+        record = {
+            "topic": canonical,
+            "source_text": excerpt,
+            "source_url": url,
+            "category": category,
+        }
+        extras = list(extra_aliases or [])
+        if normalize_title(canonical) != normalize_title(str(article.get("requested") or canonical)):
+            requested = article.get("requested")
+            if isinstance(requested, str) and requested.strip():
+                extras.append(requested.strip())
+        merge_aliases(record, extras)
+        articles.append(record)
+        if isinstance(pageid, int):
+            page_ids.add(pageid)
+        urls.add(url)
+        title_keys.add(normalize_title(canonical))
+        for alias in aliases_of(record):
+            title_keys.add(normalize_title(alias))
+        token_sets.append(significant_tokens(canonical))
+        counts[category] += 1
+        progress(
+            f"[{len(articles)}/{total}] {category} | {canonical} | "
+            f"{len(record['source_text'])} chars"
+        )
+        checkpoint()
+        return True
 
     progress(f"Collecting {total} unique English Wikipedia articles via {API_URL}")
+    progress(f"Starting from {len(articles)} stored articles")
     progress("Topic quotas: " + ", ".join(f"{k}={v}" for k, v in quotas.items()))
     progress("")
 
-    for topic, quota in quotas.items():
-        if quota <= 0:
+    progress("Pinning common essay titles...")
+    for title, category, extra_aliases in PINNED_TITLES:
+        if len(articles) >= total:
+            break
+        if normalize_title(title) in title_keys:
+            existing_row = next(
+                (
+                    row
+                    for row in articles
+                    if normalize_title(row["topic"]) == normalize_title(title)
+                    or normalize_title(title) in {normalize_title(alias) for alias in aliases_of(row)}
+                ),
+                None,
+            )
+            if existing_row:
+                merge_aliases(existing_row, [title, *extra_aliases])
             continue
-        candidates = gather_candidates(client, topic, quota)
+        try:
+            article = client.fetch_article(title, allow_skipped_title=True)
+        except RuntimeError as exc:
+            progress(f"  Failed pinned {title}: {exc}")
+            continue
+        if not article:
+            progress(f"  Skipped pinned {title}")
+            continue
+        article["requested"] = title
+        accept(article, category, [title, *extra_aliases], pinned=True)
+
+    for topic, quota in quotas.items():
+        if len(articles) >= total:
+            break
+        remaining = quota - counts[topic]
+        if remaining <= 0:
+            continue
+        candidates = gather_candidates(client, topic, remaining)
         candidate_index = 0
         random_rounds = 0
-        while counts[topic] < quota:
+        while counts[topic] < quota and len(articles) < total:
             title = None
             if candidate_index < len(candidates):
                 title = candidates[candidate_index]
                 candidate_index += 1
             else:
-                if random_rounds >= 40:
-                    raise RuntimeError(f"Could not fill quota for topic {topic}")
+                if random_rounds >= 80:
+                    progress(f"  Stopping {topic} at {counts[topic]}/{quota}; moving on")
+                    break
                 random_rounds += 1
                 extras = client.random_titles(20)
                 for extra in extras:
@@ -851,35 +1169,29 @@ def collect_articles(total: int) -> list[dict[str, str]]:
                 continue
             if not article:
                 continue
-            pageid = article["pageid"]
-            canonical = article["title"]
-            url = article["url"]
-            if pageid in page_ids or url in urls:
-                continue
-            if is_near_duplicate(canonical, token_sets, title_keys):
-                continue
-            if should_skip_title(canonical):
-                continue
+            accept(article, topic)
 
-            record = {
-                "topic": canonical,
-                "source_text": article["extract"],
-                "source_url": url,
-                "category": topic,
-            }
-            articles.append(record)
-            page_ids.add(pageid)
-            urls.add(url)
-            title_keys.add(normalize_title(canonical))
-            token_sets.append(significant_tokens(canonical))
-            counts[topic] += 1
-            n = len(articles)
-            progress(
-                f"[{n}/{total}] {topic} | {canonical} | "
-                f"{len(record['source_text'])} chars"
-            )
+    # Fill leftover slots from any topic if some quotas ran short.
+    leftover_rounds = 0
+    while len(articles) < total:
+        leftover_rounds += 1
+        if leftover_rounds > 120:
+            raise RuntimeError(f"Could not reach {total} articles (have {len(articles)})")
+        for extra in client.random_titles(20):
+            if len(articles) >= total:
+                break
+            if is_near_duplicate(extra, token_sets, title_keys):
+                continue
+            try:
+                article = client.fetch_article(extra)
+            except RuntimeError:
+                continue
+            if not article:
+                continue
+            category = "general"
+            accept(article, category)
 
-    return articles
+    return articles[:total]
 
 
 def validate_articles(articles: list[dict[str, str]], total: int) -> None:
@@ -903,25 +1215,23 @@ def validate_articles(articles: list[dict[str, str]], total: int) -> None:
 def write_jsonl(path: Path, articles: list[dict[str, str]]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         for row in articles:
-            handle.write(
-                json.dumps(
-                    {
-                        "topic": row["topic"],
-                        "source_text": row["source_text"],
-                        "source_url": row["source_url"],
-                        "category": row["category"],
-                    },
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-            )
+            payload: dict[str, Any] = {
+                "topic": row["topic"],
+                "source_text": row["source_text"],
+                "source_url": row["source_url"],
+                "category": row["category"],
+            }
+            extra = aliases_of(row)
+            if extra:
+                payload["aliases"] = extra
+            handle.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
             handle.write("\n")
 
 
 def write_xlsx(path: Path, articles: list[dict[str, str]]) -> int:
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "wikipedia_750"
+    sheet.title = "wikipedia_3000"
     headers = ["topic", "source_text", "source_url"]
     sheet.append(headers)
     for cell in sheet[1]:
@@ -961,6 +1271,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(__file__).resolve().parents[1] / "data",
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Ignore the existing JSONL and collect from scratch.",
+    )
     return parser.parse_args()
 
 
@@ -972,17 +1287,17 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = args.output_dir / "wikipedia_750.jsonl"
     xlsx_path = args.output_dir / "wikipedia_750.xlsx"
-    root = Path(__file__).resolve().parents[1]
-    root_jsonl = root / "wikipedia_750.jsonl"
-    root_xlsx = root / "wikipedia_750.xlsx"
 
-    articles = collect_articles(args.count)
+    existing: list[dict[str, str]] = []
+    if not args.fresh:
+        existing = load_existing_articles(jsonl_path)
+        if existing:
+            print(f"Resuming from {len(existing)} articles in {jsonl_path.name}")
+
+    articles = collect_articles(args.count, existing, checkpoint_path=jsonl_path)
     validate_articles(articles, args.count)
     write_jsonl(jsonl_path, articles)
     truncated = write_xlsx(xlsx_path, articles)
-    if jsonl_path.resolve() != root_jsonl.resolve() and args.count == TARGET_COUNT:
-        write_jsonl(root_jsonl, articles)
-        write_xlsx(root_xlsx, articles)
 
     counts = Counter(row["category"] for row in articles)
     print()
@@ -993,13 +1308,10 @@ def main() -> int:
         print(f"  {topic}: {counts[topic]}")
     print(f"JSONL: {jsonl_path}")
     print(f"Excel: {xlsx_path}")
-    if jsonl_path.resolve() != root_jsonl.resolve() and args.count == TARGET_COUNT:
-        print(f"JSONL copy: {root_jsonl}")
-        print(f"Excel copy: {root_xlsx}")
     if truncated:
         print(
             f"Note: {truncated} Excel rows were trimmed to the 32,767-character "
-            "cell limit. Full text is preserved in the JSONL file."
+            "cell limit. Full stored text is in the JSONL file."
         )
     return 0
 

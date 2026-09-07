@@ -148,7 +148,7 @@ export function WikipediaPicker({ onLoad, disabled }: WikipediaPickerProps) {
       </div>
       {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
       <p className="mt-2 text-[11px] leading-relaxed text-muted">
-        Loads a Wikipedia excerpt. Humanize returns the article for that same topic. Sign-in is required.
+        Loads a Wikipedia excerpt from 3,000 articles. Humanize returns the article for that same topic. Sign-in is required.
       </p>
     </div>
   );

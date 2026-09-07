@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
 
+/** On-disk name is historical; this file holds 3000 Wikipedia articles. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
 export const WIKIPEDIA_EDITOR_MAX_CHARS = 2400;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;

@@ -581,13 +581,24 @@ Rainforests also illustrate a much broader set of global development debates. It
   const wikipediaEnvironment = getWikipediaArticleByTopic("Environment");
   const wikipediaAi = getWikipediaArticleByTopic("Artificial intelligence");
   const wikipediaWater = getWikipediaArticleByTopic("Water pollution");
+  const wikipediaSuccess = getWikipediaArticleByTopic("Success");
+  const wikipediaTechnology = getWikipediaArticleByTopic("Technology");
+  const wikipediaHistory = getWikipediaArticleByTopic("History");
+  const wikipediaClimateChange = getWikipediaArticleByTopic("Climate change");
+  const wikipediaUsHistory = getWikipediaArticleByTopic("History of the United States");
+  const wikipediaIntelligence = getWikipediaArticleByTopic("Intelligence");
   assert("Wikipedia corpus includes Education", Boolean(wikipediaEducation));
   assert("Wikipedia corpus includes Environment", Boolean(wikipediaEnvironment));
   assert("Wikipedia corpus includes Artificial intelligence", Boolean(wikipediaAi));
   assert("Wikipedia corpus includes Water pollution", Boolean(wikipediaWater));
+  assert("Wikipedia corpus includes Success", Boolean(wikipediaSuccess));
+  assert("Wikipedia corpus includes Technology", Boolean(wikipediaTechnology));
+  assert("Wikipedia corpus includes History", Boolean(wikipediaHistory));
+  assert("Wikipedia corpus includes Climate change", Boolean(wikipediaClimateChange));
+  assert("Wikipedia corpus includes History of the United States", Boolean(wikipediaUsHistory));
   assert(
-    "Wikipedia corpus has at least 750 articles",
-    getWikipediaRowCount() >= 750,
+    "Wikipedia corpus has 3000 articles",
+    getWikipediaRowCount() === 3000,
     `rows=${getWikipediaRowCount()}`,
   );
   const wikiExcerptPaste = getWikipediaArticle(0)?.source_text ?? "";
@@ -598,9 +609,23 @@ Rainforests also illustrate a much broader set of global development debates. It
       engineExcerpt.text === wikiExcerptPaste,
     `source=${engineExcerpt.source}`,
   );
-  await expectNoWiki("stored training Success paste is not used by Humanize", firstPair.input);
-  await expectNoWiki("stored training Technology paste is not used by Humanize", oneWordSwap);
-  await expectNoWiki("stored training human_text paste is not used by Humanize", firstPair.output);
+  const engineStoredSuccess = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
+  assert(
+    "a Success draft returns Wikipedia Success, not training human_text",
+    engineStoredSuccess.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaSuccess) &&
+      engineStoredSuccess.text === wikipediaSuccess!.source_text &&
+      engineStoredSuccess.text !== firstPair.output,
+    `source=${engineStoredSuccess.source}`,
+  );
+  const engineStoredTech = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
+  assert(
+    "a Technology draft returns Wikipedia Technology, not training human_text",
+    engineStoredTech.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaTechnology) &&
+      engineStoredTech.text === wikipediaTechnology!.source_text,
+    `source=${engineStoredTech.source}`,
+  );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
@@ -808,9 +833,30 @@ Rainforests also illustrate a much broader set of global development debates. It
     runHumanizationFn.includes("NO_WIKIPEDIA_MATCH") && !runHumanizationFn.includes("runModelHumanization"),
   );
   assert("Humanize engine returns stored Wikipedia text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
-  await expectNoWiki("Humanize does not use training text for a #technology draft", HASH_TECHNOLOGY_ESSAY);
-  await expectNoWiki("Humanize does not use training text for a Success draft", SUCCESS_CHATGPT_ESSAY);
-  await expectNoWiki("Humanize does not use training text for a technology draft", TECH_SCREENSHOT_ESSAY);
+  const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns Wikipedia Technology for a #technology draft",
+    engineHashTech.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaTechnology) &&
+      engineHashTech.text === wikipediaTechnology!.source_text,
+    `source=${engineHashTech.source}`,
+  );
+  const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns Wikipedia Success for a Success draft",
+    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaSuccess) &&
+      engineSuccess.text === wikipediaSuccess!.source_text,
+    `source=${engineSuccess.source}`,
+  );
+  const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns Wikipedia Technology for a technology draft",
+    enginePlainTech.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaTechnology) &&
+      enginePlainTech.text === wikipediaTechnology!.source_text,
+    `source=${enginePlainTech.source}`,
+  );
   const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
   assert(
     "Humanize returns the Wikipedia Education article for an education draft",
@@ -882,17 +928,41 @@ Rainforests also illustrate a much broader set of global development debates. It
       engineSource.includes("NO_WIKIPEDIA_MATCH"),
   );
   await expectNoWiki("Harborline draft is not rewritten or substituted", NEW_TOPIC);
+  const historyWiki = findWikipediaMatch(HISTORY_ESSAY);
   assert(
-    "a general History draft is not rewritten as American History",
-    findTopicMatch(HISTORY_ESSAY) === null && findWikipediaMatch(HISTORY_ESSAY) === null,
+    "a general History draft matches Wikipedia History, not US history",
+    historyWiki?.output === wikipediaHistory!.source_text &&
+      historyWiki.output !== wikipediaUsHistory!.source_text,
+    `kind=${historyWiki?.kind ?? "none"}`,
   );
-  await expectNoWiki("a general History draft has no Wikipedia History article", HISTORY_ESSAY);
+  const engineHistory = await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
   assert(
-    "an intelligence draft is not rewritten as an AI essay",
-    findTopicMatch(INTELLIGENCE_ONLY_ESSAY) === null &&
-      findWikipediaMatch(INTELLIGENCE_ONLY_ESSAY) === null,
+    "Humanize returns Wikipedia History for a History draft",
+    engineHistory.source === "TOPIC_TRAINING_MATCH" &&
+      engineHistory.text === wikipediaHistory!.source_text,
+    `source=${engineHistory.source}`,
   );
-  await expectNoWiki("Humanize does not use training American History text", AMERICAN_HISTORY_ESSAY);
+  const intelligenceWiki = findWikipediaMatch(INTELLIGENCE_ONLY_ESSAY);
+  assert(
+    "an intelligence draft matches Wikipedia Intelligence, not Artificial intelligence",
+    intelligenceWiki?.output === wikipediaIntelligence!.source_text &&
+      intelligenceWiki.output !== wikipediaAi!.source_text,
+    `kind=${intelligenceWiki?.kind ?? "none"}`,
+  );
+  const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
+  assert(
+    "Humanize returns Wikipedia History of the United States for an American History draft",
+    engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
+      Boolean(wikipediaUsHistory) &&
+      engineAmericanHistory.text === wikipediaUsHistory!.source_text,
+    `source=${engineAmericanHistory.source}`,
+  );
+  const climateWiki = findWikipediaMatch(CLIMATE_PLAIN_ESSAY);
+  assert(
+    "a Climate change draft matches Wikipedia Climate change",
+    Boolean(wikipediaClimateChange) && climateWiki?.output === wikipediaClimateChange!.source_text,
+    `kind=${climateWiki?.kind ?? "none"}`,
+  );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(
     "standard tone does not add extra register instructions",
