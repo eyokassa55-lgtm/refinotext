@@ -17,13 +17,8 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { getTrainingRowCount } from "@/lib/training-lookup";
-import {
-  findDatabaseMatch,
-  findTopicMatch,
-  type DatabaseTrainingMatch,
-} from "@/lib/training-retrieval";
-import { findWikipediaMatch } from "@/lib/wikipedia-corpus";
+import { type DatabaseTrainingMatch } from "@/lib/training-retrieval";
+import { findWikipediaMatch, getWikipediaRowCount } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -76,9 +71,8 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Humanize returns stored gold human_text for the same draft or same topic.
- * Related Wikipedia articles are not substituted. New topics are rewritten
- * with the meaning, scope, and facts of the user's text kept intact.
+ * Humanize returns the Wikipedia article for the same topic.
+ * It does not rewrite unmatched drafts or substitute a related article.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -147,7 +141,7 @@ function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
     row: hit.index,
     kind: hit.kind,
     score: hit.score,
-    rows: getTrainingRowCount(),
+    rows: getWikipediaRowCount(),
   });
   return {
     text: hit.output,
@@ -196,7 +190,7 @@ async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeR
   const systemInstruction = buildHumanRewriteInstruction({ text: request.text }, []);
 
   console.info("[humanize] [MODEL_GENERATED]", {
-    rows: getTrainingRowCount(),
+    rows: getWikipediaRowCount(),
     backend,
     humanTextTuned: isHumanTextTunedReady(),
     model:
@@ -307,27 +301,12 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const topicHit = findTopicMatch(request.text);
-  if (topicHit) return resolveStoredHit(topicHit);
-
-  const storedHit = findDatabaseMatch(request.text);
-  if (storedHit) return resolveStoredHit(storedHit);
-
   const wikipediaHit = findWikipediaMatch(request.text);
   if (wikipediaHit) return resolveStoredHit(wikipediaHit);
 
-  if (!isGeminiApiConfigured() && !hasVertexEndpointEnv() && !isVertexConfigured()) {
-    console.error("[humanize] No Vertex credentials or Gemini API key is configured");
-    throw new HumanizationFailedError(
-      "The writing service is not configured. Please try again later.",
-      "MISSING_API_KEY",
-      503,
-    );
-  }
-
-  try {
-    return await runModelHumanization(request);
-  } catch (error) {
-    throw wrapAsError(error);
-  }
+  throw new HumanizationFailedError(
+    "No Wikipedia article matches this topic. Keep the same subject, or load a Wikipedia sample.",
+    "NO_WIKIPEDIA_MATCH",
+    422,
+  );
 }

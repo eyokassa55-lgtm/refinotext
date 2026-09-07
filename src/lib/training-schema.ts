@@ -1,15 +1,10 @@
 /**
  * Dataset contract for Humanize keyword lookup.
  *
- * The 722-pair corpus lives in `data/training_data.jsonl`. Humanize reads
- * topic keywords from the user's draft (a title, optional #hashtag, or
- * opening words) and matches them against every stored ai_text. The first
- * pair for that same topic is returned with its human_text unchanged. A
- * hashtag is not required. This same-topic rule applies to every stored pair:
- * a narrower or related subject does not replace the user's meaning
- * (History vs American History, intelligence vs artificial intelligence).
- * Unmatched drafts are rewritten in place so the user's topic and meaning
- * stay intact. Wikipedia samples match only when that excerpt was pasted.
+ * Humanize uses `data/wikipedia_750.jsonl` only. It returns the Wikipedia
+ * article whose title (or alias) is the same topic as the user's draft.
+ * Body words never select a related article. Unmatched drafts are not
+ * rewritten and do not fall back to `training_data.jsonl`.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

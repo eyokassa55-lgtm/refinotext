@@ -23,6 +23,7 @@ export type WikipediaArticle = WikipediaListItem & {
 type WikipediaRow = WikipediaArticle & {
   input: string;
   output: string;
+  aliases: string[];
 };
 
 function candidatePaths(): string[] {
@@ -88,6 +89,9 @@ function parseRow(value: unknown, id: number): WikipediaRow | null {
   }
   const output = excerpt(sourceText);
   if (output.length < 400) return null;
+  const aliases = Array.isArray(row.aliases)
+    ? row.aliases.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
   return {
     id,
     topic: topic.trim(),
@@ -96,6 +100,7 @@ function parseRow(value: unknown, id: number): WikipediaRow | null {
     source_text: output,
     input: `${topic.trim()}\n\n${output}`,
     output,
+    aliases: aliases.map((value) => value.trim()),
   };
 }
 
@@ -103,6 +108,7 @@ type WikipediaIndex = {
   rows: WikipediaRow[];
   byId: Map<number, WikipediaRow>;
   byNormalizedOutput: Map<string, WikipediaRow>;
+  byTopicKey: Map<string, WikipediaRow>;
 };
 
 function normalizeKey(text: string): string {
@@ -119,12 +125,160 @@ function normalizeInsignificant(text: string): string {
     .trim();
 }
 
+const STOPWORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "of",
+  "with",
+  "by",
+  "from",
+  "as",
+]);
+
+const SHORT_TOPIC_TERMS = new Set(["ai", "ml", "vr", "ar", "gpu", "iot"]);
+
+const LEADING_TOPIC_FRAMES = new Set([
+  "about",
+  "abstract",
+  "benefits",
+  "chapter",
+  "concept",
+  "conceptual",
+  "concerning",
+  "considering",
+  "critical",
+  "development",
+  "discussing",
+  "dossier",
+  "effect",
+  "effects",
+  "essence",
+  "evolution",
+  "examining",
+  "exploring",
+  "field",
+  "future",
+  "impact",
+  "importance",
+  "influence",
+  "introduction",
+  "literature",
+  "notes",
+  "overview",
+  "phenomenon",
+  "protecting",
+  "regarding",
+  "relationship",
+  "report",
+  "review",
+  "rise",
+  "role",
+  "studying",
+  "understanding",
+]);
+
+const TOPIC_PHRASE_BREAK =
+  /\b(?:is|are|was|were|has|have|had|do|does|did|can|will|may|might|must|should|would|could|means|refers|plays|remains|becomes|became|makes|make|made)\b/i;
+
+function tokenizeTopic(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
+    .split(/\s+/)
+    .map((token) => token.replace(/^['’-]+|['’-]+$/g, ""))
+    .filter((token) => {
+      if (!token || STOPWORDS.has(token)) return false;
+      if (SHORT_TOPIC_TERMS.has(token)) return true;
+      return token.length >= 3;
+    });
+}
+
+function skipLeadingFrames(tokens: string[]): string[] {
+  let index = 0;
+  while (index < tokens.length && LEADING_TOPIC_FRAMES.has(tokens[index]!)) index += 1;
+  return tokens.slice(index);
+}
+
+function topicKey(tokens: string[]): string {
+  const unique = [...new Set(skipLeadingFrames(tokens))];
+  if (unique.length === 0) return "";
+  return unique.sort().join("\u0001");
+}
+
+function extractHeadingLine(text: string): string | null {
+  const lines = text
+    .trim()
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const first = lines[0];
+  if (!first) return null;
+  const heading = first
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*•]\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .trim();
+  const words = heading.split(/\s+/).filter(Boolean);
+  if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(heading)) {
+    return heading;
+  }
+  return null;
+}
+
+function userTopicKeys(text: string): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const key = topicKey(tokenizeTopic(raw));
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    keys.push(key);
+  };
+
+  const heading = extractHeadingLine(text);
+  if (heading) {
+    add(heading);
+    const firstClause = heading.split(/[:–—]/)[0]?.trim();
+    if (firstClause) add(firstClause);
+  }
+
+  const head = text.trim().split(/\n/).slice(0, 6).join("\n");
+  for (const match of head.matchAll(/#([\p{L}\p{N}_-]+)/gu)) {
+    add(match[1]!.replace(/_/g, " "));
+  }
+
+  // Titled drafts keep the heading as the topic. Body nouns must not
+  // pull in a related article (Environment is not Water pollution).
+  if (!heading) {
+    const body = text.trim();
+    const first = body.split(/(?<=[.!?])\s+/).filter((part) => part.trim())[0] ?? body;
+    const parts = first.split(TOPIC_PHRASE_BREAK);
+    add(parts[0]?.trim() ? parts[0]! : first);
+  }
+
+  return keys;
+}
+
+function titleLabels(row: WikipediaRow): string[] {
+  return [row.topic, ...row.aliases];
+}
+
 function loadIndex(): WikipediaIndex {
   const datasetPath = resolveWikipediaDatasetPath();
   const text = readFileSync(datasetPath, "utf8");
   const rows: WikipediaRow[] = [];
   const byId = new Map<number, WikipediaRow>();
   const byNormalizedOutput = new Map<string, WikipediaRow>();
+  const byTopicKey = new Map<string, WikipediaRow>();
   let id = 0;
 
   for (const line of text.split(/\r?\n/)) {
@@ -143,6 +297,12 @@ function loadIndex(): WikipediaIndex {
     if (normalized && !byNormalizedOutput.has(normalized)) {
       byNormalizedOutput.set(normalized, row);
     }
+    for (const label of titleLabels(row)) {
+      const key = topicKey(tokenizeTopic(label));
+      if (key && !byTopicKey.has(key)) {
+        byTopicKey.set(key, row);
+      }
+    }
     id += 1;
   }
 
@@ -151,7 +311,7 @@ function loadIndex(): WikipediaIndex {
     rows: rows.length,
   });
 
-  return { rows, byId, byNormalizedOutput };
+  return { rows, byId, byNormalizedOutput, byTopicKey };
 }
 
 let cached: WikipediaIndex | null = null;
@@ -163,6 +323,10 @@ function getIndex(): WikipediaIndex {
 
 export function listWikipediaArticles(): WikipediaListItem[] {
   return getIndex().rows.map(({ id, topic, category }) => ({ id, topic, category }));
+}
+
+export function getWikipediaRowCount(): number {
+  return getIndex().rows.length;
 }
 
 export function getWikipediaArticle(id: number): WikipediaArticle | null {
@@ -177,6 +341,14 @@ export function getWikipediaArticle(id: number): WikipediaArticle | null {
   };
 }
 
+export function getWikipediaArticleByTopic(topic: string): WikipediaArticle | null {
+  const needle = topic.trim().toLowerCase();
+  if (!needle) return null;
+  const row = getIndex().rows.find((item) => item.topic.toLowerCase() === needle);
+  if (!row) return null;
+  return getWikipediaArticle(row.id);
+}
+
 function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["kind"]): DatabaseTrainingMatch {
   return {
     index: WIKIPEDIA_INDEX_OFFSET + row.id,
@@ -188,9 +360,9 @@ function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["
 }
 
 /**
- * Wikipedia samples match only when the user pasted that excerpt.
- * Mentioning words from a related article (environment → water pollution)
- * is not a hit. Those drafts are rewritten so the user's meaning is kept.
+ * Humanize uses Wikipedia only. A hit is the same article (pasted excerpt)
+ * or the same topic title after stopwords (The Environment = Environment).
+ * Body words never select a related article.
  */
 export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | null {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -204,7 +376,15 @@ export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | nu
   }
 
   const normalized = normalizeInsignificant(userText);
-  if (!normalized) return null;
-  const hit = index.byNormalizedOutput.get(normalized);
-  return hit ? toMatch(hit, 0.999, "near_exact") : null;
+  if (normalized) {
+    const excerptHit = index.byNormalizedOutput.get(normalized);
+    if (excerptHit) return toMatch(excerptHit, 0.999, "near_exact");
+  }
+
+  for (const key of userTopicKeys(userText)) {
+    const topicHit = index.byTopicKey.get(key);
+    if (topicHit) return toMatch(topicHit, 0.99, "topic");
+  }
+
+  return null;
 }

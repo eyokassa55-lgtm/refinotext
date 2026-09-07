@@ -67,6 +67,7 @@ function getHumanizationErrorStatus(error: HumanizationFailedError): number {
       return 401;
     case "TEXT_TOO_SHORT":
     case "NO_TRAINING_MATCH":
+    case "NO_WIKIPEDIA_MATCH":
     case "GRUBBY_LIMIT":
       return 400;
     case "GRUBBY_QUOTA":

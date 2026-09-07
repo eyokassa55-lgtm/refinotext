@@ -27,7 +27,7 @@ export const FEATURES = [
   {
     title: "Same topic, same facts",
     description:
-      "The rewrite keeps names, dates, numbers, and the original argument. It does not swap in a related essay.",
+      "Humanize matches your heading or topic to a Wikipedia article. The Environment stays Environment; it does not return Water pollution.",
     icon: "palette",
   },
   {
@@ -85,7 +85,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText rewrites the draft into natural prose while keeping the same topic, meaning, and facts.",
+      "RefinoText returns the Wikipedia article for that same topic. It does not rewrite unmatched drafts or swap in a related subject.",
   },
   {
     step: "03",
