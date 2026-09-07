@@ -2,6 +2,32 @@
 const NAV_OR_SECTION_LINE =
   /^(?:={2,}\s*.+?\s*={2,}|see also|references|external links|further reading|notes|bibliography|citations|sources|contents|etymology|terminology|classification|gallery|footnotes|references and notes|history|overview|types|applications|description|background|origins|development|usage|definition|examples|characteristics|variants)$/i;
 
+export function extractUserTitle(text: string): string | null {
+  const first = text
+    .trim()
+    .split(/\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!first) return null;
+  const heading = first
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*•]\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .trim();
+  const words = heading.split(/\s+/).filter(Boolean);
+  if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(heading)) {
+    return heading;
+  }
+  return null;
+}
+
+export function applyInputTitle(output: string, input: string): string {
+  const body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
+  const title = extractUserTitle(input);
+  if (!title) return body;
+  return `${title}\n\n${body}`;
+}
+
 export function splitHumanizeOutput(text: string): {
   title: string | null;
   paragraphs: string[];
@@ -9,12 +35,24 @@ export function splitHumanizeOutput(text: string): {
   const trimmed = text.replace(/^\uFEFF/, "").trim();
   if (!trimmed) return { title: null, paragraphs: [] };
 
-  const heading = trimmed.match(/^#\s+([^\n]+)\n+/);
-  if (heading) {
+  const hash = trimmed.match(/^#\s+([^\n]+)\n+/);
+  if (hash) {
     return {
-      title: heading[1]!.trim(),
-      paragraphs: toParagraphs(trimmed.slice(heading[0].length)),
+      title: hash[1]!.trim(),
+      paragraphs: toParagraphs(trimmed.slice(hash[0].length)),
     };
+  }
+
+  const firstBreak = trimmed.indexOf("\n\n");
+  if (firstBreak > 0) {
+    const firstLine = trimmed.slice(0, firstBreak).trim();
+    const words = firstLine.split(/\s+/).filter(Boolean);
+    if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(firstLine) && !firstLine.includes("\n")) {
+      return {
+        title: firstLine,
+        paragraphs: toParagraphs(trimmed.slice(firstBreak + 2)),
+      };
+    }
   }
 
   return { title: null, paragraphs: toParagraphs(trimmed) };

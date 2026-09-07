@@ -228,6 +228,18 @@ const PREAMBLE_ENVIRONMENT_ESSAY = `In today's world, the environment is threate
 
 Rivers, forests, and cities are part of the same system.`;
 
+const DISCIPLINE_OF_BOREDOM_ESSAY = `The Discipline of Boredom
+
+Boredom is often treated as something to escape—a signal that nothing interesting is happening. People fill the gap with noise, tasks, and constant stimulation. The result is that empty time feels like a problem rather than a chance to notice what the mind does when nothing is asked of it.
+
+I. Boredom as Empty Space
+Empty space is not always wasted. When a room is quiet, attention can settle on a thought that would not survive a crowded feed. Writers, students, and scientists have long used dull intervals to let an idea take shape. The discipline is to stay with that interval instead of reaching for the next distraction.
+
+II. Why the feeling matters
+Boredom can mark a mismatch between what a person wants and what the moment offers. It can also be a pause that makes later work sharper. Treating every dull minute as failure trains people to avoid silence. Treating it as a skill makes room for patience, memory, and independent thought.
+
+Schools and offices often pack schedules so tightly that boredom never appears. That leaves little practice for sitting with an unfinished question. A short, unfilled stretch of time can be more useful than another round of busy work.`;
+
 const POLITICAL_ECONOMY_GLOBALIZATION_ESSAY = `# The Political Economy of Globalization
 
 Globalization is the process through which countries and people become increasingly connected through trade, technology, investment, communication, and the movement of goods and services. The political economy of globalization examines how governments, businesses, and international organizations influence these global economic relationships. It also considers how globalization affects wealth, employment, development, and inequality.
@@ -515,7 +527,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { formatWikipediaEditorText, splitHumanizeOutput } = await import("../src/lib/humanize-output");
+  const { applyInputTitle, formatWikipediaEditorText, splitHumanizeOutput } = await import(
+    "../src/lib/humanize-output"
+  );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
   const formattedWiki = formatWikipediaEditorText(
     "Artificial intelligence",
@@ -536,6 +550,25 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/==/.test(formattedWiki) &&
       !/\nSee also\n/i.test(formattedWiki) &&
       !formattedParts.paragraphs.some((paragraph) => /^history$/i.test(paragraph.trim())),
+  );
+  const titledFromInput = applyInputTitle(
+    formattedWiki,
+    "The Discipline of Boredom\n\nBoredom is often treated as empty time.",
+  );
+  assert(
+    "editor output uses the input title instead of the Wikipedia title",
+    titledFromInput.startsWith("The Discipline of Boredom\n\n") &&
+      !titledFromInput.startsWith("Boredom\n") &&
+      !titledFromInput.startsWith("Artificial intelligence\n") &&
+      !/^# /.test(titledFromInput),
+  );
+  const untitledFromInput = applyInputTitle(
+    "# Boredom\n\nBoredom is an emotion characterized by uninterest.",
+    "Boredom is often treated as something to escape.",
+  );
+  assert(
+    "untitled drafts do not add a Wikipedia heading",
+    untitledFromInput === "Boredom is an emotion characterized by uninterest.",
   );
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
@@ -750,6 +783,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize returns a related Wikipedia article for a Digital Marketplace draft",
     engineMarketplace.source === "TOPIC_TRAINING_MATCH" &&
       engineMarketplace.text !== ecommercePair!.output &&
+      engineMarketplace.text.startsWith(
+        "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce\n\n",
+      ) &&
       /e-commerce|electronic commerce|online shopping|digital marketplace/i.test(
         engineMarketplace.text,
       ),
@@ -860,19 +896,14 @@ Rainforests also illustrate a much broader set of global development debates. It
       !runHumanizationFn.includes("findWikipediaMatch(") &&
       !runHumanizationFn.includes("getIndex("),
   );
-  const pickerSource = readFileSync(
-    join(process.cwd(), "src", "components", "humanizer", "wikipedia-picker.tsx"),
-    "utf8",
-  );
-  assert(
-    "Wikipedia picker searches the full encyclopedia instead of listing 3000 titles",
-    pickerSource.includes("/api/wikipedia?q=") &&
-      pickerSource.includes("Search any English Wikipedia topic") &&
-      !pickerSource.includes("listWikipediaArticles"),
-  );
   const workspaceSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),
     "utf8",
+  );
+  assert(
+    "Humanize editor does not show a Wikipedia search bar",
+    !workspaceSource.includes("WikipediaPicker") &&
+      !workspaceSource.includes("Search any English Wikipedia topic"),
   );
   assert(
     "Humanize editor does not show a red Wikipedia-match banner",
@@ -884,8 +915,12 @@ Rainforests also illustrate a much broader set of global development debates. It
     "utf8",
   );
   assert(
-    "Humanized output pane renders the title separately from paragraphs",
-    outputViewSource.includes("splitHumanizeOutput") && outputViewSource.includes("<h2"),
+    "Humanized output pane shows plain text like the input, with no heading",
+    outputViewSource.includes("textarea") &&
+      outputViewSource.includes("readOnly") &&
+      !outputViewSource.includes("<h2") &&
+      !outputViewSource.includes("font-bold") &&
+      !outputViewSource.includes("font-semibold"),
   );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
@@ -897,9 +932,22 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Humanize returns live Wikipedia Success for a Success draft",
     engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      /^# Success\n\n/i.test(engineSuccess.text) &&
+      /^Success\n\n/i.test(engineSuccess.text) &&
       /success is the state or condition/i.test(engineSuccess.text),
     `source=${engineSuccess.source} opening=${engineSuccess.text.slice(0, 80)}`,
+  );
+  const engineBoredom = await runEngineHumanization({
+    text: DISCIPLINE_OF_BOREDOM_ESSAY,
+    intensity: 75,
+  });
+  assert(
+    "Humanize keeps the input title The Discipline of Boredom",
+    engineBoredom.source === "TOPIC_TRAINING_MATCH" &&
+      engineBoredom.text.startsWith("The Discipline of Boredom\n\n") &&
+      !engineBoredom.text.startsWith("Boredom\n") &&
+      !/^# /.test(engineBoredom.text) &&
+      /boredom/i.test(engineBoredom.text),
+    `source=${engineBoredom.source} opening=${engineBoredom.text.slice(0, 80)}`,
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
   assert(

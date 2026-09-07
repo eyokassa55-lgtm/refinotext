@@ -17,6 +17,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
+import { applyInputTitle } from "@/lib/humanize-output";
 import { type DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -301,10 +302,15 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
-  if (wikipediaHit) return resolveStoredHit(wikipediaHit);
+  if (wikipediaHit) {
+    return resolveStoredHit({
+      ...wikipediaHit,
+      output: applyInputTitle(wikipediaHit.output, request.text),
+    });
+  }
 
   throw new HumanizationFailedError(
-    "No Wikipedia article matches this topic. Keep the same subject, or load a Wikipedia sample.",
+    "No Wikipedia article matches this topic. Keep the same subject.",
     "NO_WIKIPEDIA_MATCH",
     422,
   );

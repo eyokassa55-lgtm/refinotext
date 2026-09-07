@@ -18,7 +18,6 @@ import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizerControls } from "./humanizer-controls";
 import { HumanizedOutputView } from "./humanized-output-view";
-import { WikipediaPicker } from "./wikipedia-picker";
 
 export function HumanizerWorkspace() {
   if (!isClerkEnabled) {
@@ -168,18 +167,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     notifyStatus("Cleared editor");
   };
 
-  const handleLoadWikipedia = (article: {
-    topic: string;
-    source_text: string;
-    source_url: string;
-  }) => {
-    setInput(article.source_text);
-    setOutput("");
-    setError(null);
-    notifyStatus(`Loaded "${article.topic}" from Wikipedia`);
-    inputRef.current?.focus();
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isSignedIn) return;
     const file = e.target.files?.[0];
@@ -213,8 +200,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       />
 
       <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <WikipediaPicker onLoad={handleLoadWikipedia} disabled={isProcessing} />
-
         <div className="grid min-h-0 flex-1 lg:grid-cols-2">
           <div className="relative flex min-h-0 flex-col p-4 lg:pr-3">
             <div
