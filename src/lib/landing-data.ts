@@ -85,7 +85,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText looks up that topic on the full English Wikipedia and returns the article. It does not swap in a related subject.",
+      "RefinoText looks up that topic on the full English Wikipedia and returns the article. If that exact title does not exist, it returns the closest related page.",
   },
   {
     step: "03",

@@ -16,7 +16,7 @@ export function HumanizerSection() {
             id="humanizer-heading"
             eyebrow="Humanizer"
             title="Revise AI-assisted drafts in the editor"
-            description="Paste a draft. Humanize returns the English Wikipedia article for that same topic. Sign in is required."
+            description="Paste a draft. Humanize returns the English Wikipedia article for that topic, or the closest related article. Sign in is required."
           />
         </Container>
       </div>

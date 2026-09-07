@@ -73,7 +73,7 @@ export function WikipediaPicker({ onLoad, disabled }: WikipediaPickerProps) {
       </form>
       {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
       <p className="mt-2 text-[11px] leading-relaxed text-muted">
-        Searches the full English Wikipedia. Humanize looks up the same topic as your draft. Sign-in is required.
+        Searches the full English Wikipedia. Humanize returns the same topic when it exists, or the closest related article. Sign-in is required.
       </p>
     </div>
   );

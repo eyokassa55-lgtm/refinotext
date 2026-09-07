@@ -228,6 +228,12 @@ const PREAMBLE_ENVIRONMENT_ESSAY = `In today's world, the environment is threate
 
 Rivers, forests, and cities are part of the same system.`;
 
+const POLITICAL_ECONOMY_GLOBALIZATION_ESSAY = `# The Political Economy of Globalization
+
+Globalization is the process through which countries and people become increasingly connected through trade, technology, investment, communication, and the movement of goods and services. The political economy of globalization examines how governments, businesses, and international organizations influence these global economic relationships. It also considers how globalization affects wealth, employment, development, and inequality.
+
+One major benefit of globalization is increased international trade. Countries can specialize in producing certain goods and services and trade with other countries. This can provide consumers with more choices and create opportunities for businesses to reach international markets.`;
+
 const CLIMATE_PLAIN_ESSAY = `Climate change is heating the planet. Ice melts, seas rise, and storms get worse.
 
 Cutting fossil fuels and planting trees can slow the damage. Cities can also prepare hospitals and cooling centers.`;
@@ -962,6 +968,18 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize returns Wikipedia Success for a preamble Success draft",
     /success is the state or condition/i.test(enginePreambleSuccess.text),
     `source=${enginePreambleSuccess.source}`,
+  );
+  const engineGlobalization = await runEngineHumanization({
+    text: POLITICAL_ECONOMY_GLOBALIZATION_ESSAY,
+    intensity: 75,
+  });
+  assert(
+    "Humanize returns a close Wikipedia page for Political Economy of Globalization",
+    engineGlobalization.source === "TOPIC_TRAINING_MATCH" &&
+      /international political economy|political economy|political globalization|globalization is/i.test(
+        engineGlobalization.text,
+      ),
+    `source=${engineGlobalization.source} opening=${engineGlobalization.text.slice(0, 100)}`,
   );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
   assert(

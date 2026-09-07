@@ -605,8 +605,8 @@ async function fetchWikipediaPage(title: string): Promise<WikipediaRow | null> {
   return row;
 }
 
-async function searchWikipediaTitles(query: string): Promise<string[]> {
-  const cacheKey = query.trim().toLowerCase();
+async function searchWikipediaTitles(query: string, limit = 12): Promise<string[]> {
+  const cacheKey = `${query.trim().toLowerCase()}\u0001${limit}`;
   const cached = searchCache.get(cacheKey);
   if (cached) return cached;
 
@@ -614,7 +614,7 @@ async function searchWikipediaTitles(query: string): Promise<string[]> {
     list: "search",
     srsearch: query,
     srnamespace: "0",
-    srlimit: "8",
+    srlimit: String(limit),
   });
   const queryData = data?.query as { search?: Array<{ title?: string }> } | undefined;
   const titles: string[] = [];
@@ -633,7 +633,7 @@ function liveSearchQueries(text: string): string[] {
   const push = (value: string) => {
     const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
     const words = normalized.split(" ").filter(Boolean);
-    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 8) return;
+    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 16) return;
     seen.add(normalized);
     queries.push(value.trim());
   };
@@ -647,9 +647,90 @@ function liveSearchQueries(text: string): string[] {
   return queries.sort((left, right) => left.length - right.length).slice(0, 4);
 }
 
+function userTokenSet(userKeys: Iterable<string>): Set<string> {
+  const tokens = new Set<string>();
+  for (const key of userKeys) {
+    for (const token of tokensFromKey(key)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function userBigrams(text: string): string[] {
+  const grams = new Set<string>();
+  for (const phrase of userTopicPhrases(text)) {
+    const tokens = skipLeadingFrames(tokenizeTopic(phrase));
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+      grams.add(`${tokens[i]} ${tokens[i + 1]}`);
+    }
+  }
+  return [...grams];
+}
+
+function relatedTitleScore(title: string, userTokens: Set<string>, bigrams: string[]): {
+  overlap: number;
+  score: number;
+} {
+  if (/^list of\b/i.test(title)) return { overlap: 0, score: 0 };
+  const titleTokens = [...new Set(skipLeadingFrames(tokenizeTopic(title)))];
+  const overlap = titleTokens.filter((token) => userTokens.has(token)).length;
+  if (overlap === 0) return { overlap: 0, score: 0 };
+  const titleLower = title.toLowerCase();
+  let bonus = 0;
+  for (const gram of bigrams) {
+    if (titleLower.includes(gram)) bonus += 2;
+  }
+  const coverage = overlap / Math.max(titleTokens.length, 1);
+  return { overlap, score: overlap * 10 + bonus * 5 + coverage };
+}
+
 /**
- * Look up the same topic on live English Wikipedia (the full encyclopedia).
- * Related titles are not substituted.
+ * Closest real Wikipedia page when no same-title article exists
+ * (Political Economy of Globalization → International political economy).
+ */
+async function findRelatedWikipediaPage(
+  userText: string,
+  userKeys: Set<string>,
+): Promise<WikipediaRow | null> {
+  const userTokens = userTokenSet(userKeys);
+  if (userTokens.size === 0) return null;
+  const bigrams = userBigrams(userText);
+  const minOverlap = Math.min(2, userTokens.size);
+
+  let best: { row: WikipediaRow; score: number; rank: number } | null = null;
+
+  for (const query of liveSearchQueries(userText)) {
+    const titles = await searchWikipediaTitles(query, 12);
+    const ranked = titles
+      .map((title, index) => ({
+        title,
+        rank: index + 1,
+        ...relatedTitleScore(title, userTokens, bigrams),
+      }))
+      .filter((item) => item.overlap >= minOverlap)
+      .sort((left, right) => right.score - left.score || left.rank - right.rank)
+      .slice(0, 5);
+
+    for (const candidate of ranked) {
+      const page = await fetchWikipediaPage(candidate.title);
+      if (!page) continue;
+      const scored = relatedTitleScore(page.topic, userTokens, bigrams);
+      if (scored.overlap < minOverlap) continue;
+      if (
+        !best ||
+        scored.score > best.score ||
+        (scored.score === best.score && candidate.rank < best.rank)
+      ) {
+        best = { row: page, score: scored.score, rank: candidate.rank };
+      }
+    }
+  }
+
+  return best?.row ?? null;
+}
+
+/**
+ * Look up the draft on live English Wikipedia. Prefer the same topic;
+ * if that page does not exist, return the closest related article.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -677,6 +758,9 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
       if (page) return toMatch(page, 0.95, "topic");
     }
   }
+
+  const related = await findRelatedWikipediaPage(userText, userKeys);
+  if (related) return toMatch(related, 0.84, "topic");
 
   return null;
 }

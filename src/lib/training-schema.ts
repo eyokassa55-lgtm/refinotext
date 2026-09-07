@@ -2,8 +2,9 @@
  * Dataset contract for Humanize keyword lookup.
  *
  * Humanize looks up the draft's topic on live English Wikipedia and
- * returns that article. Body words never select a related article.
- * Unmatched drafts are not rewritten and do not use `training_data.jsonl`.
+ * returns that article. If the exact title is missing, it returns the
+ * closest related page. Unmatched drafts are not rewritten and do not
+ * use `training_data.jsonl`.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

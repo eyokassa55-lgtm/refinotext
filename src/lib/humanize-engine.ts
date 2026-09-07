@@ -71,8 +71,8 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Humanize returns the Wikipedia article for the same topic.
- * It does not rewrite unmatched drafts or substitute a related article.
+ * Humanize returns the Wikipedia article for the same topic, or the
+ * closest related Wikipedia page when that exact title does not exist.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
