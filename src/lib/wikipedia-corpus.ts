@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
+import { formatWikipediaEditorText } from "@/lib/humanize-output";
 
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
@@ -44,35 +45,6 @@ export function resolveWikipediaDatasetPath(): string {
   throw new Error("The Wikipedia dataset is not available on the server.");
 }
 
-function stripNavSections(text: string): string {
-  const markers = [
-    /\nSee also\n/i,
-    /\nReferences\n/i,
-    /\nExternal links\n/i,
-    /\nFurther reading\n/i,
-    /\nNotes\n/i,
-  ];
-  let out = text.trim();
-  for (const marker of markers) {
-    const index = out.search(marker);
-    if (index >= 400) out = out.slice(0, index).trim();
-  }
-  return out;
-}
-
-function excerpt(text: string, maxChars = WIKIPEDIA_EDITOR_MAX_CHARS): string {
-  const cleaned = stripNavSections(text);
-  if (cleaned.length <= maxChars) return cleaned;
-  const slice = cleaned.slice(0, maxChars);
-  const paragraph = slice.lastIndexOf("\n\n");
-  const sentence = slice.lastIndexOf(". ");
-  const cut = Math.max(paragraph, sentence);
-  if (cut >= 500) {
-    return slice.slice(0, sentence === cut ? cut + 1 : cut).trim();
-  }
-  return slice.trim();
-}
-
 function parseRow(value: unknown, id: number): WikipediaRow | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
@@ -88,7 +60,7 @@ function parseRow(value: unknown, id: number): WikipediaRow | null {
   ) {
     return null;
   }
-  const output = excerpt(sourceText);
+  const output = formatWikipediaEditorText(topic.trim(), sourceText, WIKIPEDIA_EDITOR_MAX_CHARS);
   if (output.length < 400) return null;
   const aliases = Array.isArray(row.aliases)
     ? row.aliases.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
@@ -549,7 +521,7 @@ async function wikiQuery(params: Record<string, string>): Promise<Record<string,
 }
 
 function liveRowFromExtract(title: string, extract: string, pageUrl: string): WikipediaRow | null {
-  const output = excerpt(extract);
+  const output = formatWikipediaEditorText(title, extract, WIKIPEDIA_EDITOR_MAX_CHARS);
   if (output.length < 400) return null;
   return {
     id: WIKIPEDIA_LIVE_INDEX,

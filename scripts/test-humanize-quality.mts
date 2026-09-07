@@ -515,7 +515,28 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
+  const { formatWikipediaEditorText, splitHumanizeOutput } = await import("../src/lib/humanize-output");
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
+  const formattedWiki = formatWikipediaEditorText(
+    "Artificial intelligence",
+    "Artificial intelligence (AI) is useful in daily life and in large research projects.\n\nIt is a field of research in computer science, mathematics, and engineering.\n\n== History ==\n\nEarly researchers built machines that could follow instructions.\n\nSee also\n\nRobotics",
+  );
+  const formattedParts = splitHumanizeOutput(formattedWiki);
+  assert(
+    "formatted Wikipedia output starts with the exact title",
+    formattedWiki.startsWith("# Artificial intelligence\n\n") &&
+      formattedParts.title === "Artificial intelligence",
+  );
+  assert(
+    "formatted Wikipedia output separates paragraphs",
+    formattedParts.paragraphs.length >= 2,
+  );
+  assert(
+    "formatted Wikipedia output does not add a sub-topic heading at the end",
+    !/==/.test(formattedWiki) &&
+      !/\nSee also\n/i.test(formattedWiki) &&
+      !formattedParts.paragraphs.some((paragraph) => /^history$/i.test(paragraph.trim())),
+  );
   const stats = getTrainingLookupStats();
   assert("loads all training_data.jsonl rows", stats.rows === 722, `rows=${stats.rows}`);
   assert(
@@ -840,6 +861,14 @@ Rainforests also illustrate a much broader set of global development debates. It
       pickerSource.includes("Search any English Wikipedia topic") &&
       !pickerSource.includes("listWikipediaArticles"),
   );
+  const outputViewSource = readFileSync(
+    join(process.cwd(), "src", "components", "humanizer", "humanized-output-view.tsx"),
+    "utf8",
+  );
+  assert(
+    "Humanized output pane renders the title separately from paragraphs",
+    outputViewSource.includes("splitHumanizeOutput") && outputViewSource.includes("<h2"),
+  );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
     "Humanize returns live Wikipedia Technology for a #technology draft",
@@ -849,7 +878,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
   assert(
     "Humanize returns live Wikipedia Success for a Success draft",
-    engineSuccess.source === "TOPIC_TRAINING_MATCH" && /success is the state or condition/i.test(engineSuccess.text),
+    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
+      /^# Success\n\n/i.test(engineSuccess.text) &&
+      /success is the state or condition/i.test(engineSuccess.text),
     `source=${engineSuccess.source} opening=${engineSuccess.text.slice(0, 80)}`,
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });

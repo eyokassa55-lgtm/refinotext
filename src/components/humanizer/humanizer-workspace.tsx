@@ -18,6 +18,7 @@ import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizerControls } from "./humanizer-controls";
+import { HumanizedOutputView } from "./humanized-output-view";
 import { WikipediaPicker } from "./wikipedia-picker";
 
 export function HumanizerWorkspace() {
@@ -402,12 +403,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-mint-dark/15">
-              <textarea
-                readOnly
-                value={output}
-                aria-label="Humanized output"
-                className="min-h-[200px] flex-1 resize-none bg-transparent px-5 py-4 text-base leading-relaxed text-foreground focus-visible:outline-none lg:min-h-0"
-              />
+              {output ? <HumanizedOutputView text={output} /> : null}
 
               {isProcessing && (
                 <div
