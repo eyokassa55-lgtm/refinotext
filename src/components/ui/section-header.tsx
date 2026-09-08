@@ -32,14 +32,14 @@ export function SectionHeader({
       )}
     >
       {eyebrow && (
-        <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-accent">
+        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-accent">
           {eyebrow}
         </p>
       )}
       <TitleTag
         id={id}
         className={cn(
-          "text-3xl tracking-tight sm:text-4xl",
+          "text-3xl tracking-[-0.03em] sm:text-4xl",
           titleWeight === "bold" ? "font-bold" : "font-medium",
           tone === "dark" && "text-white",
         )}
@@ -49,7 +49,7 @@ export function SectionHeader({
       {description && (
         <p
           className={cn(
-            "mt-4 text-base leading-relaxed sm:text-lg",
+            "mt-4 text-base leading-7 sm:text-lg sm:leading-8",
             tone === "dark" ? "text-white/60" : "text-muted",
           )}
         >

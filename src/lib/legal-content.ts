@@ -362,6 +362,6 @@ export const CONTACT_FAQS = [
   },
   {
     question: "Where else can I get help?",
-    answer: `The homepage FAQ covers product and billing questions. You can also email ${SUPPORT_EMAIL} directly.`,
+    answer: `The FAQ page covers product and billing questions. You can also email ${SUPPORT_EMAIL} directly.`,
   },
 ] as const;

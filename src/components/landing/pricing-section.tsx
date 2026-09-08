@@ -1,26 +1,25 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
 import { Check } from "lucide-react";
-import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
-import { SectionHeader } from "@/components/ui/section-header";
+import { isClerkEnabled } from "@/lib/auth-config";
 import {
   CREDIT_TOPUPS,
   PRICING_PLANS,
   type PricingPlan,
 } from "@/lib/landing-data";
-import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-function formatPrice(amount: number) {
-  return amount.toFixed(2);
+function formatUsPrice(amount: number) {
+  return `US$${amount.toFixed(2)}`;
 }
 
 function monthlyEquivalent(yearlyPrice: number) {
-  return formatPrice(yearlyPrice / 12);
+  return (yearlyPrice / 12).toFixed(2);
 }
 
 export function PricingSection({
@@ -28,9 +27,41 @@ export function PricingSection({
 }: {
   headingLevel?: "h1" | "h2";
 }) {
-  const [yearly, setYearly] = useState(true);
+  if (!isClerkEnabled) {
+    return <PricingSectionInner headingLevel={headingLevel} isSignedIn={false} />;
+  }
+
+  return <PricingSectionWithAuth headingLevel={headingLevel} />;
+}
+
+function PricingSectionWithAuth({
+  headingLevel,
+}: {
+  headingLevel: "h1" | "h2";
+}) {
+  const { isSignedIn } = useAuth();
+  return (
+    <PricingSectionInner
+      headingLevel={headingLevel}
+      isSignedIn={Boolean(isSignedIn)}
+    />
+  );
+}
+
+function PricingSectionInner({
+  headingLevel,
+  isSignedIn,
+}: {
+  headingLevel: "h1" | "h2";
+  isSignedIn: boolean;
+}) {
+  const [yearly, setYearly] = useState(false);
   const [loadingProductKey, setLoadingProductKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const paidPlans = useMemo(
+    () => PRICING_PLANS.filter((plan) => !plan.isFree),
+    [],
+  );
 
   const startCheckout = async (productKey: string) => {
     setCheckoutError(null);
@@ -63,25 +94,51 @@ export function PricingSection({
     }
   };
 
+  const TitleTag = headingLevel;
+
   return (
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className="bg-card/60 py-20 sm:py-28"
+      className="bg-[#faf8f4] pt-6 pb-20 sm:pt-8 sm:pb-28"
     >
       <Container className="max-w-7xl">
-        <SectionHeader
-          id="pricing-heading"
-          titleAs={headingLevel}
-          eyebrow="Pricing"
-          title="Simple, transparent pricing"
-          description="Start on the Free plan, then subscribe if you need more credits. Paid checkout is processed by Polar, the merchant of record."
-          className="mb-10"
-        />
+        <div className="mb-8 flex items-center justify-center gap-4 sm:mb-10">
+          <span
+            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
+            aria-hidden
+          />
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+            Pricing plans
+          </p>
+          <span
+            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
+            aria-hidden
+          />
+        </div>
+
+        <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-12">
+          <TitleTag
+            id="pricing-heading"
+            className="text-3xl font-bold tracking-[-0.03em] sm:text-[2.65rem] sm:leading-[1.12]"
+          >
+            simple plans,{" "}
+            <span className="font-display text-[1.08em] font-bold italic text-primary">
+              honest
+            </span>{" "}
+            pricing
+          </TitleTag>
+
+          <p className="mx-auto mt-4 max-w-xl font-mono text-sm leading-6 text-muted sm:text-[15px]">
+            {isSignedIn
+              ? "Pick a tier that fits your writing volume. Upgrade or add a top-up anytime — no surprises."
+              : "Pick a tier that fits your writing volume. Scale up or down anytime — no surprises."}
+          </p>
+        </div>
 
         <div className="mb-12 flex flex-col items-center gap-3">
           <div
-            className="inline-flex max-w-full flex-wrap items-center justify-center rounded-full border border-border bg-card p-1 shadow-sm"
+            className="inline-flex max-w-full flex-wrap items-center justify-center rounded-full border border-border/80 bg-card p-1 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_8px_20px_rgba(13,92,69,0.08)]"
             role="group"
             aria-label="Billing period"
           >
@@ -108,109 +165,134 @@ export function PricingSection({
               )}
             >
               Annual billing
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  yearly
+                    ? "bg-accent-light text-primary"
+                    : "bg-accent/15 text-primary",
+                )}
+              >
+                50% off
+              </span>
             </button>
           </div>
           <p className="max-w-xl text-center text-sm text-muted">
             {yearly
-              ? "Annual prices below are billed once per year and renew each year until cancelled."
+              ? "Annual prices include 50% off every paid plan — billed once per year until cancelled."
               : "Monthly prices below are billed every month and renew each month until cancelled."}
           </p>
-
-          <div className="mt-2 flex flex-col items-center gap-1 rounded-2xl border border-accent/30 bg-accent-light px-5 py-3 text-center">
-            <p className="text-sm font-semibold text-primary">1 word = 1 credit</p>
-            <p className="text-xs text-muted">
-              Credits are charged on the words you paste in, not on the length of
-              the output. A 750-word draft costs 750 credits.
-            </p>
-          </div>
           {checkoutError && (
             <p className="text-sm font-medium text-red-700">{checkoutError}</p>
           )}
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-          {PRICING_PLANS.map((plan) => {
+        <div className="mx-auto grid max-w-5xl items-stretch gap-4 md:grid-cols-3 md:gap-5">
+          {paidPlans.map((plan) => {
             const productKey = yearly
               ? plan.yearlyProductKey
               : plan.monthlyProductKey;
             const isOpening = Boolean(
               productKey && loadingProductKey === productKey,
             );
+            const featured = Boolean(plan.featured);
 
             return (
               <article
                 key={plan.name}
                 className={cn(
-                  "relative flex flex-col rounded-2xl border bg-card p-6 sm:p-7",
-                  plan.featured
-                    ? "pricing-card-glow z-10 border-primary"
-                    : "border-border transition-shadow hover:shadow-md",
+                  "relative mx-auto flex w-full max-w-sm flex-col rounded-xl border px-4 pb-4 pt-6 md:mx-0 md:max-w-none sm:px-5 sm:pb-5 sm:pt-7",
+                  featured
+                    ? "z-10 border-primary bg-primary text-white shadow-[0_16px_40px_rgba(13,92,69,0.24)] md:-mt-1 md:mb-1"
+                    : "border-border/80 bg-card text-foreground shadow-[0_1px_2px_rgba(15,23,20,0.04)]",
                 )}
               >
-                {plan.featured && (
-                  <span className="absolute -top-3.5 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-4 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground shadow-[0_0_16px_color-mix(in_srgb,var(--accent)_45%,transparent)]">
+                {featured && (
+                  <span className="absolute -top-3 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent-light px-3 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-foreground">
                     Most popular
                   </span>
                 )}
 
-                <div className="mb-5">
-                  <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                <div className="text-center">
+                  <p
+                    className={cn(
+                      "text-[10px] font-semibold uppercase tracking-[0.2em]",
+                      featured ? "text-white/75" : "text-muted",
+                    )}
+                  >
+                    {plan.name}
+                  </p>
+
+                  <PlanPrice plan={plan} yearly={yearly} featured={featured} />
+
+                  <p
+                    className={cn(
+                      "mx-auto mt-3 max-w-[14rem] text-xs leading-5",
+                      featured ? "text-white/80" : "text-muted",
+                    )}
+                  >
                     {plan.description}
                   </p>
 
-                  <PlanPrice plan={plan} yearly={yearly} />
+                  {!productKey ? (
+                    <Button
+                      href={plan.href}
+                      className={cn(
+                        "mt-4 w-full rounded-full py-2.5 text-xs font-bold",
+                        featured
+                          ? "bg-white text-primary hover:bg-white/90"
+                          : "border border-border bg-transparent text-foreground hover:bg-mint-dark/40",
+                      )}
+                    >
+                      {plan.cta}
+                    </Button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startCheckout(productKey)}
+                      disabled={Boolean(loadingProductKey)}
+                      className={cn(
+                        "mt-4 inline-flex w-full items-center justify-center rounded-full px-5 py-2.5 text-xs font-bold transition-colors disabled:opacity-50",
+                        featured
+                          ? "bg-white text-primary hover:bg-white/90"
+                          : "border border-border bg-transparent text-foreground hover:bg-mint-dark/40",
+                      )}
+                    >
+                      {isOpening ? "Subscribing..." : plan.cta}
+                    </button>
+                  )}
 
-                  <p className="mt-3 rounded-lg bg-mint-dark/40 px-3 py-2 text-xs font-medium text-foreground/80">
-                    {plan.creditsPerMonth.toLocaleString()} credits / month ·{" "}
-                    <span className="font-semibold text-primary">1 word = 1 credit</span>
+                  <p
+                    className={cn(
+                      "mt-2 text-[10px]",
+                      featured ? "text-white/65" : "text-muted",
+                    )}
+                  >
+                    No hidden fees · Cancel anytime
                   </p>
                 </div>
 
-                {plan.isFree || !productKey ? (
-                  <Button
-                    href={plan.href}
-                    variant={plan.featured ? "primary" : "secondary"}
-                    className={cn(
-                      "w-full rounded-xl py-3",
-                      plan.featured && "bg-primary hover:bg-primary-hover",
-                    )}
-                  >
-                    {plan.cta}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={() => startCheckout(productKey)}
-                    disabled={Boolean(loadingProductKey)}
-                    variant={plan.featured ? "primary" : "secondary"}
-                    className={cn(
-                      "w-full rounded-xl py-3",
-                      plan.featured && "bg-primary hover:bg-primary-hover",
-                      !plan.featured &&
-                        "border-accent/30 bg-accent-light text-primary hover:bg-accent/20",
-                    )}
-                  >
-                    {isOpening ? "Opening Polar checkout..." : plan.cta}
-                  </Button>
-                )}
-
-                <p className="mt-3 text-center text-[11px] text-muted">
-                  {plan.isFree
-                    ? "No credit card required for the Free plan"
-                    : yearly
-                      ? `$${formatPrice(plan.yearlyPrice)} billed once per year · renews annually until cancelled`
-                      : `$${formatPrice(plan.monthlyPrice)} billed every month · renews monthly until cancelled`}
-                </p>
-
-                <ul className="mt-5 flex-1 space-y-3 border-t border-border pt-5">
+                <ul
+                  className={cn(
+                    "mt-4 flex-1 space-y-2 border-t pt-4 text-left",
+                    featured ? "border-white/15" : "border-border/40",
+                  )}
+                >
                   {plan.features.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-start gap-2.5 text-sm text-foreground/90"
+                      className={cn(
+                        "flex items-start gap-2 text-xs leading-snug",
+                        featured ? "text-white/92" : "text-foreground/90",
+                      )}
                     >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-light">
-                        <Check className="h-3 w-3 text-primary" aria-hidden />
-                      </span>
+                      <Check
+                        className={cn(
+                          "mt-0.5 h-3.5 w-3.5 shrink-0",
+                          featured ? "text-accent-light" : "text-accent",
+                        )}
+                        aria-hidden
+                      />
                       {feature}
                     </li>
                   ))}
@@ -220,107 +302,57 @@ export function PricingSection({
           })}
         </div>
 
-        <div className="mt-10 space-y-4 rounded-3xl border border-border bg-card p-5 text-sm leading-relaxed text-muted sm:p-6">
-          <h3 className="text-base font-semibold text-foreground">
-            Polar checkout, renewal, cancellation, and refunds
-          </h3>
-          <p>
-            Polar is the merchant of record and reseller for RefinoText paid plans
-            and credit top-ups. You complete payment on Polar’s checkout. RefinoText
-            does not collect or store card details and does not process card
-            payments.
-          </p>
-          <p>
-            Subscriptions renew automatically at the chosen interval until you
-            cancel. Recurring charges continue until cancelled. Cancel through
-            Polar’s Customer Portal using the link in Polar’s purchase and billing
-            emails, or email{" "}
-            <a
-              className="font-medium text-primary underline-offset-2 hover:underline"
-              href={`mailto:${SUPPORT_EMAIL}`}
-            >
-              {SUPPORT_EMAIL}
-            </a>
-            . Cancellation stops future renewals. You keep access until the end of
-            the current billing period.
-          </p>
-          <p>
-            Refund requests are reviewed by email and processed by Polar. Unused
-            subscription time is not automatically refunded unless required by law
-            or Polar issues a refund. See the{" "}
-            <Link
-              href={ROUTES.refunds}
-              className="font-medium text-primary underline-offset-2 hover:underline"
-            >
-              Refunds and Cancellation Policy
-            </Link>
-            .
-          </p>
-        </div>
-
-        <div className="mt-10 rounded-3xl border border-accent/25 bg-accent-light/55 p-4 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-2 text-center sm:text-left">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              One-time top-ups
-            </p>
-            <h3 className="text-2xl font-bold tracking-tight text-foreground">
-              Need more credits without changing your subscription?
-            </h3>
-            <p className="text-sm leading-relaxed text-muted">
-              Top-ups are billed once through Polar. They do not renew. Credits
-              follow the same rule: 1 word = 1 credit.
+        <div className="mt-6 rounded-xl border border-accent/20 bg-accent-light/40 p-3 sm:mt-8 sm:p-4">
+          <div className="flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                One-time top-ups
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-foreground">
+                Extra credits without changing your plan
+              </p>
+            </div>
+            <p className="text-[11px] leading-5 text-muted sm:max-w-xs sm:text-right">
+              Billed once through Polar. Does not renew.
             </p>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3 sm:gap-2.5">
             {CREDIT_TOPUPS.map((topup) => (
               <article
                 key={topup.name}
                 className={cn(
-                  "rounded-2xl border bg-card p-4 shadow-sm",
-                  topup.featured ? "border-primary" : "border-border",
+                  "flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5",
+                  topup.featured ? "border-primary/70" : "border-border/70",
                 )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="truncate text-xs font-semibold text-foreground">
                       {topup.name}
                     </h4>
-                    <p className="mt-1 text-xs text-muted">
-                      {topup.credits.toLocaleString()} extra credits
-                    </p>
+                    {topup.featured && (
+                      <span className="shrink-0 rounded-full bg-primary px-1.5 py-px text-[9px] font-semibold text-primary-foreground">
+                        Popular
+                      </span>
+                    )}
                   </div>
-                  {topup.featured && (
-                    <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                      Popular
-                    </span>
-                  )}
+                  <p className="mt-0.5 text-[10px] text-muted">
+                    {topup.credits.toLocaleString()} credits · {formatUsPrice(topup.price)}
+                  </p>
                 </div>
-
-                <div className="mt-4 flex items-end gap-1">
-                  <span className="text-3xl font-bold text-foreground">
-                    ${formatPrice(topup.price)}
-                  </span>
-                  <span className="pb-1 text-xs text-muted">one time</span>
-                </div>
-
-                <p className="mt-3 text-xs text-muted">
-                  Up to {topup.maxWordsPerRequest.toLocaleString()} words per
-                  request. Does not renew.
-                </p>
 
                 <Button
                   onClick={() => startCheckout(topup.productKey)}
                   disabled={Boolean(loadingProductKey)}
                   variant={topup.featured ? "primary" : "secondary"}
+                  size="sm"
                   className={cn(
-                    "mt-4 w-full rounded-xl py-2.5 text-sm",
+                    "shrink-0 rounded-lg px-3 py-1.5 text-[11px]",
                     topup.featured && "bg-primary hover:bg-primary-hover",
                   )}
                 >
-                  {loadingProductKey === topup.productKey
-                    ? "Opening Polar checkout..."
-                    : "Buy top-up on Polar"}
+                  {loadingProductKey === topup.productKey ? "..." : "Buy"}
                 </Button>
               </article>
             ))}
@@ -331,34 +363,41 @@ export function PricingSection({
   );
 }
 
-function PlanPrice({ plan, yearly }: { plan: PricingPlan; yearly: boolean }) {
+function PlanPrice({
+  plan,
+  yearly,
+  featured = false,
+}: {
+  plan: PricingPlan;
+  yearly: boolean;
+  featured?: boolean;
+}) {
+  const mutedClass = featured ? "text-white/65" : "text-muted";
+  const strikeClass = featured ? "text-white/55" : "text-muted";
+
   if (plan.isFree) {
     return (
-      <>
-        <div className="mt-4 flex items-baseline gap-2">
-          <span className="text-4xl font-bold text-foreground">$0.00</span>
-        </div>
-        <p className="mt-2 text-sm text-muted">
-          Free plan · 500 credits each month · no paid subscription
-        </p>
-      </>
+      <div className="mt-4 flex items-baseline justify-center gap-1">
+        <span className="text-4xl font-bold tracking-[-0.03em]">$0.00</span>
+        <span className={cn("text-sm", mutedClass)}>/mo</span>
+      </div>
     );
   }
 
   if (yearly) {
     return (
       <>
-        <div className="mt-4 flex items-baseline gap-2">
-          <span className="text-4xl font-bold text-foreground">
-            ${formatPrice(plan.yearlyPrice)}
-          </span>
-          <span className="text-sm text-muted">/year</span>
-        </div>
-        <p className="mt-2 text-sm text-muted">
-          billed once per year, about ${monthlyEquivalent(plan.yearlyPrice)}/month
+        <p className={cn("mt-3 text-xs line-through", strikeClass)}>
+          {formatUsPrice(plan.monthlyPrice)}
         </p>
-        <p className="mt-1 text-xs text-muted">
-          12 monthly payments would be ${formatPrice(plan.monthlyPrice * 12)}
+        <div className="mt-0.5 flex items-baseline justify-center gap-1">
+          <span className="text-[1.85rem] font-bold leading-none tracking-[-0.03em] sm:text-[2rem]">
+            {formatUsPrice(Number(monthlyEquivalent(plan.yearlyPrice)))}
+          </span>
+          <span className={cn("text-xs font-medium", mutedClass)}>/mo</span>
+        </div>
+        <p className={cn("mt-1.5 text-[10px]", mutedClass)}>
+          Billed annually at {formatUsPrice(plan.yearlyPrice)}
         </p>
       </>
     );
@@ -366,16 +405,13 @@ function PlanPrice({ plan, yearly }: { plan: PricingPlan; yearly: boolean }) {
 
   return (
     <>
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="text-4xl font-bold text-foreground">
-          ${formatPrice(plan.monthlyPrice)}
+      <div className="mt-3 flex items-baseline justify-center gap-1">
+        <span className="text-[1.85rem] font-bold leading-none tracking-[-0.03em] sm:text-[2rem]">
+          {formatUsPrice(plan.monthlyPrice)}
         </span>
-        <span className="text-sm text-muted">/month</span>
+        <span className={cn("text-xs font-medium", mutedClass)}>/mo</span>
       </div>
-      <p className="mt-2 text-sm text-muted">billed every month</p>
-      <p className="mt-1 text-xs text-muted">
-        or ${formatPrice(plan.yearlyPrice)} billed once per year
-      </p>
+      <p className={cn("mt-1.5 text-[10px]", mutedClass)}>Billed monthly</p>
     </>
   );
 }

@@ -1,29 +1,38 @@
+import { HumanizerDetectorMarks } from "@/components/landing/humanizer-detector-marks";
 import { HumanizerWorkspace } from "@/components/humanizer/humanizer-workspace";
 import { Container } from "@/components/ui/container";
-import { SectionHeader } from "@/components/ui/section-header";
 
 export function HumanizerSection() {
   return (
     <section
       id="humanizer"
       aria-labelledby="humanizer-heading"
-      className="min-w-0 overflow-x-clip pb-20 sm:pb-28"
+      className="relative min-w-0 overflow-x-clip bg-gradient-to-b from-background from-0% via-card/25 via-45% to-background to-100% py-16 sm:py-20"
     >
-      {/* Mid-gap band above the editor */}
-      <div className="py-14 sm:py-20">
-        <Container>
-          <SectionHeader
-            id="humanizer-heading"
-            eyebrow="Humanizer"
-            title="Revise AI-assisted drafts in the editor"
-            description="Paste a draft. Humanize returns the English Wikipedia article for that topic, or the closest related article. Sign in is required."
+      <Container>
+        <div className="mb-8 flex items-center justify-center gap-4 sm:mb-10">
+          <span
+            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
+            aria-hidden
           />
-        </Container>
-      </div>
+          <p
+            id="humanizer-heading"
+            className="text-xs font-semibold uppercase tracking-[0.22em] text-accent"
+          >
+            Try the editor
+          </p>
+          <span
+            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
+            aria-hidden
+          />
+        </div>
 
-      <Container className="max-w-[90rem]">
-        <HumanizerWorkspace />
+        <HumanizerDetectorMarks />
       </Container>
+
+      <div className="mx-auto mt-8 w-full min-w-0 max-w-[90rem] px-4 sm:mt-10 sm:px-6">
+        <HumanizerWorkspace />
+      </div>
     </section>
   );
 }

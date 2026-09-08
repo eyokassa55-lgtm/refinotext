@@ -32,7 +32,7 @@ export function ContactPageContent() {
         </nav>
 
         <header className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-foreground sm:text-4xl">
             Contact Us
           </h1>
           <p className="mt-5 text-base leading-relaxed text-muted sm:text-lg">
@@ -66,7 +66,7 @@ export function ContactPageContent() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)] sm:p-8">
           <h2 className="text-lg font-semibold text-foreground">Send an email</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             This opens your email app. Messages are not submitted through a form on

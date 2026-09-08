@@ -981,6 +981,13 @@ Rainforests also illustrate a much broader set of global development debates. It
     !workspaceSource.includes("border-red-200") &&
       workspaceSource.includes('apiError.code === "NO_WIKIPEDIA_MATCH"'),
   );
+  assert(
+    "Humanize editor uses a two-panel layout with a clean empty output state",
+    workspaceSource.includes("Paste text on the left and click Humanize") &&
+      workspaceSource.includes("Your humanized text will appear here") &&
+      workspaceSource.includes('label: "Auto"') &&
+      workspaceSource.includes('label: "Academic"'),
+  );
   const outputViewSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanized-output-view.tsx"),
     "utf8",

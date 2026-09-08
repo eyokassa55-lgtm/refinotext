@@ -24,7 +24,7 @@ export function CreditNavBadge() {
     <Link
       href={ROUTES.dashboard}
       title={`${credits.balance.toLocaleString()} credits remaining · 1 word = 1 credit`}
-      className="inline-flex h-7 items-center gap-1 rounded-full border border-accent/25 bg-accent-light/60 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="inline-flex h-7 items-center gap-1 rounded-full border border-accent/25 bg-accent-light/70 px-2.5 text-[11px] font-semibold tracking-tight text-primary shadow-[0_1px_2px_rgba(13,92,69,0.08)] transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <Coins className="h-3 w-3" aria-hidden />
       {credits.balance.toLocaleString()}

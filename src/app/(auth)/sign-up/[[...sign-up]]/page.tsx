@@ -16,7 +16,7 @@ export const metadata = pageMetadata(
 export default function SignUpPage() {
   if (!isClerkEnabled) {
     return (
-      <div className="max-w-md rounded-2xl border border-border bg-card p-8 text-center">
+      <div className="max-w-md rounded-2xl border border-border/70 bg-card p-8 text-center shadow-[0_1px_2px_rgba(15,23,20,0.04),0_16px_40px_rgba(13,92,69,0.10)]">
         <h1 className="text-xl font-bold">Sign up unavailable</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           Authentication is not configured yet. Add your Clerk keys to{" "}

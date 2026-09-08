@@ -6,6 +6,10 @@ const noindexRobots = [{ key: "X-Robots-Tag", value: "noindex, nofollow" }];
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    qualities: [75, 100],
+  },
   outputFileTracingRoot: path.join(__dirname),
   outputFileTracingIncludes: {
     "/api/humanize": ["./data/training_data.jsonl"],
@@ -28,6 +32,8 @@ const nextConfig: NextConfig = {
       { source: "/", headers: indexRobots },
       { source: "/pricing", headers: indexRobots },
       { source: "/pricing/:path*", headers: indexRobots },
+      { source: "/faq", headers: indexRobots },
+      { source: "/faq/:path*", headers: indexRobots },
       { source: "/contact", headers: indexRobots },
       { source: "/contact/:path*", headers: indexRobots },
       { source: "/privacy", headers: indexRobots },

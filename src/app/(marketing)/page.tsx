@@ -7,7 +7,7 @@ import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { HumanizerSection } from "@/components/landing/humanizer-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { Navbar } from "@/components/landing/navbar";
-import { TrustSection } from "@/components/landing/trust-section";
+import { PromoOfferSection } from "@/components/landing/promo-offer-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { JsonLd } from "@/components/seo/json-ld";
 import { buildHomeJsonLd, PAGE_SEO, pageMetadata } from "@/lib/seo";
@@ -28,10 +28,10 @@ export default function HomePage() {
       <main className="min-w-0">
         <HeroSection />
         <HumanizerSection />
-        <FeaturesSection />
-        <HowItWorksSection />
         <AudienceSection />
-        <TrustSection />
+        <HowItWorksSection />
+        <FeaturesSection />
+        <PromoOfferSection />
         <PricingSection />
         <FaqSection />
       </main>

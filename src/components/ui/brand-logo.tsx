@@ -15,7 +15,7 @@ type BrandLogoProps = {
 export function BrandLogo({
   href = ROUTES.home,
   className,
-  size = 24,
+  size = 52,
   showWordmark = true,
   priority = false,
 }: BrandLogoProps) {
@@ -24,20 +24,27 @@ export function BrandLogo({
       href={href}
       aria-label={APP_NAME}
       className={cn(
-        "inline-flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        "inline-flex min-w-0 items-center gap-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         className,
       )}
     >
-      <Image
-        src={APP_LOGO_SRC}
-        alt=""
-        width={size}
-        height={size}
-        className="shrink-0 object-contain"
-        priority={priority}
-      />
+      <span
+        className="relative inline-flex shrink-0 items-center justify-center overflow-visible"
+        style={{ width: size, height: size }}
+      >
+        <Image
+          src={APP_LOGO_SRC}
+          alt=""
+          width={128}
+          height={128}
+          sizes={`${Math.round(size * 1.5)}px`}
+          quality={100}
+          className="h-full w-full scale-[1.45] object-contain bg-transparent"
+          priority={priority}
+        />
+      </span>
       {showWordmark ? (
-        <span className="truncate text-xl font-bold tracking-tight text-foreground">
+        <span className="-ml-1.5 truncate text-2xl font-bold leading-none tracking-[-0.03em] text-foreground sm:-ml-2">
           {APP_NAME}
         </span>
       ) : null}

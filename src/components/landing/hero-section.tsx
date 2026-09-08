@@ -12,6 +12,9 @@ const featureIcons = {
   zap: Zap,
 };
 
+const heroHeadingGradient =
+  "bg-gradient-to-b from-[#1a8f6a] via-[#0d5c45] to-[#062e22] bg-clip-text text-transparent";
+
 export function HeroSection() {
   return (
     <section aria-labelledby="hero-heading" className="relative overflow-x-clip">
@@ -35,12 +38,15 @@ export function HeroSection() {
 
             <h1
               id="hero-heading"
-              className="text-4xl font-extrabold leading-[1.1] tracking-tight break-words sm:text-5xl lg:text-[3.25rem]"
+              className="text-4xl font-extrabold leading-[1.08] tracking-[-0.035em] break-words sm:text-5xl lg:text-[3.35rem]"
             >
-              RefinoText rewrites drafts into{" "}
-              <span className="font-display block text-[1.15em] font-bold text-primary sm:inline sm:text-[1.2em]">
-                clearer, more natural writing
+              <span className={heroHeadingGradient}>
+                RefinoText rewrites drafts into clearer, more{" "}
               </span>
+              <span className="font-display font-bold italic text-primary">
+                natural
+              </span>
+              <span className={heroHeadingGradient}> writing</span>
             </h1>
 
             <div className="mt-6 flex flex-wrap gap-4">
@@ -58,7 +64,7 @@ export function HeroSection() {
               })}
             </div>
 
-            <p className="mt-6 max-w-lg text-base leading-relaxed text-muted sm:text-lg">
+            <p className="mt-6 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">
               Paste an AI-assisted or rough draft. RefinoText revises it for
               clarity, tone, and readability while aiming to keep your meaning.
               Review the result before you use it.
@@ -87,7 +93,7 @@ export function HeroSection() {
             </ul>
           </div>
 
-          <div className="flex min-w-0 justify-center lg:justify-end">
+          <div className="relative flex min-w-0 justify-center lg:justify-end">
             <HumanizerPreview />
           </div>
         </div>

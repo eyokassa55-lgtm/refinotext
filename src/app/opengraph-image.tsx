@@ -3,12 +3,15 @@ import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
+import { APP_LOGO_SRC } from "@/lib/constants";
+
 export const alt = "RefinoText — AI-assisted writing revision";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function OpenGraphImage() {
-  const logo = await readFile(join(process.cwd(), "public/logo-mark.png"));
+  const logoPath = join(process.cwd(), "public", APP_LOGO_SRC.replace(/^\//, ""));
+  const logo = await readFile(logoPath);
   const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
 
   return new ImageResponse(

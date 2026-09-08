@@ -49,6 +49,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: "#e8f5ef",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {
@@ -105,7 +106,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="overflow-x-clip">
       <body
-        className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} antialiased min-h-screen`}
+        className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
       >
         {isClerkEnabled ? (
           <ClerkProvider

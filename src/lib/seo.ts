@@ -43,6 +43,12 @@ export const PAGE_SEO = {
     title: "Contact Us",
     description: `Contact the RefinoText team at ${SUPPORT_EMAIL} for support, billing questions, or partnership inquiries.`,
   },
+  faq: {
+    path: "/faq",
+    title: "FAQ — Frequently Asked Questions",
+    description:
+      "Answers about RefinoText: how the AI humanizer works, credits and pricing, quality and results, privacy, and support.",
+  },
   privacy: {
     path: "/privacy",
     title: "Privacy Policy",
@@ -229,19 +235,29 @@ export function buildHomeJsonLd() {
           },
         ],
       },
-      {
-        "@type": "FAQPage",
-        "@id": `${url}/#faq`,
-        mainEntity: FAQ_ITEMS.map((item) => ({
-          "@type": "Question",
-          name: item.question,
-          acceptedAnswer: {
-            "@type": "Answer",
-            text: item.answer,
-          },
-        })),
-      },
     ],
+  };
+}
+
+export function buildFaqPageJsonLd() {
+  const url = getAppUrl();
+  const pageUrl = getAbsoluteUrl(PAGE_SEO.faq.path);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${pageUrl}#faq`,
+    url: pageUrl,
+    inLanguage: "en-US",
+    isPartOf: { "@id": `${url}/#website` },
+    mainEntity: FAQ_ITEMS.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
   };
 }
 

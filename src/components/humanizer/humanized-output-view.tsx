@@ -1,3 +1,5 @@
+import { humanizerEditorTextClassName } from "./humanizer-editor-styles";
+
 type HumanizedOutputViewProps = {
   text: string;
 };
@@ -8,7 +10,7 @@ export function HumanizedOutputView({ text }: HumanizedOutputViewProps) {
       readOnly
       aria-label="Humanized output"
       value={text}
-      className="min-h-[200px] flex-1 resize-none whitespace-pre-wrap bg-transparent px-5 py-4 text-base leading-relaxed text-foreground focus-visible:outline-none lg:min-h-0"
+      className={`h-full min-h-0 w-full resize-none whitespace-pre-wrap ${humanizerEditorTextClassName}`}
     />
   );
 }

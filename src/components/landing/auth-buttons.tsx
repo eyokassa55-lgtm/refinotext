@@ -2,22 +2,33 @@
 
 import { Show, UserButton } from "@clerk/nextjs";
 import { Coins } from "lucide-react";
+import Link from "next/link";
 
 import { CreditNavBadge } from "@/components/credits/credit-nav-badge";
 import { Button } from "@/components/ui/button";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+
+const signInClassName =
+  "text-sm font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm";
+
+const getStartedClassName = cn(
+  "inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-bold tracking-tight transition-all duration-200",
+  "bg-accent-light text-primary hover:bg-accent hover:text-primary-foreground",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+);
 
 export function DesktopAuthButtons() {
   if (!isClerkEnabled) {
     return (
       <>
-        <Button href={ROUTES.signIn} variant="ghost" size="sm">
-          Log in
-        </Button>
-        <Button href={ROUTES.signUp} size="sm">
-          Start free
-        </Button>
+        <Link href={ROUTES.signIn} className={signInClassName}>
+          Sign In
+        </Link>
+        <Link href={ROUTES.signUp} className={getStartedClassName}>
+          Get Started
+        </Link>
       </>
     );
   }
@@ -25,12 +36,12 @@ export function DesktopAuthButtons() {
   return (
     <>
       <Show when="signed-out">
-        <Button href={ROUTES.signIn} variant="ghost" size="sm">
-          Log in
-        </Button>
-        <Button href={ROUTES.signUp} size="sm">
-          Start free
-        </Button>
+        <Link href={ROUTES.signIn} className={signInClassName}>
+          Sign In
+        </Link>
+        <Link href={ROUTES.signUp} className={getStartedClassName}>
+          Get Started
+        </Link>
       </Show>
       <Show when="signed-in">
         <CreditNavBadge />
@@ -59,10 +70,10 @@ export function MobileAuthButtons() {
     return (
       <>
         <Button href={ROUTES.signIn} variant="ghost" className="w-full">
-          Log in
+          Sign In
         </Button>
         <Button href={ROUTES.signUp} className="w-full">
-          Start free
+          Get Started
         </Button>
       </>
     );
@@ -72,10 +83,10 @@ export function MobileAuthButtons() {
     <>
       <Show when="signed-out">
         <Button href={ROUTES.signIn} variant="ghost" className="w-full">
-          Log in
+          Sign In
         </Button>
         <Button href={ROUTES.signUp} className="w-full">
-          Start free
+          Get Started
         </Button>
       </Show>
       <Show when="signed-in">

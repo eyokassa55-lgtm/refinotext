@@ -15,15 +15,21 @@ const isVercelProduction =
   process.env.VERCEL_ENV === "production" ||
   process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
 
+const appUrl = publicPath(process.env.NEXT_PUBLIC_APP_URL, "");
+const isProductionAppUrl = /refinotext\.com/i.test(appUrl);
+
 export const isClerkDevelopmentKey = publishableKey.startsWith("pk_test_");
 export const isClerkProductionKey = publishableKey.startsWith("pk_live_");
 
 // Development Clerk instances handshake to *.clerk.accounts.dev. Never load
 // them on the Vercel Production deployment.
+// Production keys only work on refinotext.com — disable locally to avoid
+// "Production Keys are only allowed for domain refinotext.com" console errors.
 export const isClerkEnabled =
   publishableKey.startsWith("pk_") &&
   !publishableKey.includes("placeholder") &&
-  !(isVercelProduction && isClerkDevelopmentKey);
+  !(isVercelProduction && isClerkDevelopmentKey) &&
+  !(isClerkProductionKey && !isProductionAppUrl);
 
 export const clerkPublishableKey = publishableKey;
 

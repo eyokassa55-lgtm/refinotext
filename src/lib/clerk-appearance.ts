@@ -12,13 +12,13 @@ export const clerkAppearance = {
   },
   elements: {
     rootBox: "mx-auto w-full",
-    card: "rounded-2xl border border-border shadow-sm",
+    card: "rounded-2xl border border-border/70 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_16px_40px_rgba(13,92,69,0.10)]",
     headerTitle: "text-foreground font-bold",
     headerSubtitle: "text-muted",
     socialButtonsBlockButton:
       "border border-border bg-card text-foreground hover:bg-mint-dark/40",
     formButtonPrimary:
-      "rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm",
+      "rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_1px_2px_rgba(13,92,69,0.18),0_8px_20px_rgba(13,92,69,0.16)]",
     formFieldInput:
       "rounded-xl border-border bg-[#f8f9fa] focus:ring-primary",
     footerActionLink: "text-primary hover:text-primary-hover",

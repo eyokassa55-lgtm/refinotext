@@ -76,12 +76,12 @@ export default async function DashboardPage() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)]">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
             <Coins className="h-4 w-4 text-accent" aria-hidden />
             Credits remaining
           </div>
-          <p className="mt-3 text-3xl font-bold text-foreground">
+          <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-foreground">
             {account.balance.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -102,12 +102,12 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)]">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
             <Gauge className="h-4 w-4 text-accent" aria-hidden />
             Current plan
           </div>
-          <p className="mt-3 text-3xl font-bold text-foreground">
+          <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-foreground">
             {account.plan.charAt(0) + account.plan.slice(1).toLowerCase()}
           </p>
           <Link
@@ -119,19 +119,19 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)]">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
             <FileText className="h-4 w-4 text-accent" aria-hidden />
             Per-request limit
           </div>
-          <p className="mt-3 text-3xl font-bold text-foreground">
+          <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-foreground">
             {account.maxWordsPerRequest.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-muted">words per humanization</p>
         </div>
       </div>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section className="rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)]">
         <h2 className="text-base font-semibold text-foreground">
           Recent credit activity
         </h2>

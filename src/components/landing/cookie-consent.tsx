@@ -41,7 +41,7 @@ export function CookieConsent() {
           : "pointer-events-none translate-y-4 opacity-0",
       )}
     >
-      <div className="relative rounded-2xl border border-border bg-card p-5 shadow-[0_8px_40px_rgba(13,92,69,0.14)] sm:p-6">
+      <div className="relative rounded-2xl border border-border/70 bg-card p-5 shadow-[0_12px_48px_rgba(13,92,69,0.16)] sm:p-6">
         <button
           type="button"
           onClick={dismiss}

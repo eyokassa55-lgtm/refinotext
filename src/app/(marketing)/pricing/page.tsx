@@ -1,6 +1,7 @@
 import { AnnouncementBar } from "@/components/landing/announcement-bar";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { Navbar } from "@/components/landing/navbar";
+import { PromoOfferSection } from "@/components/landing/promo-offer-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 
 import { JsonLd } from "@/components/seo/json-ld";
@@ -25,6 +26,7 @@ export default function PricingPage() {
       <AnnouncementBar />
       <Navbar />
       <main className="pt-8">
+        <PromoOfferSection />
         <PricingSection headingLevel="h1" />
       </main>
       <LandingFooter />

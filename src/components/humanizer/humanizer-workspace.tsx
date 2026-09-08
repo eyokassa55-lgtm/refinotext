@@ -2,22 +2,44 @@
 
 import { Show, useAuth } from "@clerk/nextjs";
 import {
+  BookOpen,
+  Briefcase,
   Check,
+  Coffee,
   Copy,
+  ChevronDown,
   Download,
+  GraduationCap,
+  Heart,
+  Keyboard,
+  Lightbulb,
   Loader2,
-  Sparkles,
   UploadCloud,
+  Wand2,
+  Zap,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isClerkEnabled } from "@/lib/auth-config";
-import { ROUTES } from "@/lib/constants";
+import { APP_LOGO_SRC, ROUTES } from "@/lib/constants";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
-import { HumanizerControls } from "./humanizer-controls";
 import { HumanizedOutputView } from "./humanized-output-view";
+import { humanizerEditorTextClassName } from "./humanizer-editor-styles";
+
+const EDITOR_STYLES = [
+  { id: "auto", label: "Auto", Icon: Wand2 },
+  { id: "academic", label: "Academic", Icon: BookOpen },
+  { id: "professional", label: "Professional", Icon: Briefcase },
+  { id: "friendly", label: "Friendly", Icon: Heart },
+  { id: "formal", label: "Formal", Icon: GraduationCap },
+  { id: "casual", label: "Casual", Icon: Coffee },
+  { id: "creative", label: "Creative", Icon: Lightbulb },
+] as const;
+
+type EditorStyleId = (typeof EDITOR_STYLES)[number]["id"];
 
 export function HumanizerWorkspace() {
   if (!isClerkEnabled) {
@@ -35,6 +57,8 @@ function HumanizerWorkspaceWithAuth() {
 function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [style, setStyle] = useState<EditorStyleId>("auto");
+  const [ultraMode, setUltraMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState<"input" | "output" | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -47,7 +71,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const requestKeyRef = useRef<string | null>(null);
 
   const inputWordCount = countWords(input);
-  const outputWordCount = countWords(output);
 
   const notifyStatus = (msg: string) => {
     setStatusMsg(msg);
@@ -85,6 +108,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         body: JSON.stringify({
           text,
           requestId: requestIdRef.current,
+          tone: style === "auto" ? undefined : style,
         }),
       });
 
@@ -116,11 +140,13 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
-  }, [input, isSignedIn]);
+  }, [input, isSignedIn, style]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "j") {
+      if (!(event.ctrlKey || event.metaKey)) return;
+
+      if (event.key === "Enter" || event.key.toLowerCase() === "j") {
         event.preventDefault();
         handleRefine();
       }
@@ -160,13 +186,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     notifyStatus(`Downloaded ${filename}`);
   };
 
-  const handleClear = () => {
-    setInput("");
-    setOutput("");
-    setError(null);
-    notifyStatus("Cleared editor");
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isSignedIn) return;
     const file = e.target.files?.[0];
@@ -186,11 +205,18 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const requireAuthButtonClass =
-    "rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground";
+  const handleClear = () => {
+    setInput("");
+    setOutput("");
+    setError(null);
+    notifyStatus("Cleared editor");
+  };
+
+  const iconButtonClass =
+    "rounded-md p-1 text-foreground transition-colors duration-150 hover:text-foreground/80";
 
   return (
-    <div className="mx-auto flex w-full min-w-0 flex-col gap-4">
+    <div className="mx-auto flex w-full min-w-0 flex-col">
       <input
         type="file"
         ref={fileInputRef}
@@ -199,24 +225,97 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         className="hidden"
       />
 
-      <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="grid min-h-0 flex-1 lg:grid-cols-2">
-          <div className="relative flex min-h-0 flex-col p-4 lg:pr-3">
-            <div
-              className="pointer-events-none absolute bottom-5 right-0 top-5 hidden w-px rounded-full bg-border lg:block"
-              aria-hidden
-            />
+      <div className="overflow-hidden rounded-2xl border-2 border-border/75 bg-transparent">
+        <div className="flex items-center justify-between gap-3 border-b-2 border-border/70 px-4 py-3">
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            role="tablist"
+            aria-label="Writing style"
+          >
+            {EDITOR_STYLES.map(({ id, label, Icon }) => {
+              const selected = style === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setStyle(id)}
+                  className={
+                    selected
+                      ? "inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark px-3.5 py-1.5 text-xs font-medium tracking-tight text-foreground"
+                      : "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-tight text-foreground transition-colors duration-150 hover:bg-mint-dark/60"
+                  }
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-            <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <h3 className="text-sm font-semibold text-foreground">Input Text</h3>
-              <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
+              aria-haspopup="listbox"
+              aria-label="Engine version REFV4.5 beta"
+            >
+              <span>REFV4.5</span>
+              <span className="rounded-md bg-accent-light px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                Beta
+              </span>
+              <ChevronDown className="h-4 w-4 text-foreground" aria-hidden />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setUltraMode((current) => !current)}
+              aria-pressed={ultraMode}
+              className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                ultraMode
+                  ? "text-primary"
+                  : "text-foreground hover:text-foreground/80"
+              }`}
+            >
+              <Zap className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">Ultra Mode</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid min-h-[min(70vh,640px)] gap-3 p-3 sm:grid-cols-2">
+          <section className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] sm:min-h-0 sm:h-full">
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                aria-label="Input text"
+                placeholder="For optimal results, we recommend using at least 250 words."
+                className={`min-h-0 flex-1 resize-none px-4 pb-14 pt-4 ${humanizerEditorTextClassName}`}
+              />
+
+              <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
+                <span className="rounded-full border border-border/70 bg-white/95 px-2.5 py-1 font-mono text-xs text-[#374151] shadow-sm">
+                  {inputWordCount} words
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-white/95 px-3 py-1.5 font-mono text-xs text-[#6b7280] shadow-sm">
+                  <Keyboard className="h-3.5 w-3.5" aria-hidden />
+                  Press Ctrl+Enter to humanize
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t-2 border-border/60">
+              <div className="flex items-center gap-2 px-3 py-2">
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
                       <Link
                         href={ROUTES.signIn}
                         title="Sign in to upload"
-                        className={requireAuthButtonClass}
+                        className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
                       >
                         <UploadCloud className="h-4 w-4" />
                       </Link>
@@ -226,7 +325,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                         type="button"
                         title="Upload document"
                         onClick={() => fileInputRef.current?.click()}
-                        className={requireAuthButtonClass}
+                        className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
                       >
                         <UploadCloud className="h-4 w-4" />
                       </button>
@@ -237,17 +336,16 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     type="button"
                     title="Upload document"
                     onClick={() => fileInputRef.current?.click()}
-                    className={requireAuthButtonClass}
+                    className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
                   >
                     <UploadCloud className="h-4 w-4" />
                   </button>
                 )}
                 <button
                   type="button"
-                  title="Clear text"
                   onClick={handleClear}
                   disabled={!input.trim() && !output.trim()}
-                  className="rounded-lg px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                  className="px-1 text-sm font-medium text-foreground transition-colors hover:text-foreground/80 disabled:opacity-40"
                 >
                   Clear
                 </button>
@@ -256,7 +354,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                   title="Copy input"
                   onClick={() => handleCopy("input")}
                   disabled={!input.trim()}
-                  className="rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                  className={`${iconButtonClass} disabled:opacity-40`}
                 >
                   {copied === "input" ? (
                     <Check className="h-4 w-4 text-accent" />
@@ -270,7 +368,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                       <Link
                         href={ROUTES.signIn}
                         title="Sign in to download"
-                        className={requireAuthButtonClass}
+                        className={iconButtonClass}
                       >
                         <Download className="h-4 w-4" />
                       </Link>
@@ -281,7 +379,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                         title="Download draft"
                         onClick={() => handleDownload("input")}
                         disabled={!input.trim()}
-                        className="rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                        className={`${iconButtonClass} disabled:opacity-40`}
                       >
                         <Download className="h-4 w-4" />
                       </button>
@@ -293,142 +391,157 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     title="Download draft"
                     onClick={() => handleDownload("input")}
                     disabled={!input.trim()}
-                    className="rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                    className={`${iconButtonClass} disabled:opacity-40`}
                   >
                     <Download className="h-4 w-4" />
                   </button>
                 )}
-                <span className="text-xs text-muted">
-                  {inputWordCount} words · {input.length} chars
-                </span>
               </div>
-            </div>
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-[#f8f9fa]">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                aria-label="Input text"
-                placeholder="For optimal results, we recommend using at least 250 words."
-                className="min-h-[200px] flex-1 resize-none bg-transparent px-5 py-4 text-base leading-relaxed text-foreground placeholder:text-muted/70 focus-visible:outline-none lg:min-h-0"
-              />
-            </div>
-          </div>
-
-          <div className="flex min-h-0 flex-col border-t border-border p-4 lg:border-t-0 lg:pl-3">
-            <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Humanized Output
-                </h3>
-                {statusMsg && output ? (
-                  <span className="truncate text-[11px] text-muted">{statusMsg}</span>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-end gap-3 border-t border-border/50 bg-white/70 px-4 py-3">
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
                       <Link
                         href={ROUTES.signIn}
-                        title="Sign in to download"
-                        className={requireAuthButtonClass}
+                        className="inline-flex items-center rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground"
                       >
-                        <Download className="h-4 w-4" />
+                        Humanize
                       </Link>
                     </Show>
                     <Show when="signed-in">
                       <button
                         type="button"
-                        title="Download output"
-                        onClick={() => handleDownload("output")}
-                        disabled={!output.trim()}
-                        className="rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                        onClick={handleRefine}
+                        disabled={!input.trim() || isProcessing}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
                       >
-                        <Download className="h-4 w-4" />
+                        {isProcessing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : null}
+                        {isProcessing ? "Humanizing..." : "Humanize"}
                       </button>
                     </Show>
                   </>
                 ) : (
                   <button
                     type="button"
-                    title="Download output"
-                    onClick={() => handleDownload("output")}
-                    disabled={!output.trim()}
-                    className="rounded-lg p-1.5 text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
+                    onClick={handleRefine}
+                    disabled={!input.trim() || isProcessing}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
                   >
-                    <Download className="h-4 w-4" />
+                    {isProcessing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : null}
+                    {isProcessing ? "Humanizing..." : "Humanize"}
                   </button>
-                )}
-                <button
-                  type="button"
-                  title="Copy output"
-                  onClick={() => handleCopy("output")}
-                  disabled={!output.trim()}
-                  className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-mint-dark/60 hover:text-foreground disabled:opacity-40"
-                >
-                  {copied === "output" ? (
-                    <Check className="h-3.5 w-3.5 text-accent" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                  {copied === "output" ? "Copied" : "Copy"}
-                </button>
-                {(outputWordCount > 0 || output.length > 0) && (
-                  <span className="ml-1 text-xs text-muted">
-                    {outputWordCount} words · {output.length} chars
-                  </span>
                 )}
               </div>
             </div>
+          </section>
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-mint-dark/15">
-              {output ? <HumanizedOutputView text={output} /> : null}
-
-              {isProcessing && (
-                <div
-                  className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-2xl bg-card/85"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-                  <p className="text-sm font-medium text-foreground">
-                    Humanizing your draft…
-                  </p>
+          <section className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] sm:min-h-0 sm:h-full">
+            {output.trim() ? (
+              <>
+                <div className="flex items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
+                  <button
+                    type="button"
+                    title="Copy output"
+                    onClick={() => handleCopy("output")}
+                    className={iconButtonClass}
+                  >
+                    {copied === "output" ? (
+                      <Check className="h-4 w-4 text-accent" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                  {isClerkEnabled ? (
+                    <>
+                      <Show when="signed-out">
+                        <Link
+                          href={ROUTES.signIn}
+                          title="Sign in to download"
+                          className={iconButtonClass}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Link>
+                      </Show>
+                      <Show when="signed-in">
+                        <button
+                          type="button"
+                          title="Download output"
+                          onClick={() => handleDownload("output")}
+                          className={iconButtonClass}
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                      </Show>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Download output"
+                      onClick={() => handleDownload("output")}
+                      className={iconButtonClass}
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              )}
-
-              {!output && !isProcessing && (
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-mint-dark/50 text-accent">
-                    <Sparkles className="h-7 w-7" />
-                  </div>
-                  <p className="text-base font-semibold text-foreground/80">
-                    Your humanized text will appear here
-                  </p>
-                  <p className="mt-2 max-w-xs text-sm text-muted">
-                    {error
-                      ? error
-                      : isSignedIn
-                        ? "Paste your draft, then click Humanize"
-                        : "Sign in first, then paste your draft and humanize"}
-                  </p>
-                  {statusMsg && !error ? (
-                    <p className="mt-2 max-w-xs text-xs text-muted">{statusMsg}</p>
-                  ) : null}
+                <div className="min-h-0 flex-1 overflow-auto p-4">
+                  <HumanizedOutputView text={output} />
                 </div>
-              )}
-            </div>
-          </div>
+              </>
+            ) : null}
+
+            {isProcessing && (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card/90 backdrop-blur-[2px]"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
+                <p className="text-sm font-medium text-foreground">
+                  Humanizing your draft…
+                </p>
+              </div>
+            )}
+
+            {!output && !isProcessing && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                <Image
+                  src={APP_LOGO_SRC}
+                  alt=""
+                  width={128}
+                  height={128}
+                  sizes="112px"
+                  quality={100}
+                  className="mb-4 h-28 w-28 scale-[1.45] object-contain bg-transparent opacity-[0.14]"
+                />
+                {error ? (
+                  <p className="max-w-xs text-sm text-red-600">{error}</p>
+                ) : (
+                  <>
+                    <p className="text-[15px] font-semibold text-foreground/85">
+                      Your humanized text will appear here
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-muted/70">
+                      Paste text on the left and click Humanize
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </section>
         </div>
-      </div>
 
-      <HumanizerControls
-        onRefine={handleRefine}
-        isLoading={isProcessing}
-        disabled={!input.trim()}
-      />
+        {statusMsg ? (
+          <p className="border-t-2 border-border/60 px-4 py-2 text-center text-xs text-muted/70" role="status">
+            {statusMsg}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

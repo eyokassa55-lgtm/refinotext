@@ -30,7 +30,7 @@ export function LegalDocument({ page }: LegalDocumentProps) {
         </nav>
 
         <header className="mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-foreground sm:text-4xl">
             {page.title}
           </h1>
           {page.subtitle && (
@@ -98,7 +98,7 @@ export function LegalDocument({ page }: LegalDocumentProps) {
         </div>
 
         {page.footerNote && (
-          <div className="mt-10 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+          <div className="mt-10 rounded-2xl border border-border/70 bg-card p-6 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)] sm:p-8">
             <p className="text-sm leading-relaxed text-muted sm:text-base">
               {page.footerNote}
             </p>

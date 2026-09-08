@@ -16,6 +16,7 @@ const isWebhookRoute = createRouteMatcher(["/api/webhooks(.*)"]);
 const isIndexableRoute = createRouteMatcher([
   "/",
   "/pricing(.*)",
+  "/faq(.*)",
   "/contact(.*)",
   "/privacy(.*)",
   "/terms(.*)",
@@ -25,6 +26,7 @@ const isIndexableRoute = createRouteMatcher([
 const isPublicRoute = createRouteMatcher([
   "/",
   "/pricing(.*)",
+  "/faq(.*)",
   "/contact(.*)",
   "/privacy(.*)",
   "/terms(.*)",

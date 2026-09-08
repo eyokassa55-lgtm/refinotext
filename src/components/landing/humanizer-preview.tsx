@@ -1,256 +1,268 @@
 "use client";
 
-import {
-  Bot,
-  CheckCircle2,
-  RotateCcw,
-  ScanSearch,
-  Sparkles,
-  UserCheck,
-  Wand2,
-} from "lucide-react";
+import { RotateCcw, Search, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const AI_DRAFT =
-  "Furthermore, it is imperative to analyze the data systematically. Consequently, this study demonstrates significant statistical correlations across multiple key parameters.";
+const SLIDES = [
+  {
+    chunks: [
+      {
+        ai: "Furthermore, it is imperative to analyze the data systematically.",
+        human: "When you look closely at the numbers, a clear pattern shows up.",
+      },
+      {
+        ai: "Consequently, this study demonstrates significant statistical correlations.",
+        human: "The results point to real, meaningful connections.",
+      },
+      {
+        ai: "Therefore, it is essential to consider the implications of these findings.",
+        human: "In short, the data holds up across every key area we measured.",
+      },
+    ],
+  },
+  {
+    chunks: [
+      {
+        ai: "Research indicates that regular physical activity is beneficial.",
+        human: "Research shows that staying active helps the mind stay sharp.",
+      },
+      {
+        ai: "It is widely acknowledged that exercise enhances cognitive performance.",
+        human: "A daily walk can boost focus and memory over time.",
+      },
+      {
+        ai: "Thus, individuals are advised to maintain consistent engagement.",
+        human: "Keep it simple: move a little, often, and stick with it.",
+      },
+    ],
+  },
+  {
+    chunks: [
+      {
+        ai: "It is important to note that the draft requires substantial revision.",
+        human: "This draft is easier to read once the stiff phrasing is gone.",
+      },
+      {
+        ai: "The current iteration utilizes overly formal constructions.",
+        human: "The meaning stays the same. The voice just sounds more natural.",
+      },
+      {
+        ai: "Overall, the output will be optimized for human-like expression.",
+        human: "Read it out loud. If it sounds like you, you are close.",
+      },
+    ],
+  },
+] as const;
 
-const HUMAN_TONE =
-  "When you look closely at the numbers, a clear pattern emerges. The results show real, meaningful connections across every key area we measured.";
+const RING_SIZE = 64;
+const RING_STROKE = 6;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-const HIGHLIGHT_WORDS = ["numbers", "pattern", "meaningful", "connections"];
+function scoreTone(value: number) {
+  const t = Math.min(1, Math.max(0, (value - 68) / 31));
+  const r = Math.round(224 + (78 - 224) * t);
+  const g = Math.round(82 + (240 - 82) * t);
+  const b = Math.round(74 + (195 - 74) * t);
+  const a = 0.4 + 0.6 * t;
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
 
 export function HumanizerPreview() {
-  const [viewMode, setViewMode] = useState<"transform" | "compare">("transform");
-  const [stage, setScanningStage] = useState<"scanning" | "rewriting" | "complete">("scanning");
-  const [progress, setProgress] = useState(0);
-  const [activeWordIdx, setActiveWordIdx] = useState(0);
-  const [key, setKey] = useState(0);
+  const [slide, setSlide] = useState(0);
+  const [playId, setPlayId] = useState(0);
+  const [scanned, setScanned] = useState(0);
+  const [showWand, setShowWand] = useState(false);
+  const [ring, setRing] = useState(24);
+  const [score, setScore] = useState(72);
 
-  const startAnimation = useCallback(() => {
-    setScanningStage("scanning");
-    setProgress(12);
-    setActiveWordIdx(0);
-
-    const progressTimer = setTimeout(() => {
-      setProgress(68);
-      setScanningStage("rewriting");
-    }, 1200);
-
-    const wordInterval = setInterval(() => {
-      setActiveWordIdx((prev) => (prev + 1) % HIGHLIGHT_WORDS.length);
-    }, 700);
-
-    const completeTimer = setTimeout(() => {
-      setProgress(99);
-      setScanningStage("complete");
-      clearInterval(wordInterval);
-    }, 2500);
-
-    return () => {
-      clearTimeout(progressTimer);
-      clearInterval(wordInterval);
-      clearTimeout(completeTimer);
-    };
+  const replay = useCallback(() => {
+    setPlayId((current) => current + 1);
   }, []);
 
   useEffect(() => {
-    const cleanup = startAnimation();
-    return cleanup;
-  }, [startAnimation, key]);
+    setScanned(0);
+    setShowWand(false);
+    setRing(24);
+    setScore(72);
 
-  const handleReplay = () => {
-    setKey((prev) => prev + 1);
-  };
+    const timers = [
+      window.setTimeout(() => setScanned(1), 750),
+      window.setTimeout(() => {
+        setScanned(2);
+        setShowWand(true);
+      }, 1700),
+      window.setTimeout(() => setScanned(3), 2650),
+    ];
+
+    const tick = window.setInterval(() => {
+      setRing((current) => Math.min(99, current + 1));
+      setScore((current) => Math.min(99, current + 1));
+    }, 110);
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.clearInterval(tick);
+    };
+  }, [playId, slide]);
+
+  const ringOffset = RING_CIRCUMFERENCE * (1 - ring / 100);
+  const current = SLIDES[slide];
+  const tone = scoreTone(score);
+  const ringTone = scoreTone(ring);
 
   return (
     <div
-      className="relative w-full min-w-0 max-w-lg overflow-x-clip"
-      aria-label="Example of RefinoText rewriting a stiff draft into clearer writing"
+      className="relative w-full min-w-0 max-w-lg"
+      aria-label="Example rewrite motion preview"
     >
-      {/* Background Ambient Glow */}
-      <div
-        className="absolute inset-0 rounded-3xl bg-gradient-to-r from-accent/20 via-primary/10 to-accent/20 blur-xl"
-        aria-hidden
-      />
+      <div className="pointer-events-none absolute -inset-10" aria-hidden>
+        <div className="preview-aurora preview-aurora-a" />
+        <div className="preview-aurora preview-aurora-b" />
+        <div className="preview-aurora preview-aurora-c" />
+      </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#0e1311] text-white shadow-2xl">
-        {/* Top Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-5 py-3.5 bg-white/[0.02]">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/20 text-accent">
-              <ScanSearch className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-white">RefinoText</p>
-              <p className="text-[10px] text-white/50">Example rewrite preview</p>
-            </div>
+      <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#0e1311] text-white shadow-[0_24px_70px_rgba(13,92,69,0.28)]">
+        <div className="flex items-center justify-between gap-3 px-4 pt-3.5 sm:px-5">
+          <div className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-white/70">
+            <Search className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            Deep Scan
           </div>
-
-          <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode("transform")}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all",
-                viewMode === "transform"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-white/60 hover:text-white",
-              )}
-            >
-              Rewrite
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("compare")}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all",
-                viewMode === "compare"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-white/60 hover:text-white",
-              )}
-            >
-              Before / After
-            </button>
-          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+            <span className="preview-status-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            Rewrite in motion
+          </span>
         </div>
 
-        {/* Card Body */}
-        {viewMode === "transform" ? (
-          <div className="p-5 sm:p-6 space-y-4">
-            {/* Status Indicator */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {stage === "scanning" && (
-                  <Badge variant="dark" className="bg-amber-500/20 text-amber-300 border-amber-500/30">
-                    <Bot className="h-3 w-3 animate-pulse" />
-                    Reading the draft...
-                  </Badge>
-                )}
-                {stage === "rewriting" && (
-                  <Badge variant="dark" className="bg-primary/20 text-accent border-accent/30">
-                    <Wand2 className="h-3 w-3 animate-spin" />
-                    Improving clarity and tone...
-                  </Badge>
-                )}
-                {stage === "complete" && (
-                  <Badge variant="dark" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                    <UserCheck className="h-3 w-3 text-emerald-400" />
-                    Rewrite complete
-                  </Badge>
-                )}
-              </div>
+        <div className="relative mx-4 mt-3 min-h-[168px] overflow-hidden rounded-xl border border-white/10 bg-black/45 p-3.5 sm:mx-5">
+          <div key={playId} className="preview-scan-beam" aria-hidden />
 
-              <span className="text-[11px] font-mono text-white/50">
-                {stage === "scanning" ? "Original draft" : "Clearer rewrite"}
+          <div className="relative z-[1] flex flex-col gap-1.5">
+            {current.chunks.map((chunk, index) => {
+              const isDone = index < scanned;
+              const isHot = index === scanned - 1 && scanned < current.chunks.length;
+
+              return (
+                <p
+                  key={`${slide}-${playId}-${index}`}
+                  className={cn(
+                    "transition-all duration-700",
+                    isDone
+                      ? "font-display text-[1.05rem] leading-6 text-white"
+                      : "font-mono text-[11.5px] italic leading-5 tracking-wide text-white/45",
+                    isHot && "preview-hot-word preview-hot-word-active px-1 py-0.5",
+                  )}
+                >
+                  {isDone ? chunk.human : chunk.ai}
+                </p>
+              );
+            })}
+          </div>
+
+          {showWand ? (
+            <div className="pointer-events-none absolute right-4 top-6 z-[2] flex flex-col items-center">
+              <span className="animate-fade-tooltip mb-1.5 rounded-full bg-black/90 px-2 py-0.5 text-[10px] font-bold tracking-tight text-white shadow-lg">
+                100% Human!
+              </span>
+              <span className="animate-float-wand flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
               </span>
             </div>
+          ) : null}
+        </div>
 
-            {/* Transforming Text Area */}
-            <div className="relative min-h-[120px] rounded-xl border border-white/10 bg-black/40 p-4 font-sans text-sm leading-relaxed text-white/90">
-              {/* Glowing Scan Line Animation */}
-              {stage !== "complete" && (
-                <div
-                  className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-accent to-transparent shadow-[0_0_12px_var(--color-accent)] transition-all duration-700 animate-scan-pulse"
-                  style={{ top: `${(progress / 100) * 100}%` }}
-                />
-              )}
-
-              {stage === "scanning" ? (
-                <p className="text-white/60 italic font-mono transition-opacity">
-                  &ldquo;{AI_DRAFT}&rdquo;
-                </p>
-              ) : (
-                <p className="transition-all duration-500">
-                  {HUMAN_TONE.split(/(\s+)/).map((segment, idx) => {
-                    const clean = segment.replace(/[.,]/g, "").toLowerCase();
-                    const isTarget = clean === HIGHLIGHT_WORDS[activeWordIdx];
-
-                    if (isTarget) {
-                      return (
-                        <span key={idx} className="relative inline-block">
-                          <span className="rounded bg-accent/30 px-1 font-semibold text-accent animate-scan-pulse">
-                            {segment}
-                          </span>
-                          <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-white px-2 py-0.5 text-[9px] font-bold text-black shadow-md animate-fade-tooltip">
-                            <Sparkles className="inline h-2.5 w-2.5 text-accent mr-0.5" />
-                            Clearer phrasing
-                          </span>
-                        </span>
-                      );
-                    }
-                    return <span key={idx}>{segment}</span>;
-                  })}
-                </p>
-              )}
-            </div>
-
-            {/* Score Progress Bar */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-white/70">Rewrite progress</span>
-                <span className="text-accent font-mono font-bold">{progress}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 via-primary to-accent transition-all duration-1000 ease-out"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Before vs After Compare Mode */
-          <div className="p-5 sm:p-6 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-red-500/20 bg-red-950/20 p-3">
-                <div className="mb-2 flex items-center justify-between text-xs text-red-400 font-semibold">
-                  <span className="flex items-center gap-1">
-                    <Bot className="h-3.5 w-3.5" /> AI Draft
-                  </span>
-                  <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px]">
-                    Stiff AI draft
-                  </span>
-                </div>
-                <p className="text-xs text-white/60 leading-relaxed font-mono">
-                  {AI_DRAFT}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-accent/30 bg-accent/10 p-3">
-                <div className="mb-2 flex items-center justify-between text-xs text-accent font-semibold">
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Humanized
-                  </span>
-                  <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                    Natural rewrite
-                  </span>
-                </div>
-                <p className="text-xs text-white/90 leading-relaxed font-sans">
-                  {HUMAN_TONE}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-white/10 px-5 py-3.5 bg-white/[0.02]">
-          <div className="flex items-center gap-2 text-xs text-white/60">
-            <Sparkles className="h-3.5 w-3.5 text-accent" />
-            <span>Example only — not a detector score</span>
+        <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+            <svg
+              width={RING_SIZE}
+              height={RING_SIZE}
+              viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+              className="-rotate-90"
+              aria-hidden
+            >
+              <circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                fill="none"
+                stroke={ringTone}
+                strokeOpacity={0.22}
+                strokeWidth={RING_STROKE}
+                className="transition-[stroke] duration-300 ease-out"
+              />
+              <circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                fill="none"
+                stroke={ringTone}
+                strokeWidth={RING_STROKE}
+                strokeLinecap="round"
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={ringOffset}
+                className="transition-[stroke,stroke-dashoffset] duration-300 ease-out"
+              />
+            </svg>
+            <span
+              className="absolute text-xs font-bold transition-colors duration-300"
+              style={{ color: ringTone }}
+            >
+              {ring}%
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleReplay}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-white/80 hover:border-accent hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Replay Motion
-          </button>
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-lg font-bold tracking-tight transition-colors duration-300 sm:text-xl"
+              style={{ color: tone }}
+            >
+              {score}% Human
+            </p>
+            <p className="mt-0.5 text-[11px] text-white/50">
+              Example rewrite preview
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={replay}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/85 transition-colors hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              Replay Motion
+            </button>
+            <div
+              className="flex items-center gap-1.5"
+              role="tablist"
+              aria-label="Preview examples"
+            >
+              {SLIDES.map((_, index) => {
+                const selected = slide === index;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-label={`Example ${index + 1}`}
+                    onClick={() => {
+                      setSlide(index);
+                      setPlayId((current) => current + 1);
+                    }}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all duration-300",
+                      selected
+                        ? "w-5 bg-white"
+                        : "w-1.5 bg-white/30 hover:bg-white/50",
+                    )}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -16,8 +16,9 @@ type ButtonProps = {
 
 const variants = {
   primary:
-    "bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm",
-  secondary: "bg-card text-foreground border border-border hover:bg-mint-dark",
+    "bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_1px_2px_rgba(13,92,69,0.18),0_8px_20px_rgba(13,92,69,0.16)] hover:shadow-[0_2px_8px_rgba(13,92,69,0.22)]",
+  secondary:
+    "bg-card text-foreground border border-border/80 shadow-[0_1px_2px_rgba(15,23,20,0.04)] hover:bg-mint-dark hover:shadow-sm",
   ghost: "text-foreground hover:bg-mint-dark/60",
   outline:
     "border border-border bg-transparent text-foreground hover:bg-card",
@@ -41,7 +42,7 @@ export function Button({
   ariaLabel,
 }: ButtonProps) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex items-center justify-center gap-2 rounded-full font-semibold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
     variants[variant],
     sizes[size],
     className,
