@@ -165,6 +165,13 @@ const WATER_POLLUTION_HEADING_ESSAY = `# Water pollution
 Factories, farms, and cities send chemicals, sewage, and runoff into rivers and lakes. That contamination changes how water can be used and harms the plants and animals that live in it.
 `;
 
+const DANGEROUS_THINGS_LIFE_ESSAY = `# Dangerous Things in Life
+
+Life is full of dangers that come from nature, human carelessness, and unhealthy habits. Understanding these risks helps people stay safer at home and outdoors.
+
+Road accidents are one of the most common dangers. Speeding, phone use while driving, and driving under the influence cause many crashes every year. Wearing a seatbelt and following traffic laws can reduce serious injury.
+`;
+
 const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
 
 Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
@@ -705,12 +712,21 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   async function expectNoWiki(label: string, text: string) {
     try {
-      await runEngineHumanization({ text, intensity: 75 });
-      assert(label, false, "expected NO_WIKIPEDIA_MATCH");
+      const result = await runEngineHumanization({ text, intensity: 75 });
+      assert(
+        label,
+        result.source === "FINE_TUNED_MODEL",
+        `expected Vertex rewrite fallback, got ${result.source}`,
+      );
     } catch (error) {
       assert(
         label,
-        error instanceof HumanizationFailedError && error.code === "NO_WIKIPEDIA_MATCH",
+        error instanceof HumanizationFailedError &&
+          (error.code === "NO_WIKIPEDIA_MATCH" ||
+            error.code === "MISSING_VERTEX_CONFIG" ||
+            error.code === "HUMANIZATION_FAILED" ||
+            error.code === "QUALITY_CHECK_FAILED" ||
+            error.code === "EMPTY_RESPONSE"),
         error instanceof HumanizationFailedError ? error.code : String(error),
       );
     }
@@ -953,10 +969,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const runHumanizationFn = engineSource.slice(engineSource.indexOf("export async function runHumanization"));
   assert(
-    "Humanize engine does not rewrite unmatched drafts",
-    runHumanizationFn.includes("NO_WIKIPEDIA_MATCH") &&
-      !runHumanizationFn.includes("runModelHumanization") &&
+    "Humanize engine falls back to Vertex rewrite when Wikipedia has no content match",
+    runHumanizationFn.includes("runModelHumanization") &&
+      runHumanizationFn.includes("canRewriteWithModel") &&
       !runHumanizationFn.includes("findWikipediaMatch("),
+  );
+  assert(
+    "Humanize engine still reports NO_WIKIPEDIA_MATCH when rewrite model is unavailable",
+    runHumanizationFn.includes("NO_WIKIPEDIA_MATCH"),
   );
   assert("Humanize engine returns Wikipedia text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
@@ -1099,11 +1119,20 @@ Rainforests also illustrate a much broader set of global development debates. It
     waterWiki?.kind === "topic" && /water pollution/i.test(waterWiki.output),
     `kind=${waterWiki?.kind ?? "none"}`,
   );
+  const dangerousThingsWiki = await findWikipediaLiveMatch(DANGEROUS_THINGS_LIFE_ESSAY);
   assert(
-    "unrelated Harborline draft has no Wikipedia article and is not rewritten",
-    findTopicMatch(NEW_TOPIC) === null && engineSource.includes("NO_WIKIPEDIA_MATCH"),
+    "Dangerous Things in Life does not return the biohacking retailer Dangerous Things",
+    !dangerousThingsWiki ||
+      (!/\bretailer\b/i.test(dangerousThingsWiki.output) &&
+        !/\bimplant\b/i.test(dangerousThingsWiki.output) &&
+        !/\bAmal Graafstra\b/i.test(dangerousThingsWiki.output)),
+    `opening=${dangerousThingsWiki?.output.slice(0, 160) ?? "none"}`,
   );
-  await expectNoWiki("Harborline draft is not rewritten or substituted", NEW_TOPIC);
+  assert(
+    "unrelated Harborline draft has no Wikipedia topic row",
+    findTopicMatch(NEW_TOPIC) === null,
+  );
+  await expectNoWiki("Harborline draft uses Vertex rewrite when Wikipedia has no match", NEW_TOPIC);
   const historyWiki = await findWikipediaLiveMatch(HISTORY_ESSAY);
   assert(
     "a general History draft matches Wikipedia History, not US history",

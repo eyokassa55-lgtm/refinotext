@@ -72,15 +72,21 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Humanize returns the Wikipedia article for the same topic, or the
- * closest related Wikipedia page when that exact title does not exist.
+ * Prefer a same-topic Wikipedia article. If none is a good content match,
+ * rewrite with the Vertex fine-tuned humanizer (or base Gemini when tuned
+ * is not configured).
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
 }
 
+function canRewriteWithModel(): boolean {
+  return hasVertexEndpointEnv() || isVertexConfigured() || isGeminiApiConfigured();
+}
+
 function unmatchedRewriteBackend(): GenerateBackend {
-  return isHumanTextTunedReady() ? "tuned" : "base";
+  if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
+  return "base";
 }
 
 function unmatchedRewriteTemperature(backend: GenerateBackend): number {
@@ -309,8 +315,13 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     });
   }
 
+  if (canRewriteWithModel()) {
+    console.info("[humanize] no content-aligned Wikipedia article; using Vertex rewrite");
+    return runModelHumanization(request);
+  }
+
   throw new HumanizationFailedError(
-    "No Wikipedia article matches this topic. Keep the same subject.",
+    "No Wikipedia article matches this topic, and the rewrite model is not configured.",
     "NO_WIKIPEDIA_MATCH",
     422,
   );
