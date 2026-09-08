@@ -724,9 +724,9 @@ function pageAlignsWithDraft(
 }
 
 /**
- * Look up the draft on live English Wikipedia only when it is the same topic.
- * Loose “related” pages (Jack Dangers, company names, etc.) are never returned —
- * Humanize falls back to the Vertex rewrite so the output stays similar to the input.
+ * Look up the draft on live English Wikipedia for the same / closely titled topic
+ * (Environment → Natural environment). Keyword-only collisions (Jack Dangers,
+ * Internet of things) are rejected — Humanize then uses the Vertex rewrite.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;

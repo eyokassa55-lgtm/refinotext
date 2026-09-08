@@ -27,7 +27,7 @@ export const FEATURES = [
   {
     title: "Same topic, same facts",
     description:
-      "Humanize rewrites your draft in place. The Environment stays Environment; it does not invent a different article or cut your points.",
+      "Humanize uses Wikipedia when your topic matches a real article. If nothing related fits, it rewrites your draft with the tuned model instead of inventing another subject.",
     icon: "palette",
   },
   {
@@ -108,7 +108,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText rewrites your draft into clear essay paragraphs, keeps the same topic and facts, and does not replace it with a different article.",
+      "RefinoText looks up a related English Wikipedia article for your topic. If none fits, it rewrites your draft with the tuned model so the subject stays the same.",
   },
   {
     step: "03",

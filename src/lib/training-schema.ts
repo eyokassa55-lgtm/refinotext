@@ -1,9 +1,9 @@
 /**
- * Dataset contract for training / export helpers.
+ * Dataset contract for training / export helpers and Wikipedia topic lookup.
  *
- * Humanize rewrites the user's draft with the fine-tuned Vertex model.
- * It does not paste Wikipedia articles or substitute rows from
- * `training_data.jsonl` at inference time.
+ * Humanize prefers a related English Wikipedia article when the topic matches.
+ * If nothing related is found, it rewrites with the fine-tuned Vertex model.
+ * It does not substitute rows from `training_data.jsonl` at inference time.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)
