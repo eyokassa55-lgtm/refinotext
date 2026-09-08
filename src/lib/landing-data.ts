@@ -27,7 +27,7 @@ export const FEATURES = [
   {
     title: "Same topic, same facts",
     description:
-      "Humanize matches your heading or topic to a Wikipedia article. The Environment stays Environment; it does not return Water pollution.",
+      "Humanize rewrites your draft in place. The Environment stays Environment; it does not invent a different article or cut your points.",
     icon: "palette",
   },
   {
@@ -108,7 +108,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText looks up that topic on the full English Wikipedia and returns the article. If that exact title does not exist, it returns the closest related page.",
+      "RefinoText rewrites your draft into clear essay paragraphs, keeps the same topic and facts, and does not replace it with a different article.",
   },
   {
     step: "03",

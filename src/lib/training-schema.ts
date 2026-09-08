@@ -1,10 +1,9 @@
 /**
- * Dataset contract for Humanize keyword lookup.
+ * Dataset contract for training / export helpers.
  *
- * Humanize looks up the draft's topic on live English Wikipedia and
- * returns that article. If the exact title is missing, it returns the
- * closest related page. Unmatched drafts are not rewritten and do not
- * use `training_data.jsonl`.
+ * Humanize rewrites the user's draft with the fine-tuned Vertex model.
+ * It does not paste Wikipedia articles or substitute rows from
+ * `training_data.jsonl` at inference time.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

@@ -17,9 +17,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { applyInputTitle, extractUserTitle } from "@/lib/humanize-output";
-import { type DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
+import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -72,9 +70,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Prefer a same-topic Wikipedia article. If none is a good content match,
- * rewrite with the Vertex fine-tuned humanizer (or base Gemini when tuned
- * is not configured).
+ * Rewrite the user's draft with the Vertex fine-tuned humanizer (or base
+ * Gemini when tuned is not configured). Wikipedia articles are not substituted —
+ * that cut facts and swapped topics.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -131,30 +129,6 @@ async function rewriteWithModel(
 
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
-}
-
-function databaseRetrieval(hit: DatabaseTrainingMatch): HumanizeRetrievalSummary {
-  return {
-    band: "high",
-    matches: [{ index: hit.index, score: hit.score }],
-  };
-}
-
-/**
- * Return the stored gold human_text from the matched row. Never rewrite it.
- */
-function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
-  console.info("[humanize] [TOPIC_MATCH]", {
-    row: hit.index,
-    kind: hit.kind,
-    score: hit.score,
-    source: "wikipedia-live",
-  });
-  return {
-    text: hit.output,
-    source: "TOPIC_TRAINING_MATCH",
-    retrieval: databaseRetrieval(hit),
-  };
 }
 
 function rewritePenalty(input: string, output: string): number {
@@ -309,6 +283,8 @@ The last version copied the draft. Change the sentence openings. Keep every fact
     output = `${titled}\n\n${body}`;
   }
 
+  output = formatEssayParagraphs(output);
+
   return {
     text: output.trim(),
     source: "FINE_TUNED_MODEL",
@@ -317,22 +293,14 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const wikipediaHit = await findWikipediaLiveMatch(request.text);
-  if (wikipediaHit) {
-    return resolveStoredHit({
-      ...wikipediaHit,
-      output: applyInputTitle(wikipediaHit.output, request.text),
-    });
+  if (!canRewriteWithModel()) {
+    throw new HumanizationFailedError(
+      "The rewrite model is not configured.",
+      "NO_WIKIPEDIA_MATCH",
+      422,
+    );
   }
 
-  if (canRewriteWithModel()) {
-    console.info("[humanize] no content-aligned Wikipedia article; using Vertex rewrite");
-    return runModelHumanization(request);
-  }
-
-  throw new HumanizationFailedError(
-    "No Wikipedia article matches this topic, and the rewrite model is not configured.",
-    "NO_WIKIPEDIA_MATCH",
-    422,
-  );
+  console.info("[humanize] rewriting draft with Vertex (same topic, full essay)");
+  return runModelHumanization(request);
 }

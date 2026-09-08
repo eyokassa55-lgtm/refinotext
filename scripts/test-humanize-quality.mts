@@ -544,7 +544,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { applyInputTitle, formatWikipediaEditorText, hasLatexDump, splitHumanizeOutput, stripWikiMath } = await import(
+  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
   );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
@@ -567,6 +567,27 @@ Rainforests also illustrate a much broader set of global development debates. It
     !/==/.test(formattedWiki) &&
       !/\nSee also\n/i.test(formattedWiki) &&
       !formattedParts.paragraphs.some((paragraph) => /^history$/i.test(paragraph.trim())),
+  );
+  const longWikiBody = Array.from({ length: 12 }, (_, i) =>
+    `Paragraph ${i + 1} explains the same topic with complete sentences and normal punctuation for readers.`,
+  ).join("\n\n");
+  const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody);
+  assert(
+    "formatted Wikipedia essay keeps full paragraph content instead of cutting mid-article",
+    fullWikiEssay.includes("Paragraph 1") &&
+      fullWikiEssay.includes("Paragraph 12") &&
+      fullWikiEssay.split(/\n\s*\n/).length >= 12,
+    `paras=${fullWikiEssay.split(/\n\s*\n/).length}`,
+  );
+  const essayFormatted = formatEssayParagraphs(
+    "Road Safety\n\nPeople overlook hazards every day when they rush\n\nDrivers who text take serious risks on busy roads",
+  );
+  assert(
+    "essay formatter adds terminal punctuation to paragraphs",
+    essayFormatted.startsWith("Road Safety\n\n") &&
+      essayFormatted.includes("rush.") &&
+      essayFormatted.includes("roads."),
+    essayFormatted,
   );
   const mathDump = `In deductive logic, a consistent theory is one that does not lead to a logical contradiction. A theory 
 
@@ -741,17 +762,17 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineStoredSuccess = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
   assert(
-    "a Success draft returns live Wikipedia Success, not training human_text",
-    engineStoredSuccess.source === "TOPIC_TRAINING_MATCH" &&
-      /success/i.test(engineStoredSuccess.text.slice(0, 400)) &&
+    "a Success draft is rewritten by the model and stays on success",
+    engineStoredSuccess.source === "FINE_TUNED_MODEL" &&
+      /success/i.test(engineStoredSuccess.text) &&
       engineStoredSuccess.text !== firstPair.output,
     `source=${engineStoredSuccess.source} opening=${engineStoredSuccess.text.slice(0, 80)}`,
   );
   const engineStoredTech = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
   assert(
-    "a Technology draft returns live Wikipedia Technology, not training human_text",
-    engineStoredTech.source === "TOPIC_TRAINING_MATCH" &&
-      /technolog/i.test(engineStoredTech.text.slice(0, 400)),
+    "a Technology draft is rewritten by the model and stays on technology",
+    engineStoredTech.source === "FINE_TUNED_MODEL" &&
+      /technolog/i.test(engineStoredTech.text),
     `source=${engineStoredTech.source} opening=${engineStoredTech.text.slice(0, 80)}`,
   );
 
@@ -867,9 +888,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "Humanize returns Wikipedia e-commerce or a Vertex rewrite for a Digital Marketplace draft",
-    (engineMarketplace.source === "TOPIC_TRAINING_MATCH" ||
-      engineMarketplace.source === "FINE_TUNED_MODEL") &&
+    "Humanize returns a same-topic Vertex rewrite for a Digital Marketplace draft",
+    engineMarketplace.source === "FINE_TUNED_MODEL" &&
       engineMarketplace.text !== ecommercePair!.output &&
       engineMarketplace.text.startsWith(
         "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce",
@@ -966,30 +986,36 @@ Rainforests also illustrate a much broader set of global development debates. It
     ogCue.startsWith(OG_REFINO_TRAINING_SYSTEM_INSTRUCTION),
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
-  assert("Humanize engine looks up topics on live Wikipedia", engineSource.includes("findWikipediaLiveMatch"));
+  assert(
+    "Humanize engine rewrites with the model instead of pasting Wikipedia",
+    engineSource.includes("runModelHumanization") &&
+      !engineSource.includes("findWikipediaLiveMatch"),
+  );
   assert(
     "Humanize engine does not fall back to training_data.jsonl",
     !engineSource.includes("findTopicMatch") && !engineSource.includes("findDatabaseMatch"),
   );
   const runHumanizationFn = engineSource.slice(engineSource.indexOf("export async function runHumanization"));
   assert(
-    "Humanize engine falls back to Vertex rewrite when Wikipedia has no content match",
+    "Humanize engine always uses Vertex rewrite of the user draft",
     runHumanizationFn.includes("runModelHumanization") &&
       runHumanizationFn.includes("canRewriteWithModel") &&
-      !runHumanizationFn.includes("findWikipediaMatch("),
+      !runHumanizationFn.includes("findWikipediaLiveMatch"),
   );
   assert(
     "Humanize engine still reports NO_WIKIPEDIA_MATCH when rewrite model is unavailable",
     runHumanizationFn.includes("NO_WIKIPEDIA_MATCH"),
   );
-  assert("Humanize engine returns Wikipedia text without rewriting it", engineSource.includes("hit.output") && !engineSource.includes("tryDeterministicEntityMerge"));
+  assert(
+    "Humanize engine formats essay paragraphs after rewrite",
+    engineSource.includes("formatEssayParagraphs"),
+  );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
-    "Humanize looks up articles on live English Wikipedia, not a local 3000-article file",
+    "Live Wikipedia helpers remain available for topic checks, not Humanize paste",
     wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
-      engineSource.includes("findWikipediaLiveMatch") &&
-      !runHumanizationFn.includes("findWikipediaMatch(") &&
-      !runHumanizationFn.includes("getIndex("),
+      wikiSource.includes("findWikipediaLiveMatch") &&
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 0"),
   );
   const workspaceSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),
@@ -1026,16 +1052,16 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Technology for a #technology draft",
-    engineHashTech.source === "TOPIC_TRAINING_MATCH" && /technology is the application/i.test(engineHashTech.text),
+    "Humanize rewrites a #technology draft without switching topics",
+    engineHashTech.source === "FINE_TUNED_MODEL" && /technolog/i.test(engineHashTech.text),
     `source=${engineHashTech.source} opening=${engineHashTech.text.slice(0, 80)}`,
   );
   const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Success for a Success draft",
-    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize rewrites a Success draft and keeps the Success title",
+    engineSuccess.source === "FINE_TUNED_MODEL" &&
       /^Success\n\n/i.test(engineSuccess.text) &&
-      /success is the state or condition/i.test(engineSuccess.text),
+      /success/i.test(engineSuccess.text),
     `source=${engineSuccess.source} opening=${engineSuccess.text.slice(0, 80)}`,
   );
   const engineBoredom = await runEngineHumanization({
@@ -1044,7 +1070,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   });
   assert(
     "Humanize keeps the input title The Discipline of Boredom",
-    engineBoredom.source === "TOPIC_TRAINING_MATCH" &&
+    engineBoredom.source === "FINE_TUNED_MODEL" &&
       engineBoredom.text.startsWith("The Discipline of Boredom\n\n") &&
       !engineBoredom.text.startsWith("Boredom\n") &&
       !/^# /.test(engineBoredom.text) &&
@@ -1056,8 +1082,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "Humanize output is plain paragraphs without Wikipedia math markup",
-    engineConsistency.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize output is plain essay paragraphs without Wikipedia math markup",
+    engineConsistency.source === "FINE_TUNED_MODEL" &&
       engineConsistency.text.startsWith("The Quiet Strength of Consistency\n\n") &&
       !hasLatexDump(engineConsistency.text) &&
       !/displaystyle/.test(engineConsistency.text) &&
@@ -1069,20 +1095,20 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Technology for a technology draft",
-    enginePlainTech.source === "TOPIC_TRAINING_MATCH" && /technology is the application/i.test(enginePlainTech.text),
+    "Humanize rewrites a technology draft and keeps the technology topic",
+    enginePlainTech.source === "FINE_TUNED_MODEL" && /technolog/i.test(enginePlainTech.text),
     `source=${enginePlainTech.source}`,
   );
   const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns the live Wikipedia Education article for an education draft",
-    engineEducation.source === "TOPIC_TRAINING_MATCH" && /education is the transmission/i.test(engineEducation.text),
+    "Humanize rewrites an education draft and keeps the education topic",
+    engineEducation.source === "FINE_TUNED_MODEL" && /education/i.test(engineEducation.text),
     `source=${engineEducation.source}`,
   );
   const engineAi = await runEngineHumanization({ text: AI_TECH_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns the live Wikipedia Artificial intelligence article for an AI draft",
-    engineAi.source === "TOPIC_TRAINING_MATCH" && /artificial intelligence/i.test(engineAi.text),
+    "Humanize rewrites an AI draft and keeps artificial intelligence in scope",
+    engineAi.source === "FINE_TUNED_MODEL" && /artificial intelligence|ai\b/i.test(engineAi.text),
     `source=${engineAi.source}`,
   );
   const environmentHeadingTopic = findTopicMatch(ENVIRONMENT_HEADING_ESSAY);
@@ -1105,10 +1131,11 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineEnvironment = await runEngineHumanization({ text: ENVIRONMENT_HEADING_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Environment, not Water pollution",
-    engineEnvironment.source === "TOPIC_TRAINING_MATCH" &&
-      /natural environment/i.test(engineEnvironment.text) &&
-      !/^water pollution/i.test(engineEnvironment.text),
+    "Humanize rewrites an Environment draft without switching to Water pollution",
+    engineEnvironment.source === "FINE_TUNED_MODEL" &&
+      /environment/i.test(engineEnvironment.text) &&
+      !/^water pollution/i.test(engineEnvironment.text) &&
+      !/\bJack Dangers\b/i.test(engineEnvironment.text),
     `source=${engineEnvironment.source} opening=${engineEnvironment.text.slice(0, 80)}`,
   );
   const untitledEnvironment = await findWikipediaLiveMatch(ENVIRONMENT_ESSAY);
@@ -1181,8 +1208,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineHistory = await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia History for a History draft",
-    engineHistory.source === "TOPIC_TRAINING_MATCH" && /study of the past/i.test(engineHistory.text),
+    "Humanize rewrites a History draft and keeps history in scope",
+    engineHistory.source === "FINE_TUNED_MODEL" && /histor/i.test(engineHistory.text),
     `source=${engineHistory.source}`,
   );
   const intelligenceWiki = await findWikipediaLiveMatch(INTELLIGENCE_ONLY_ESSAY);
@@ -1195,10 +1222,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia History of the United States for an American History draft",
-    engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
-      /united states/i.test(engineAmericanHistory.text) &&
-      !/history is the systematic study of the past/i.test(engineAmericanHistory.text),
+    "Humanize rewrites an American History draft without swapping to a different topic",
+    engineAmericanHistory.source === "FINE_TUNED_MODEL" &&
+      /united states|american|history/i.test(engineAmericanHistory.text),
     `source=${engineAmericanHistory.source} opening=${engineAmericanHistory.text.slice(0, 80)}`,
   );
   const climateWiki = await findWikipediaLiveMatch(CLIMATE_PLAIN_ESSAY);
@@ -1223,8 +1249,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const enginePreambleSuccess = await runEngineHumanization({ text: PREAMBLE_SUCCESS_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Success for a preamble Success draft",
-    /success is the state or condition/i.test(enginePreambleSuccess.text),
+    "Humanize rewrites a preamble Success draft and keeps success in scope",
+    enginePreambleSuccess.source === "FINE_TUNED_MODEL" && /success/i.test(enginePreambleSuccess.text),
     `source=${enginePreambleSuccess.source}`,
   );
   const engineGlobalization = await runEngineHumanization({
@@ -1232,11 +1258,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "Humanize returns a close Wikipedia page for Political Economy of Globalization",
-    engineGlobalization.source === "TOPIC_TRAINING_MATCH" &&
-      /international political economy|political economy|political globalization|globalization is/i.test(
-        engineGlobalization.text,
-      ),
+    "Humanize rewrites Political Economy of Globalization without swapping topics",
+    engineGlobalization.source === "FINE_TUNED_MODEL" &&
+      /globalization|political economy|trade|market/i.test(engineGlobalization.text),
     `source=${engineGlobalization.source} opening=${engineGlobalization.text.slice(0, 100)}`,
   );
   assert("new-input prompt asks for rewritten text only", /return only the final refined text/i.test(newPrompt));
@@ -1408,8 +1432,8 @@ async function runLiveTests() {
     });
     assert(
       `${sample.id} ${sample.name}`,
-      result.source === "TOPIC_TRAINING_MATCH" &&
-        /natural environment/i.test(result.text) &&
+      result.source === "FINE_TUNED_MODEL" &&
+        /environment/i.test(result.text) &&
         !/^water pollution/i.test(result.text),
       `source=${result.source}`,
     );

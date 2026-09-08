@@ -277,8 +277,9 @@ export const HUMAN_REWRITE_V2_SYSTEM_INSTRUCTION = `Rewrite the AI draft into na
 
 Keep the same topic, meaning, facts, names, numbers, dates, and paragraph breaks.
 Change sentence openings and rhythm so it reads like a person wrote it in one sitting.
+Write complete essay paragraphs with normal punctuation.
 Ordinary words are better than polished template phrasing. A little repetition is fine.
-Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
+Do not summarize. Do not drop paragraphs. Do not invent a new topic. Do not add a title, commentary, or new claims.
 Never turn a multi-paragraph draft into a short summary.
 Return only the rewritten text.`;
 
@@ -292,9 +293,10 @@ export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the draft into natural 
 This is an editing job, not a copy job and not a lookup job.
 Change the sentence openings, rhythm, and transitions. Swapping a few words is not enough.
 Keep the same topic, meaning, facts, names, numbers, dates, length, and paragraph breaks.
-Do not replace the draft with a different essay on a related subject.
-Do not narrow a general topic into one example from the draft.
-Do not summarize. Do not drop paragraphs. Do not add a title, commentary, or new claims.
+Write complete essay paragraphs with normal punctuation (periods, commas, question marks).
+Do not replace the draft with a Wikipedia article, biography, or different essay on a related subject.
+Do not invent a new topic. Do not cut, omit, or summarize information from the draft.
+Do not drop paragraphs. Do not add a title, commentary, or new claims.
 Ordinary words are better than polished template phrasing. A little repetition is fine.
 Return only the rewritten text.`;
 
@@ -499,6 +501,8 @@ ${clipStyleReference(demo.output)}
   return `${activeRewriteSystemInstruction()}
 ${lengthNote}
 Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
+Use proper essay paragraphs separated by blank lines. End sentences with punctuation.
+Do not switch topics. Do not paste an encyclopedia article. Keep the user's meaning end to end.
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.
 Return only the rewritten user draft.`;

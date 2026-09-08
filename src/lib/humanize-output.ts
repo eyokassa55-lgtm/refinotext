@@ -58,16 +58,50 @@ export function splitHumanizeOutput(text: string): {
   return { title: null, paragraphs: toParagraphs(trimmed) };
 }
 
+function ensureTerminalPunctuation(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  if (/[.!?…]["”']?$/.test(trimmed)) return trimmed;
+  return `${trimmed}.`;
+}
+
 function toParagraphs(text: string): string[] {
   const blocks = text
     .split(/\n\s*\n/)
     .map((block) => block.replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ").trim())
-    .filter((block) => Boolean(block) && !isBrokenSentence(block));
+    .filter((block) => Boolean(block) && !isBrokenSentence(block))
+    .map(ensureTerminalPunctuation);
   if (blocks.length >= 2) return blocks;
 
   const block = blocks[0];
   if (!block) return [];
-  return splitLongBlock(block);
+  return splitLongBlock(block).map(ensureTerminalPunctuation);
+}
+
+/** Essay body: blank-line paragraphs, cleaned spacing, terminal punctuation. */
+export function formatEssayParagraphs(text: string): string {
+  const trimmed = text.replace(/^\uFEFF/, "").trim();
+  if (!trimmed) return "";
+
+  const hash = trimmed.match(/^#\s+([^\n]+)\n+/);
+  if (hash) {
+    const title = hash[1]!.trim();
+    const body = toParagraphs(trimmed.slice(hash[0].length)).join("\n\n");
+    return body ? `# ${title}\n\n${body}` : `# ${title}`;
+  }
+
+  const firstBreak = trimmed.indexOf("\n\n");
+  if (firstBreak > 0) {
+    const firstLine = trimmed.slice(0, firstBreak).trim();
+    const words = firstLine.split(/\s+/).filter(Boolean);
+    // Only peel one plain title line; do not treat body openings as titles.
+    if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(firstLine) && !firstLine.includes("\n")) {
+      const body = toParagraphs(trimmed.slice(firstBreak + 2)).join("\n\n");
+      return body ? `${firstLine}\n\n${body}` : firstLine;
+    }
+  }
+
+  return toParagraphs(trimmed).join("\n\n");
 }
 
 function dropUnclosedParens(text: string): string {
@@ -258,7 +292,7 @@ export function stripWikiMath(text: string): string {
       .replace(/\[\d+\]/g, "")
       .replace(/&nbsp;|&#160;/gi, " ")
       .replace(/\s+([,.;:!?])/g, "$1")
-      .replace(/^[,\s"“”]+/gm, "")
+      .replace(/^[, \t"“”]+/gm, "")
       .replace(/,\s*,+/g, ",")
       .replace(/\(\s*\)/g, "")
       .replace(/[ \t]+\n/g, "\n")
@@ -280,7 +314,8 @@ function scrubLatexDump(text: string): string {
       .replace(/\\(?:displaystyle|textstyle|scriptstyle)\b/gi, "")
       .replace(/\{\s*\\[a-zA-Z]+[^}]*\}/g, " ")
       .replace(/\\[a-zA-Z]+\*?/g, " ")
-      .replace(/\s{2,}/g, " ")
+      .replace(/[^\S\n]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
       .replace(/\s+([,.;:!?])/g, "$1")
       .trim();
     if (next === out) break;
@@ -300,7 +335,7 @@ function repairExtractGaps(text: string): string {
     .replace(/\s+\)/g, ")")
     .replace(/\(\s+/g, "(")
     .replace(/(^|[.!?]\s+),\s+/g, "$1")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[^\S\n]{2,}/g, " ")
     .trim();
 }
 
@@ -308,7 +343,7 @@ function polishProse(text: string): string {
   return repairExtractGaps(stripWikiMath(text))
     .replace(/\[\d+\]/g, "")
     .replace(/\(\s*\)/g, "")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[^\S\n]{2,}/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/\s+([,.;:!?])/g, "$1")
@@ -325,7 +360,7 @@ function endOnCompleteSentence(text: string): string {
 }
 
 function clipToBudget(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return endOnCompleteSentence(text);
+  if (maxChars <= 0 || text.length <= maxChars) return endOnCompleteSentence(text);
   const slice = text.slice(0, maxChars);
   const paragraph = slice.lastIndexOf("\n\n");
   const sentence = slice.lastIndexOf(". ");
@@ -337,20 +372,21 @@ function clipToBudget(text: string, maxChars: number): string {
 }
 
 /**
- * Wikipedia article text for the editor: exact title, then paragraphs.
- * Wiki sub-topic headings are removed so the piece ends as finished prose.
+ * Wikipedia article text for the editor: title, then full essay paragraphs.
+ * Sub-topic headings are removed. Content is not truncated unless maxChars > 0.
  */
 export function formatWikipediaEditorText(
   title: string,
   extract: string,
-  maxChars = 2400,
+  maxChars = 0,
 ): string {
   const heading = title.replace(/^#+\s*/, "").trim();
   const cleaned = polishProse(stripNavAndHeadings(extract));
-  const paragraphs = toParagraphs(cleaned);
-  let body = clipToBudget(paragraphs.join("\n\n"), maxChars);
+  let body = formatEssayParagraphs(cleaned);
+  if (maxChars > 0) body = clipToBudget(body, maxChars);
   body = scrubLatexDump(body);
   if (hasLatexDump(body)) body = scrubLatexDump(stripWikiMath(body));
+  body = formatEssayParagraphs(body);
   if (!heading || body.length < 80) return body;
   return `# ${heading}\n\n${body}`;
 }

@@ -8,7 +8,8 @@ import { formatWikipediaEditorText, hasLatexDump } from "@/lib/humanize-output";
 
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
-export const WIKIPEDIA_EDITOR_MAX_CHARS = 2400;
+/** 0 = keep the full cleaned article prose (no mid-essay cut). */
+export const WIKIPEDIA_EDITOR_MAX_CHARS = 0;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;
 
 export type WikipediaListItem = {
