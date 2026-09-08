@@ -17,7 +17,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { applyInputTitle } from "@/lib/humanize-output";
+import { applyInputTitle, extractUserTitle } from "@/lib/humanize-output";
 import { type DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -299,8 +299,18 @@ The last version copied the draft. Change the sentence openings. Keep every fact
     );
   }
 
+  const titled = extractUserTitle(request.text);
+  if (titled) {
+    let body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
+    const firstLine = body.split(/\n/)[0]?.trim() ?? "";
+    if (firstLine.toLowerCase() === titled.toLowerCase()) {
+      body = body.slice(firstLine.length).replace(/^\n+/, "").trim();
+    }
+    output = `${titled}\n\n${body}`;
+  }
+
   return {
-    text: output,
+    text: output.trim(),
     source: "FINE_TUNED_MODEL",
     retrieval: null,
   };

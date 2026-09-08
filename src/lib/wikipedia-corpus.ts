@@ -649,42 +649,6 @@ function liveSearchQueries(text: string): string[] {
   return queries.sort((left, right) => left.length - right.length).slice(0, 6);
 }
 
-function userTokenSet(userKeys: Iterable<string>): Set<string> {
-  const tokens = new Set<string>();
-  for (const key of userKeys) {
-    for (const token of tokensFromKey(key)) tokens.add(token);
-  }
-  return tokens;
-}
-
-function userBigrams(text: string): string[] {
-  const grams = new Set<string>();
-  for (const phrase of userTopicPhrases(text)) {
-    const tokens = skipLeadingFrames(tokenizeTopic(phrase));
-    for (let i = 0; i < tokens.length - 1; i += 1) {
-      grams.add(`${tokens[i]} ${tokens[i + 1]}`);
-    }
-  }
-  return [...grams];
-}
-
-function relatedTitleScore(title: string, userTokens: Set<string>, bigrams: string[]): {
-  overlap: number;
-  score: number;
-} {
-  if (/^list of\b/i.test(title)) return { overlap: 0, score: 0 };
-  const titleTokens = [...new Set(skipLeadingFrames(tokenizeTopic(title)))];
-  const overlap = titleTokens.filter((token) => userTokens.has(token)).length;
-  if (overlap === 0) return { overlap: 0, score: 0 };
-  const titleLower = title.toLowerCase();
-  let bonus = 0;
-  for (const gram of bigrams) {
-    if (titleLower.includes(gram)) bonus += 2;
-  }
-  const coverage = overlap / Math.max(titleTokens.length, 1);
-  return { overlap, score: overlap * 10 + bonus * 5 + coverage };
-}
-
 function draftBodyText(text: string): string {
   const trimmed = text.trim();
   const heading = extractHeadingLine(trimmed);
@@ -729,121 +693,39 @@ function contentOverlapRatio(extract: string, contentTokens: readonly string[]):
 }
 
 const ENTITY_LEAD_PATTERN =
-  /\bis (?:an?|the)\b[\s\S]{0,80}\b(?:company|retailer|manufacturer|corporation|business|organization|organisation|nonprofit|website|brand|startup|store|shop|founder|entrepreneur)\b/i;
+  /\bis (?:an?|the)\b[\s\S]{0,100}\b(?:company|retailer|manufacturer|corporation|business|organization|organisation|nonprofit|website|brand|startup|store|shop|founder|entrepreneur|musician|singer|rapper|composer|actor|actress|politician|footballer|athlete|writer|author|artist|painter|poet|band|dj)\b/i;
+
+const PERSON_BIO_LEAD_PATTERN =
+  /^(?:[A-Z][\p{L}'’-]+)(?:\s+[A-Z][\p{L}'’-]+){1,4}\b[\s\S]{0,120}\b(?:born|known professionally as|known as|is an English|is an American|is a British|is a Canadian)\b/u;
 
 function draftLooksLikeEntityBio(text: string): boolean {
-  return ENTITY_LEAD_PATTERN.test(draftBodyText(text).slice(0, 500));
+  const lead = draftBodyText(text).slice(0, 500);
+  return ENTITY_LEAD_PATTERN.test(lead) || PERSON_BIO_LEAD_PATTERN.test(lead);
 }
 
 function pageAlignsWithDraft(
   page: WikipediaRow,
   userText: string,
   contentTokens: readonly string[],
-  mode: "exact" | "related",
 ): boolean {
   const extract = page.output || page.source_text;
   const lead = extract.replace(/^#\s+[^\n]+\n*/, "").slice(0, 520);
-  if (ENTITY_LEAD_PATTERN.test(lead) && !draftLooksLikeEntityBio(userText)) {
+  if (
+    (ENTITY_LEAD_PATTERN.test(lead) || PERSON_BIO_LEAD_PATTERN.test(lead)) &&
+    !draftLooksLikeEntityBio(userText)
+  ) {
     return false;
   }
-  if (contentTokens.length < 4) return mode === "exact";
+  if (contentTokens.length < 4) return true;
   const sample = contentTokens.slice(0, 16);
   const ratio = contentOverlapRatio(extract, sample);
-  if (mode === "exact") return ratio >= 0.12 || contentTokens.length < 6;
-  return ratio >= 0.2;
-}
-
-function relatedSearchQueries(text: string): string[] {
-  const queries: string[] = [];
-  const seen = new Set<string>();
-  const push = (value: string) => {
-    const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
-    const words = normalized.split(" ").filter(Boolean);
-    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 12) return;
-    seen.add(normalized);
-    queries.push(value.trim());
-  };
-
-  for (const query of liveSearchQueries(text)) push(query);
-
-  const content = contentTopicTokens(text);
-  for (let i = 0; i < Math.min(content.length, 8); i += 1) {
-    for (let j = i + 1; j < Math.min(content.length, i + 4); j += 1) {
-      push(`${content[i]} ${content[j]}`);
-    }
-  }
-
-  const body = draftBodyText(text);
-  if (body) {
-    const clause = openingClause(body);
-    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(clause)));
-    if (stripped.length >= 2 && stripped.length <= 5) {
-      push(stripped.join(" "));
-    }
-  }
-
-  return queries.slice(0, 10);
+  return ratio >= 0.12 || contentTokens.length < 6;
 }
 
 /**
- * Closest real Wikipedia page when no same-title article exists
- * (Political Economy of Globalization → International political economy).
- * Rejects title-only collisions that do not match the draft body
- * (Dangerous Things in Life ≠ the biohacking retailer Dangerous Things).
- */
-async function findRelatedWikipediaPage(
-  userText: string,
-  userKeys: Set<string>,
-): Promise<WikipediaRow | null> {
-  const allTokens = userTokenSet(userKeys);
-  const contentTokens = contentTopicTokens(userText);
-  if (allTokens.size === 0 && contentTokens.length === 0) return null;
-  const bigrams = userBigrams(userText);
-
-  let best: { row: WikipediaRow; score: number; rank: number; content: number } | null = null;
-
-  for (const query of relatedSearchQueries(userText)) {
-    const queryTokens = new Set(skipLeadingFrames(tokenizeTopic(query)));
-    const scoreTokens =
-      queryTokens.size > 0 ? queryTokens : allTokens.size > 0 ? allTokens : new Set(contentTokens);
-    const minOverlap = scoreTokens.size >= 4 ? 2 : 1;
-    const titles = await searchWikipediaTitles(query, 12);
-    const ranked = titles
-      .map((title, index) => ({
-        title,
-        rank: index + 1,
-        ...relatedTitleScore(title, scoreTokens, bigrams),
-      }))
-      .filter((item) => item.overlap >= minOverlap || contentTokens.length >= 4)
-      .sort((left, right) => right.score - left.score || left.rank - right.rank)
-      .slice(0, 6);
-
-    for (const candidate of ranked) {
-      const page = await fetchWikipediaPage(candidate.title);
-      if (!page || !preferProsePage(userText, page)) continue;
-      if (!pageAlignsWithDraft(page, userText, contentTokens, "related")) continue;
-      const scored = relatedTitleScore(page.topic, scoreTokens, bigrams);
-      const content = contentOverlapRatio(page.output, contentTokens.slice(0, 16));
-      const combined = scored.score + content * 40;
-      if (scored.overlap < minOverlap && content < 0.28) continue;
-      if (
-        !best ||
-        combined > best.score ||
-        (combined === best.score && candidate.rank < best.rank)
-      ) {
-        best = { row: page, score: combined, rank: candidate.rank, content };
-      }
-    }
-  }
-
-  if (best && contentTokens.length >= 4 && best.content < 0.28) return null;
-  return best?.row ?? null;
-}
-
-/**
- * Look up the draft on live English Wikipedia. Prefer the same topic;
- * if that page does not exist, return a content-related article.
- * Unrelated title collisions return null so Humanize can fall back to Vertex.
+ * Look up the draft on live English Wikipedia only when it is the same topic.
+ * Loose “related” pages (Jack Dangers, company names, etc.) are never returned —
+ * Humanize falls back to the Vertex rewrite so the output stays similar to the input.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -864,7 +746,7 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
       } else if (
         (titleMatchesUserTopic(exact.topic, userKeys) ||
           topicKey(tokenizeTopic(exact.topic)) === queryKey) &&
-        pageAlignsWithDraft(exact, userText, contentTokens, "exact")
+        pageAlignsWithDraft(exact, userText, contentTokens)
       ) {
         return toMatch(exact, 0.97, "topic");
       }
@@ -880,14 +762,12 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
         mathFallback ??= page;
         continue;
       }
-      if (!pageAlignsWithDraft(page, userText, contentTokens, "exact")) continue;
+      if (!pageAlignsWithDraft(page, userText, contentTokens)) continue;
       return toMatch(page, 0.95, "topic");
     }
   }
 
-  const related = await findRelatedWikipediaPage(userText, userKeys);
-  if (related) return toMatch(related, 0.84, "topic");
-  if (mathFallback && pageAlignsWithDraft(mathFallback, userText, contentTokens, "exact")) {
+  if (mathFallback && pageAlignsWithDraft(mathFallback, userText, contentTokens)) {
     return toMatch(mathFallback, 0.8, "topic");
   }
 

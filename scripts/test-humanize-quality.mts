@@ -867,13 +867,17 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "Humanize returns a related Wikipedia article for a Digital Marketplace draft",
-    engineMarketplace.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize returns Wikipedia e-commerce or a Vertex rewrite for a Digital Marketplace draft",
+    (engineMarketplace.source === "TOPIC_TRAINING_MATCH" ||
+      engineMarketplace.source === "FINE_TUNED_MODEL") &&
       engineMarketplace.text !== ecommercePair!.output &&
       engineMarketplace.text.startsWith(
-        "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce\n\n",
+        "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce",
       ) &&
-      /e-commerce|electronic commerce|online shopping|digital marketplace/i.test(
+      /e-commerce|electronic commerce|online shopping|digital marketplace|customers|products/i.test(
+        engineMarketplace.text,
+      ) &&
+      !/\bJack Dangers\b|\bMeat Beat Manifesto\b|\bAmal Graafstra\b/i.test(
         engineMarketplace.text,
       ),
     `source=${engineMarketplace.source} opening=${engineMarketplace.text.slice(0, 80)}`,
@@ -1121,13 +1125,47 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const dangerousThingsWiki = await findWikipediaLiveMatch(DANGEROUS_THINGS_LIFE_ESSAY);
   assert(
-    "Dangerous Things in Life does not return the biohacking retailer Dangerous Things",
-    !dangerousThingsWiki ||
+    "Dangerous Things in Life does not return Wikipedia bios or company pages",
+    dangerousThingsWiki === null ||
       (!/\bretailer\b/i.test(dangerousThingsWiki.output) &&
         !/\bimplant\b/i.test(dangerousThingsWiki.output) &&
-        !/\bAmal Graafstra\b/i.test(dangerousThingsWiki.output)),
+        !/\bAmal Graafstra\b/i.test(dangerousThingsWiki.output) &&
+        !/\bJack Dangers\b/i.test(dangerousThingsWiki.output) &&
+        !/\bMeat Beat Manifesto\b/i.test(dangerousThingsWiki.output) &&
+        !/\bJohn Stephen Corrigan\b/i.test(dangerousThingsWiki.output)),
     `opening=${dangerousThingsWiki?.output.slice(0, 160) ?? "none"}`,
   );
+  assert(
+    "Dangerous Things in Life has no same-topic Wikipedia page (Vertex rewrite path)",
+    dangerousThingsWiki === null,
+    `kind=${dangerousThingsWiki?.kind ?? "none"} opening=${dangerousThingsWiki?.output.slice(0, 80) ?? "none"}`,
+  );
+  try {
+    const engineDangerous = await runEngineHumanization({
+      text: DANGEROUS_THINGS_LIFE_ESSAY,
+      intensity: 75,
+    });
+    assert(
+      "Dangerous Things in Life uses Vertex rewrite of the draft, not a Wikipedia bio",
+      engineDangerous.source === "FINE_TUNED_MODEL" &&
+        /danger|road|accident|speed|traffic|phone|hazard|life/i.test(engineDangerous.text) &&
+        !/\bJack Dangers\b|\bMeat Beat Manifesto\b|\bJohn Stephen Corrigan\b|\bAmal Graafstra\b/i.test(
+          engineDangerous.text,
+        ),
+      `source=${engineDangerous.source} opening=${engineDangerous.text.slice(0, 120)}`,
+    );
+  } catch (error) {
+    assert(
+      "Dangerous Things in Life uses Vertex rewrite of the draft, not a Wikipedia bio",
+      error instanceof HumanizationFailedError &&
+        (error.code === "NO_WIKIPEDIA_MATCH" ||
+          error.code === "MISSING_VERTEX_CONFIG" ||
+          error.code === "HUMANIZATION_FAILED" ||
+          error.code === "QUALITY_CHECK_FAILED" ||
+          error.code === "EMPTY_RESPONSE"),
+      error instanceof HumanizationFailedError ? error.code : String(error),
+    );
+  }
   assert(
     "unrelated Harborline draft has no Wikipedia topic row",
     findTopicMatch(NEW_TOPIC) === null,
