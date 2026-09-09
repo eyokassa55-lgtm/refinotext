@@ -1003,8 +1003,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert(
-    "Humanize engine looks up related Wikipedia topics first",
-    engineSource.includes("findWikipediaLiveMatch") && engineSource.includes("findWikipediaMatch"),
+    "Humanize engine looks up topics on the live Wikipedia API only",
+    engineSource.includes("findWikipediaLiveMatch") &&
+      !engineSource.includes("findWikipediaMatch"),
   );
   assert(
     "Humanize engine does not fall back to training_data.jsonl",
@@ -1027,10 +1028,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
-    "Humanize uses live English Wikipedia for same-topic matches, then Vertex when unrelated",
+    "Humanize uses live English Wikipedia API, not the local 3000-row file",
     wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
       wikiSource.includes("findWikipediaLiveMatch") &&
-      !wikiSource.includes("findRelatedWikipediaPage") &&
+      wikiSource.includes("findClosestLiveWikipediaPage") &&
       wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 14_000") &&
       wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 24"),
   );

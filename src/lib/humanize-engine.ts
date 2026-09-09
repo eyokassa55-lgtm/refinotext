@@ -19,7 +19,7 @@ import {
 } from "@/lib/humanize-quality";
 import { applyInputTitle, formatEssayParagraphs, extractUserTitle, fitWikipediaOutputToInput } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findWikipediaLiveMatch, findWikipediaMatch } from "@/lib/wikipedia-corpus";
+import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -72,9 +72,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Prefer a related/same-topic Wikipedia article from the full English
- * encyclopedia (live API, with the local corpus as backup). If nothing
- * related matches, rewrite with the Vertex fine-tuned humanizer.
+ * Prefer live English Wikipedia (full encyclopedia via API) for ~95% of
+ * drafts. The Vertex tuned model is only the rare fallback when no related
+ * Wikipedia page exists.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -320,8 +320,8 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  const wikipediaHit =
-    (await findWikipediaLiveMatch(request.text)) ?? findWikipediaMatch(request.text);
+  // Full English Wikipedia via API — not the local ~3000-row file.
+  const wikipediaHit = await findWikipediaLiveMatch(request.text);
 
   if (wikipediaHit) {
     let output = fitWikipediaOutputToInput(
@@ -330,25 +330,15 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     );
     output = formatEssayParagraphs(output);
 
-    const inputWords = countWords(request.text);
-    const outputWords = countWords(output);
-    // A tiny Wikipedia blurb is not useful for a long draft — match length via rewrite.
-    if (inputWords >= 80 && outputWords < inputWords * 0.8 && canRewriteWithModel()) {
-      console.info("[humanize] Wikipedia text shorter than input; using Vertex rewrite for length match", {
-        inputWords,
-        outputWords,
-      });
-      return runModelHumanization(request);
-    }
-
     return resolveStoredHit({
       ...wikipediaHit,
       output,
     });
   }
 
+  // ~5% path: no related encyclopedia page — rewrite with the tuned model.
   if (canRewriteWithModel()) {
-    console.info("[humanize] no related Wikipedia topic; using Vertex rewrite");
+    console.info("[humanize] no live Wikipedia topic; using Vertex rewrite (fallback)");
     return runModelHumanization(request);
   }
 

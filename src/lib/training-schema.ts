@@ -1,9 +1,10 @@
 /**
- * Dataset contract for training / export helpers and Wikipedia topic lookup.
+ * Dataset contract for training / export helpers.
  *
- * Humanize prefers a related English Wikipedia article when the topic matches.
- * If nothing related is found, it rewrites with the fine-tuned Vertex model.
- * It does not substitute rows from `training_data.jsonl` at inference time.
+ * Humanize uses the live English Wikipedia API (full encyclopedia) as the
+ * main path (~95%). The fine-tuned Vertex model is only the fallback (~5%)
+ * when no related Wikipedia page exists. The local wikipedia_750 file is
+ * not used at inference.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

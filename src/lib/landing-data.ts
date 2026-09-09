@@ -27,7 +27,7 @@ export const FEATURES = [
   {
     title: "Same topic, same facts",
     description:
-      "Humanize uses Wikipedia when your topic matches a real article. If nothing related fits, it rewrites your draft with the tuned model instead of inventing another subject.",
+      "Humanize uses the full English Wikipedia for matching topics (about 95% of drafts). Only when nothing related fits does it use the tuned model.",
     icon: "palette",
   },
   {
@@ -108,7 +108,7 @@ export const HOW_IT_WORKS = [
     step: "02",
     title: "Click Humanize",
     description:
-      "RefinoText looks up a related English Wikipedia article for your topic. If none fits, it rewrites your draft with the tuned model so the subject stays the same.",
+      "RefinoText looks up your topic on the full English Wikipedia. If no related article fits, it falls back to the tuned rewrite model.",
   },
   {
     step: "03",

@@ -593,9 +593,8 @@ function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["
 }
 
 /**
- * Humanize uses Wikipedia only. A hit is the same article (pasted excerpt)
- * or the same topic title after stopwords (The Environment = Environment).
- * Body words never select a related article.
+ * Local ~3000-row corpus helper (not used by Humanize).
+ * Humanize uses the live English Wikipedia API for the full encyclopedia.
  */
 export function findWikipediaMatch(userText: string): DatabaseTrainingMatch | null {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -832,7 +831,67 @@ function pageAlignsWithDraft(
   if (contentTokens.length < 4) return true;
   const sample = contentTokens.slice(0, 16);
   const ratio = contentOverlapRatio(extract, sample);
-  return ratio >= 0.12 || contentTokens.length < 6;
+  // Soft gate: prefer same-topic pages; do not over-reject related encyclopedia leads.
+  return ratio >= 0.08 || contentTokens.length < 8;
+}
+
+function strongUserTopicTokens(userKeys: Iterable<string>): string[] {
+  const tokens = new Set<string>();
+  for (const key of userKeys) {
+    for (const token of tokensFromKey(key)) {
+      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token)) tokens.add(token);
+    }
+  }
+  return [...tokens];
+}
+
+/**
+ * Broader live search when an exact title miss happens — still rejects bios and
+ * weak keyword traps (Jack Dangers / Internet of things).
+ */
+async function findClosestLiveWikipediaPage(
+  userText: string,
+  userKeys: Set<string>,
+  contentTokens: readonly string[],
+): Promise<WikipediaRow | null> {
+  const strongTokens = strongUserTopicTokens(userKeys);
+  if (strongTokens.length === 0) return null;
+
+  let best: { row: WikipediaRow; score: number } | null = null;
+  const seen = new Set<string>();
+
+  for (const query of liveSearchQueries(userText).slice(0, 10)) {
+    for (const title of await searchWikipediaTitles(query, 10)) {
+      const key = title.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      const titleTokens = tokenizeTopic(title);
+      const sharedStrong = titleTokens.filter((token) => strongTokens.includes(token));
+      if (sharedStrong.length === 0 && !titleMatchesUserTopic(title, userKeys)) continue;
+
+      const page = await fetchWikipediaPage(title);
+      if (!page) continue;
+      if (!preferProsePage(userText, page)) continue;
+      if (!pageAlignsWithDraft(page, userText, contentTokens)) continue;
+
+      const overlap = contentOverlapRatio(page.output || page.source_text, contentTokens.slice(0, 16));
+      let score = sharedStrong.length * 2 + overlap * 4;
+      if (titleMatchesUserTopic(title, userKeys)) score += 5;
+      for (const userKey of userKeys) {
+        const phrase = tokensFromKey(userKey).join(" ");
+        for (const alias of topicAliasQueries(phrase)) {
+          if (topicKey(tokenizeTopic(alias)) === topicKey(titleTokens)) {
+            score += 3;
+            break;
+          }
+        }
+      }
+      if (!best || score > best.score) best = { row: page, score };
+    }
+  }
+
+  return best && best.score >= 2 ? best.row : null;
 }
 
 function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean {
@@ -857,9 +916,9 @@ function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean 
 }
 
 /**
- * Look up the draft on live English Wikipedia for the same / closely titled topic
- * (Digital Trade → Trade / E-commerce; Environment → Natural environment).
- * Weak keyword collisions (Jack Dangers, Internet of things) are rejected.
+ * Look up the draft on the full English Wikipedia API (not the local 3000-row file).
+ * Same/related topic pages win; weak keyword collisions are rejected so Humanize
+ * can fall back to the tuned model only when nothing fits.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -886,7 +945,7 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
       }
     }
 
-    for (const title of await searchWikipediaTitles(query)) {
+    for (const title of await searchWikipediaTitles(query, 12)) {
       if (
         !titleMatchesUserTopic(title, userKeys) &&
         topicKey(tokenizeTopic(title)) !== queryKey
@@ -907,6 +966,9 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   if (mathFallback && pageAlignsWithDraft(mathFallback, userText, contentTokens)) {
     return toMatch(mathFallback, 0.8, "topic");
   }
+
+  const related = await findClosestLiveWikipediaPage(userText, userKeys, contentTokens);
+  if (related) return toMatch(related, 0.88, "topic");
 
   return null;
 }
