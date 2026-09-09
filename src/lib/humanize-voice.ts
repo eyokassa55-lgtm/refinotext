@@ -103,3 +103,54 @@ export function looksLikeGenericEssay(text: string): boolean {
 
   return topicLike && formal;
 }
+
+/**
+ * Strip chatbot / detector-bait phrasing from model output.
+ * Does not invent new content — only removes or softens known AI filler.
+ */
+export function scrubAiEssayMarks(text: string): string {
+  let out = text.replace(/\r\n/g, "\n").trim();
+  if (!out) return out;
+
+  const lineFixes: Array<[RegExp, string]> = [
+    [/^\s*In conclusion,?\s*/gim, ""],
+    [/^\s*To (?:conclude|summarize|sum up),?\s*/gim, ""],
+    [/^\s*In (?:summary|short),?\s*/gim, ""],
+    [/^\s*Furthermore,?\s*/gim, ""],
+    [/^\s*Moreover,?\s*/gim, ""],
+    [/^\s*Additionally,?\s*/gim, ""],
+    [/^\s*Consequently,?\s*/gim, ""],
+    [/^\s*Ultimately,?\s*/gim, ""],
+    [/^\s*In today'?s (?:world|society),?\s*/gim, ""],
+    [/^\s*It is important to note that\s+/gim, ""],
+    [/^\s*It is (?:essential|crucial|vital|imperative) to(?: note that)?\s+/gim, ""],
+  ];
+  for (const [pattern, replacement] of lineFixes) {
+    out = out.replace(pattern, replacement);
+  }
+
+  const softFixes: Array<[RegExp, string]> = [
+    [/\bdelve into\b/gi, "look at"],
+    [/\bunlock(?:s|ed|ing)?\b/gi, "open"],
+    [/\bunleash(?:es|ed|ing)?\b/gi, "bring"],
+    [/\ba tapestry of\b/gi, "a mix of"],
+    [/\bthe landscape of\b/gi, ""],
+    [/\brealm of\b/gi, "area of"],
+    [/\bpivotal\b/gi, "important"],
+    [/\bparamount\b/gi, "important"],
+    [/\bunderscore(?:s|d)?\b/gi, "show"],
+    [/\btestament to\b/gi, "sign of"],
+    [/\bplays? a (?:crucial|vital|key|significant) role\b/gi, "matters"],
+    [/\bnavigate the complexities of\b/gi, "deal with"],
+    [/\bpave(?:s)? the way for\b/gi, "help"],
+  ];
+  for (const [pattern, replacement] of softFixes) {
+    out = out.replace(pattern, replacement);
+  }
+
+  return out
+    .replace(/[^\S\n]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s+/gm, "")
+    .trim();
+}

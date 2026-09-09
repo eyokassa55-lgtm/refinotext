@@ -287,17 +287,15 @@ Return only the rewritten text.`;
  * Rewrite instruction for OG REFINO rewrite (v4) training / inference.
  * Gold targets are Wikipedia-style human prose from wikipedia_training_pairs.
  */
-export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the user's draft into natural human prose — the same plain, factual cadence as a clear encyclopedia article written by a person.
+export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the user's draft into plain human prose, like a clear encyclopedia article.
 
-This is a real rewrite, not a light polish.
-- Returning the draft almost unchanged is a failure. Most sentences must use new openings and different wording.
-- Keep the same topic, meaning, facts, names, numbers, and dates. Keep roughly the same length and paragraph breaks.
-- Prefer concrete nouns and short common words over polished template phrasing.
-- Mix very short sentences with longer ones. Do not keep a steady, even cadence.
-- Do not start with dictionary definitions like "X is the ability to…" or "X is an important part of…".
-- Do not use: In conclusion, Furthermore, Moreover, Additionally, In today's world, It is important to note, unlock, delve, tapestry, landscape, realm, pivotal, crucial, underscore.
-- Do not invent a new topic. Do not drop the user's claims. Do not add a title or commentary.
-- Do not paste a different article. Rewrite THIS draft only.
+Rules:
+- Keep the same topic, facts, names, numbers, and roughly the same length and paragraph breaks.
+- Change sentence openings and wording. Do not return a near-copy of the draft.
+- Use short common words. Mix short and long sentences.
+- Do not start with "X is the ability to…" or "X is an important part of…".
+- Do not use essay glue: In conclusion, Furthermore, Moreover, Additionally, In today's world, It is important to note, delve, tapestry, landscape, realm, pivotal, unlock.
+- Do not add a title, new claims, or a different topic.
 Return only the rewritten text.`;
 
 /** System line that matches the bound rewrite-trained endpoint. */

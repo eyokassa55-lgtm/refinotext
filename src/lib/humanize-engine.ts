@@ -24,12 +24,14 @@ import {
   formatWikipediaEditorText,
 } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
+import { findDatabaseMatch, findTopicMatch } from "@/lib/training-retrieval";
 import {
   findWikipediaLiveMatch,
   WIKIPEDIA_EDITOR_MAX_CHARS,
   WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
 } from "@/lib/wikipedia-corpus";
 import { pickWikipediaStyleExamples } from "@/lib/wikipedia-style-examples";
+import { scrubAiEssayMarks } from "@/lib/humanize-voice";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -96,6 +98,9 @@ function canRewriteWithModel(): boolean {
 }
 
 function unmatchedRewriteBackend(): GenerateBackend {
+  // Unseen drafts: prefer base Gemini + Wikipedia AFTER examples.
+  // The tuned endpoint too often echoes the draft or keeps chatbot cadence that detectors mark AI.
+  if (isGeminiApiConfigured()) return "base";
   if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
   return "base";
 }
@@ -344,7 +349,7 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
     output = `${titled}\n\n${body}`;
   }
 
-  output = formatEssayParagraphs(output);
+  output = formatEssayParagraphs(scrubAiEssayMarks(output));
 
   return {
     text: output.trim(),
@@ -354,7 +359,19 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // Primary: live Wikipedia prose (same human encyclopedia style as training-pair outputs).
+  // 1) Stored human training outputs (wikipedia_training_pairs / essay gold text).
+  const storedHit = findTopicMatch(request.text) ?? findDatabaseMatch(request.text);
+  if (storedHit) {
+    return resolveStoredHit({
+      ...storedHit,
+      output: formatEssayParagraphs(
+        applyInputTitle(storedHit.output, request.text),
+      ),
+    });
+  }
+
+  // 2) Live Wikipedia — real human encyclopedia prose (same style as pair outputs).
+  // Never replace this with the tuned model: generated text is what detectors mark 100% AI.
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
   if (wikipediaHit) {
     const inputWords = countWords(request.text);
@@ -375,31 +392,15 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     );
     output = formatEssayParagraphs(output);
 
-    const outputWords = countWords(output);
-    const endsComplete = /[.!?]["”']?\s*$/.test(output.trim());
-
-    if (
-      inputWords >= 80 &&
-      (!endsComplete || outputWords < inputWords * 0.9) &&
-      canRewriteWithModel()
-    ) {
-      console.info("[humanize] Wikipedia output too short or incomplete; using Vertex with Wikipedia style example", {
-        inputWords,
-        outputWords,
-        endsComplete,
-      });
-      return runModelHumanization(request);
-    }
-
     return resolveStoredHit({
       ...wikipediaHit,
       output,
     });
   }
 
-  // Fallback: TOPN1 with a BEFORE/AFTER example from wikipedia_training_pairs outputs.
+  // 3) Last resort only: model rewrite + strip AI filler marks.
   if (canRewriteWithModel()) {
-    console.info("[humanize] no Wikipedia topic match; tuned model + Wikipedia style example");
+    console.info("[humanize] no human Wikipedia/training match; model rewrite with AI-mark scrub");
     return runModelHumanization(request);
   }
 
