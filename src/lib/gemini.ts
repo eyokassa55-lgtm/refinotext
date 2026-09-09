@@ -4,11 +4,18 @@ import { ApiError, GoogleGenAI } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
-const GEMINI_API_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_API_FALLBACK_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+];
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 3;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
+/** Models that currently fail on Gemini API for this project — skip to fallbacks. */
+const BROKEN_GEMINI_API_MODELS = new Set(["gemini-3.6-flash", "gemini-3-flash", "gemini-3.0-flash"]);
 
 export class GeminiError extends Error {
   code: string;
@@ -200,7 +207,14 @@ function getApiKey(): string {
 
 export function getGeminiApiModel(): string {
   const model = cleanEnv(process.env.GEMINI_MODEL)?.replace(/-+$/, "");
-  if (model && /^gemini-/i.test(model) && !model.includes("endpoints/")) return model;
+  if (
+    model &&
+    /^gemini-/i.test(model) &&
+    !model.includes("endpoints/") &&
+    !BROKEN_GEMINI_API_MODELS.has(model.toLowerCase())
+  ) {
+    return model;
+  }
   return DEFAULT_GEMINI_MODEL;
 }
 
@@ -279,6 +293,8 @@ function sleep(ms: number) {
 function modelsToTry(
   backend: GenerateBackend = "tuned",
 ): { provider: GenerateProvider; model: string }[] {
+  const targets: { provider: GenerateProvider; model: string }[] = [];
+
   if (backend === "tuned" && hasVertexEndpointEnv()) {
     const vertex = requireVertexConfig();
     if (isInvalidEndpointValue(vertex.model) || /^gemini-/i.test(vertex.model)) {
@@ -288,16 +304,15 @@ function modelsToTry(
         503,
       );
     }
-    return [{ provider: "vertex", model: vertex.model }];
+    targets.push({ provider: "vertex", model: vertex.model });
   }
 
-  const targets: { provider: GenerateProvider; model: string }[] = [];
-
-  // Prefer Gemini API first for base rewrites — Vertex publisher models often
-  // fail with 403 on this project while the API key path works.
+  // Gemini API publisher models (skip known-broken IDs).
   if (isGeminiApiConfigured()) {
     const primary = getGeminiApiModel();
-    targets.push({ provider: "gemini-api", model: primary.startsWith("gemini-") ? primary : BASE_VERTEX_MODEL });
+    if (primary.startsWith("gemini-") && !BROKEN_GEMINI_API_MODELS.has(primary.toLowerCase())) {
+      targets.push({ provider: "gemini-api", model: primary });
+    }
     for (const model of GEMINI_API_FALLBACK_MODELS) {
       if (!targets.some((target) => target.provider === "gemini-api" && target.model === model)) {
         targets.push({ provider: "gemini-api", model });
@@ -305,8 +320,25 @@ function modelsToTry(
     }
   }
 
-  if (hasVertexEndpointEnv() || isVertexConfigured()) {
+  // Vertex publisher model last — this project often returns 403 here.
+  if (isVertexConfigured()) {
     targets.push({ provider: "vertex-base", model: BASE_VERTEX_MODEL });
+  }
+
+  // If we asked for base but Gemini/Vertex base are down, still try the tuned endpoint.
+  if (backend === "base" && hasVertexEndpointEnv()) {
+    try {
+      const vertex = requireVertexConfig();
+      if (
+        !isInvalidEndpointValue(vertex.model) &&
+        !/^gemini-/i.test(vertex.model) &&
+        !targets.some((target) => target.provider === "vertex" && target.model === vertex.model)
+      ) {
+        targets.push({ provider: "vertex", model: vertex.model });
+      }
+    } catch {
+      // ignore — tuned endpoint unavailable
+    }
   }
 
   if (targets.length === 0) {
@@ -386,11 +418,18 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
     );
   }
 
-  if (status === 404 || lower.includes("not found")) {
+  if (
+    status === 404 ||
+    status === 400 ||
+    lower.includes("not found") ||
+    lower.includes("is not found") ||
+    lower.includes("invalid model") ||
+    lower.includes("model not found")
+  ) {
     return new GeminiError(
       "The writing service is temporarily unavailable. Please try again later.",
       "MODEL_NOT_FOUND",
-      404,
+      status === 400 ? 400 : 404,
     );
   }
 

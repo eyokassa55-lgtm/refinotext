@@ -99,10 +99,10 @@ function canRewriteWithModel(): boolean {
 }
 
 function unmatchedRewriteBackend(): GenerateBackend {
-  // Prefer Gemini API base rewrite when available. Fall back to the tuned Vertex
-  // endpoint, then Vertex publisher models.
-  if (isGeminiApiConfigured()) return "base";
+  // Prefer the bound TOPN1 tuned endpoint. Gemini API / Vertex publisher models
+  // are currently failing on this project (400/404/403), so base is last resort.
   if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
+  if (isGeminiApiConfigured()) return "base";
   return "base";
 }
 
