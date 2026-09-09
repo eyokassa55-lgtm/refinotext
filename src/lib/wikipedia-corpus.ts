@@ -1261,7 +1261,8 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   const contentTokens = contentTopicTokens(userText);
 
   let mathFallback: WikipediaRow | null = null;
-  let best: { row: WikipediaRow; score: number } | null = null;
+  let bestRow: WikipediaRow | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
   const seen = new Set<string>();
 
   const consider = (page: WikipediaRow) => {
@@ -1271,7 +1272,10 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
     if (!pageAlignsWithDraft(page, userText, contentTokens)) return;
     const score = scoreWikipediaCandidate(page, userText, userKeys, contentTokens);
     if (score < 6) return;
-    if (!best || score > best.score) best = { row: page, score };
+    if (score > bestScore) {
+      bestRow = page;
+      bestScore = score;
+    }
   };
 
   for (const query of liveSearchQueries(userText)) {
@@ -1307,9 +1311,9 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
     }
   }
 
-  if (best) {
-    const confidence = best.score >= 18 ? 0.97 : best.score >= 12 ? 0.95 : 0.9;
-    return toMatch(best.row, confidence, "topic");
+  if (bestRow) {
+    const confidence = bestScore >= 18 ? 0.97 : bestScore >= 12 ? 0.95 : 0.9;
+    return toMatch(bestRow, confidence, "topic");
   }
 
   if (mathFallback && pageAlignsWithDraft(mathFallback, userText, contentTokens)) {
