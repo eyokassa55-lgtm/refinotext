@@ -372,21 +372,38 @@ function clipToBudget(text: string, maxChars: number): string {
 }
 
 /**
- * Wikipedia article text for the editor: title, then full essay paragraphs.
- * Sub-topic headings are removed. Content is not truncated unless maxChars > 0.
+ * Wikipedia article text for the editor: title, then a short lead.
+ * Main points only — not a full article dump.
  */
 export function formatWikipediaEditorText(
   title: string,
   extract: string,
-  maxChars = 0,
+  maxChars = 850,
+  maxParagraphs = 2,
 ): string {
   const heading = title.replace(/^#+\s*/, "").trim();
   const cleaned = polishProse(stripNavAndHeadings(extract));
-  let body = formatEssayParagraphs(cleaned);
+  let paragraphs = formatEssayParagraphs(cleaned)
+    .replace(/^#\s+[^\n]+\n*/, "")
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (maxParagraphs > 0) paragraphs = paragraphs.slice(0, maxParagraphs);
+  let body = paragraphs.join("\n\n");
   if (maxChars > 0) body = clipToBudget(body, maxChars);
   body = scrubLatexDump(body);
   if (hasLatexDump(body)) body = scrubLatexDump(stripWikiMath(body));
-  body = formatEssayParagraphs(body);
+  body = formatEssayParagraphs(body)
+    .replace(/^#\s+[^\n]+\n*/, "")
+    .trim();
+  if (maxParagraphs > 0) {
+    body = body
+      .split(/\n\s*\n/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .slice(0, maxParagraphs)
+      .join("\n\n");
+  }
   if (!heading || body.length < 80) return body;
   return `# ${heading}\n\n${body}`;
 }

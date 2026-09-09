@@ -501,6 +501,7 @@ ${clipStyleReference(demo.output)}
   return `${activeRewriteSystemInstruction()}
 ${lengthNote}
 Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
+Use short common words. Prefer clear sentences over long academic phrasing.
 Use proper essay paragraphs separated by blank lines. End sentences with punctuation.
 Do not switch topics. Do not paste an encyclopedia article. Keep the user's meaning end to end.
 ${demoBlock}

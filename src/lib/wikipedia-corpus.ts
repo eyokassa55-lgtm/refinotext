@@ -8,8 +8,10 @@ import { formatWikipediaEditorText, hasLatexDump } from "@/lib/humanize-output";
 
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
-/** 0 = keep the full cleaned article prose (no mid-essay cut). */
-export const WIKIPEDIA_EDITOR_MAX_CHARS = 0;
+/** Short lead only — main points, not the full Wikipedia article. */
+export const WIKIPEDIA_EDITOR_MAX_CHARS = 850;
+/** Keep the opening idea tight; skip long article dumps. */
+export const WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 2;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;
 
 export type WikipediaListItem = {
@@ -62,8 +64,13 @@ function parseRow(value: unknown, id: number): WikipediaRow | null {
   ) {
     return null;
   }
-  const output = formatWikipediaEditorText(topic.trim(), sourceText, WIKIPEDIA_EDITOR_MAX_CHARS);
-  if (output.length < 400) return null;
+  const output = formatWikipediaEditorText(
+    topic.trim(),
+    sourceText,
+    WIKIPEDIA_EDITOR_MAX_CHARS,
+    WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
+  );
+  if (output.length < 120) return null;
   const aliases = Array.isArray(row.aliases)
     ? row.aliases.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     : [];
@@ -217,7 +224,57 @@ const TITLE_QUALIFIERS = new Set([
   "human",
   "general",
   "basic",
+  "electronic",
+  "online",
+  "international",
+  "global",
 ]);
+
+/**
+ * Single heading words that must not alone open a Wikipedia match
+ * ("things" → Internet of things, "dangerous" → Jack Dangers).
+ */
+const WEAK_SOLO_TOPIC_TOKENS = new Set([
+  "thing",
+  "things",
+  "life",
+  "lives",
+  "world",
+  "way",
+  "ways",
+  "people",
+  "person",
+  "day",
+  "time",
+  "part",
+  "parts",
+  "form",
+  "type",
+  "types",
+  "kind",
+  "kinds",
+  "danger",
+  "dangers",
+  "dangerous",
+  "stuff",
+  "area",
+  "areas",
+  "good",
+  "bad",
+  "important",
+  "modern",
+]);
+
+/** Related encyclopedia titles for common essay headings. */
+const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
+  "digital trade": ["e-commerce", "electronic commerce", "digital commerce", "trade", "online shopping"],
+  "digital marketplace": ["e-commerce", "electronic commerce", "online shopping", "digital commerce"],
+  ecommerce: ["e-commerce", "electronic commerce", "digital trade"],
+  "e commerce": ["e-commerce", "electronic commerce", "digital trade"],
+  "e-commerce": ["electronic commerce", "digital trade", "online shopping"],
+  "online trade": ["e-commerce", "digital trade", "electronic commerce"],
+  "international trade": ["trade", "digital trade"],
+};
 
 const TOPIC_PHRASE_BREAK =
   /\b(?:is|are|was|were|has|have|had|do|does|did|can|will|may|might|must|should|would|could|means|refers|plays|remains|becomes|became|makes|make|made)\b/i;
@@ -359,19 +416,89 @@ function tokensFromKey(key: string): string[] {
 export function titleMatchesUserTopic(title: string, userKeys: Iterable<string>): boolean {
   const titleKey = topicKey(tokenizeTopic(title));
   if (!titleKey) return false;
-  const titleTokens = new Set(tokensFromKey(titleKey));
+  const titleTokens = tokensFromKey(titleKey);
+  const titleTokenSet = new Set(titleTokens);
   for (const userKey of userKeys) {
     if (!userKey) continue;
     if (userKey === titleKey) return true;
-    const userTokens = new Set(tokensFromKey(userKey));
-    if (userTokens.size === 0) continue;
-    if (![...userTokens].every((token) => titleTokens.has(token))) continue;
-    const extra = [...titleTokens].filter((token) => !userTokens.has(token));
-    if (extra.length > 0 && extra.every((token) => TITLE_QUALIFIERS.has(token))) {
-      return true;
+    const userTokens = tokensFromKey(userKey);
+    const userTokenSet = new Set(userTokens);
+    if (userTokens.length === 0) continue;
+
+    // Environment → Natural environment (qualifier extras on the title).
+    if (userTokens.every((token) => titleTokenSet.has(token))) {
+      const extra = titleTokens.filter((token) => !userTokenSet.has(token));
+      if (extra.length === 0 || extra.every((token) => TITLE_QUALIFIERS.has(token))) {
+        return true;
+      }
+    }
+
+    // Digital Trade → Trade / Digital trade (title is a strong subset of the heading).
+    if (titleTokens.every((token) => userTokenSet.has(token))) {
+      if (titleTokens.length >= 2) return true;
+      const solo = titleTokens[0]!;
+      if (!WEAK_SOLO_TOPIC_TOKENS.has(solo) && solo.length >= 4) return true;
     }
   }
   return false;
+}
+
+function topicAliasQueries(phrase: string): string[] {
+  const key = phrase.toLowerCase().replace(/\s+/g, " ").trim();
+  const aliases = TOPIC_SEARCH_ALIASES[key];
+  return aliases ? [...aliases] : [];
+}
+
+function headingPermutations(phrase: string): string[] {
+  const tokens = tokenizeTopic(phrase);
+  if (tokens.length < 2 || tokens.length > 3) return [];
+  if (tokens.length === 2) return [`${tokens[1]} ${tokens[0]}`];
+  return [
+    `${tokens[1]} ${tokens[0]} ${tokens[2]}`,
+    `${tokens[2]} ${tokens[1]} ${tokens[0]}`,
+    `${tokens[0]} ${tokens[2]} ${tokens[1]}`,
+  ];
+}
+
+function liveSearchQueries(text: string): string[] {
+  const phrases = userTopicPhrases(text);
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  const push = (value: string) => {
+    const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
+    const words = normalized.split(" ").filter(Boolean);
+    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 16) return;
+    seen.add(normalized);
+    queries.push(value.trim());
+  };
+  for (const phrase of phrases) {
+    push(phrase);
+    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(phrase)));
+    if (stripped.length >= 1 && stripped.length <= 3) {
+      push(stripped.join(" "));
+    }
+    for (const perm of headingPermutations(phrase)) push(perm);
+    for (const alias of topicAliasQueries(phrase)) push(alias);
+    if (stripped.length >= 2) {
+      for (const alias of topicAliasQueries(stripped.join(" "))) push(alias);
+    }
+    // Digital Trade → also search "trade" and "digital" when they are strong tokens.
+    for (const token of stripped) {
+      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token)) push(token);
+    }
+  }
+  return queries
+    .sort((left, right) => {
+      const rank = (value: string) => {
+        const normalized = value.toLowerCase();
+        if (normalized === "e-commerce" || normalized === "electronic commerce") return 0;
+        if (normalized.includes("commerce") || normalized.includes("trade")) return 1;
+        if (normalized.includes("shopping")) return 3;
+        return 2;
+      };
+      return rank(left) - rank(right) || right.length - left.length || left.localeCompare(right);
+    })
+    .slice(0, 12);
 }
 
 function titleLabels(row: WikipediaRow): string[] {
@@ -541,8 +668,13 @@ async function wikiQuery(params: Record<string, string>): Promise<Record<string,
 }
 
 function liveRowFromExtract(title: string, extract: string, pageUrl: string): WikipediaRow | null {
-  const output = formatWikipediaEditorText(title, extract, WIKIPEDIA_EDITOR_MAX_CHARS);
-  if (output.length < 400) return null;
+  const output = formatWikipediaEditorText(
+    title,
+    extract,
+    WIKIPEDIA_EDITOR_MAX_CHARS,
+    WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
+  );
+  if (output.length < 120) return null;
   if (hasLatexDump(output)) return null;
   return {
     id: WIKIPEDIA_LIVE_INDEX,
@@ -568,6 +700,7 @@ async function fetchWikipediaPage(title: string): Promise<WikipediaRow | null> {
   const data = await wikiQuery({
     prop: "extracts|info|pageprops",
     explaintext: "1",
+    exintro: "1",
     exsectionformat: "plain",
     inprop: "url",
     ppprop: "disambiguation",
@@ -627,27 +760,6 @@ function userDraftHasLatex(text: string): boolean {
 function preferProsePage(userText: string, page: WikipediaRow): boolean {
   if (!page.mathHeavy) return true;
   return userDraftHasLatex(userText);
-}
-
-function liveSearchQueries(text: string): string[] {
-  const phrases = userTopicPhrases(text);
-  const queries: string[] = [];
-  const seen = new Set<string>();
-  const push = (value: string) => {
-    const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
-    const words = normalized.split(" ").filter(Boolean);
-    if (!normalized || seen.has(normalized) || words.length === 0 || words.length > 16) return;
-    seen.add(normalized);
-    queries.push(value.trim());
-  };
-  for (const phrase of phrases) {
-    push(phrase);
-    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(phrase)));
-    if (stripped.length >= 1 && stripped.length <= 3) {
-      push(stripped.join(" "));
-    }
-  }
-  return queries.sort((left, right) => left.length - right.length).slice(0, 6);
 }
 
 function draftBodyText(text: string): string {
@@ -723,10 +835,31 @@ function pageAlignsWithDraft(
   return ratio >= 0.12 || contentTokens.length < 6;
 }
 
+function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean {
+  const queryKey = topicKey(tokenizeTopic(query));
+  if (!queryKey) return false;
+  if (userKeys.has(queryKey)) return true;
+
+  const queryTokens = tokensFromKey(queryKey);
+  for (const userKey of userKeys) {
+    const userTokens = new Set(tokensFromKey(userKey));
+    if (queryTokens.every((token) => userTokens.has(token))) {
+      if (queryTokens.length >= 2) return true;
+      const solo = queryTokens[0]!;
+      if (!WEAK_SOLO_TOPIC_TOKENS.has(solo) && solo.length >= 4) return true;
+    }
+    const phrase = tokensFromKey(userKey).join(" ");
+    for (const alias of topicAliasQueries(phrase)) {
+      if (topicKey(tokenizeTopic(alias)) === queryKey) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Look up the draft on live English Wikipedia for the same / closely titled topic
- * (Environment → Natural environment). Keyword-only collisions (Jack Dangers,
- * Internet of things) are rejected — Humanize then uses the Vertex rewrite.
+ * (Digital Trade → Trade / E-commerce; Environment → Natural environment).
+ * Weak keyword collisions (Jack Dangers, Internet of things) are rejected.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -738,7 +871,7 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
 
   for (const query of liveSearchQueries(userText)) {
     const queryKey = topicKey(tokenizeTopic(query));
-    if (!queryKey || !userKeys.has(queryKey)) continue;
+    if (!queryKey || !queryBelongsToUserTopic(query, userKeys)) continue;
 
     const exact = await fetchWikipediaPage(query);
     if (exact) {
@@ -754,7 +887,10 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
     }
 
     for (const title of await searchWikipediaTitles(query)) {
-      if (!titleMatchesUserTopic(title, userKeys) && topicKey(tokenizeTopic(title)) !== queryKey) {
+      if (
+        !titleMatchesUserTopic(title, userKeys) &&
+        topicKey(tokenizeTopic(title)) !== queryKey
+      ) {
         continue;
       }
       const page = await fetchWikipediaPage(title);

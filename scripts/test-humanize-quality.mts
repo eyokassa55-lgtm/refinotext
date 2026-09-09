@@ -573,10 +573,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   ).join("\n\n");
   const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody);
   assert(
-    "formatted Wikipedia essay keeps full paragraph content instead of cutting mid-article",
+    "formatted Wikipedia essay keeps a short lead, not the full article",
     fullWikiEssay.includes("Paragraph 1") &&
-      fullWikiEssay.includes("Paragraph 12") &&
-      fullWikiEssay.split(/\n\s*\n/).length >= 12,
+      !fullWikiEssay.includes("Paragraph 12") &&
+      fullWikiEssay.split(/\n\s*\n/).length <= 3,
     `paras=${fullWikiEssay.split(/\n\s*\n/).length}`,
   );
   const essayFormatted = formatEssayParagraphs(
@@ -755,6 +755,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Natural environment is the same topic as Environment",
     titleMatchesUserTopic("Natural environment", ["environment"]),
+  );
+  assert(
+    "Trade is related to Digital Trade",
+    titleMatchesUserTopic("Trade", ["digital\u0001trade"]),
+  );
+  assert(
+    "Internet of things is not related to Dangerous Things in Life",
+    !titleMatchesUserTopic("Internet of things", ["dangerous\u0001things"]),
   );
   assert(
     "Artificial intelligence is not the same topic as intelligence",
@@ -1016,7 +1024,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
       wikiSource.includes("findWikipediaLiveMatch") &&
       !wikiSource.includes("findRelatedWikipediaPage") &&
-      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 0"),
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 850") &&
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 2"),
   );
   const workspaceSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),
