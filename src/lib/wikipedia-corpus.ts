@@ -5,13 +5,13 @@ import path from "node:path";
 
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import { formatWikipediaEditorText, hasLatexDump } from "@/lib/humanize-output";
+import { countWords } from "@/lib/words";
 
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
-/** Short lead only — main points, not the full Wikipedia article. */
-export const WIKIPEDIA_EDITOR_MAX_CHARS = 850;
-/** Keep the opening idea tight; skip long article dumps. */
-export const WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 2;
+/** Upper bound while fetching; final output is sized to the input word count. */
+export const WIKIPEDIA_EDITOR_MAX_CHARS = 14_000;
+export const WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 24;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;
 
 export type WikipediaListItem = {
@@ -700,8 +700,8 @@ async function fetchWikipediaPage(title: string): Promise<WikipediaRow | null> {
   const data = await wikiQuery({
     prop: "extracts|info|pageprops",
     explaintext: "1",
-    exintro: "1",
     exsectionformat: "plain",
+    exchars: "12000",
     inprop: "url",
     ppprop: "disambiguation",
     redirects: "1",

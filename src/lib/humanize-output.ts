@@ -1,3 +1,5 @@
+import { countWords } from "@/lib/words";
+
 /** Typical Wikipedia back-matter and section labels — never shown as extra sub-topics. */
 const NAV_OR_SECTION_LINE =
   /^(?:={2,}\s*.+?\s*={2,}|see also|references|external links|further reading|notes|bibliography|citations|sources|contents|etymology|terminology|classification|gallery|footnotes|references and notes|history|overview|types|applications|description|background|origins|development|usage|definition|examples|characteristics|variants)$/i;
@@ -372,14 +374,15 @@ function clipToBudget(text: string, maxChars: number): string {
 }
 
 /**
- * Wikipedia article text for the editor: title, then a short lead.
- * Main points only — not a full article dump.
+ * Wikipedia article text for the editor: title, then prose sized to the draft.
+ * Pass targetWords so long inputs get a matching-length lead, not a tiny blurb.
  */
 export function formatWikipediaEditorText(
   title: string,
   extract: string,
-  maxChars = 850,
-  maxParagraphs = 2,
+  maxChars = 14_000,
+  maxParagraphs = 24,
+  targetWords = 0,
 ): string {
   const heading = title.replace(/^#+\s*/, "").trim();
   const cleaned = polishProse(stripNavAndHeadings(extract));
@@ -388,15 +391,35 @@ export function formatWikipediaEditorText(
     .split(/\n\s*\n/)
     .map((part) => part.trim())
     .filter(Boolean);
-  if (maxParagraphs > 0) paragraphs = paragraphs.slice(0, maxParagraphs);
+
+  if (targetWords > 0) {
+    const picked: string[] = [];
+    let words = 0;
+    for (const paragraph of paragraphs) {
+      picked.push(paragraph);
+      words += paragraph.split(/\s+/).filter(Boolean).length;
+      if (words >= targetWords) break;
+      if (maxParagraphs > 0 && picked.length >= maxParagraphs) break;
+    }
+    paragraphs = picked.length > 0 ? picked : paragraphs.slice(0, Math.max(1, maxParagraphs));
+  } else if (maxParagraphs > 0) {
+    paragraphs = paragraphs.slice(0, maxParagraphs);
+  }
+
   let body = paragraphs.join("\n\n");
-  if (maxChars > 0) body = clipToBudget(body, maxChars);
+  if (targetWords > 0) {
+    body = clipToWordBudget(body, targetWords);
+  } else if (maxChars > 0) {
+    body = clipToBudget(body, maxChars);
+  }
   body = scrubLatexDump(body);
   if (hasLatexDump(body)) body = scrubLatexDump(stripWikiMath(body));
   body = formatEssayParagraphs(body)
     .replace(/^#\s+[^\n]+\n*/, "")
     .trim();
-  if (maxParagraphs > 0) {
+  if (targetWords > 0) {
+    body = clipToWordBudget(body, targetWords);
+  } else if (maxParagraphs > 0) {
     body = body
       .split(/\n\s*\n/)
       .map((part) => part.trim())
@@ -406,4 +429,41 @@ export function formatWikipediaEditorText(
   }
   if (!heading || body.length < 80) return body;
   return `# ${heading}\n\n${body}`;
+}
+
+/** Trim prose to about `targetWords`, ending on a complete sentence. */
+export function clipToWordBudget(text: string, targetWords: number): string {
+  const trimmed = text.trim();
+  if (targetWords <= 0) return trimmed;
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length <= targetWords) return endOnCompleteSentence(trimmed);
+
+  const slice = words.slice(0, targetWords).join(" ");
+  const sentenceEnd = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("? "), slice.lastIndexOf("! "));
+  if (sentenceEnd >= Math.min(80, Math.floor(slice.length * 0.45))) {
+    return endOnCompleteSentence(slice.slice(0, sentenceEnd + 1));
+  }
+  return endOnCompleteSentence(slice);
+}
+
+/**
+ * Resize an already-formatted Wikipedia editor string to the input word count.
+ */
+export function fitWikipediaOutputToInput(output: string, input: string): string {
+  const target = Math.max(40, countWords(input));
+  const hash = output.match(/^#\s+([^\n]+)\n+/);
+  if (hash) {
+    const body = clipToWordBudget(output.slice(hash[0].length).trim(), target);
+    return body ? `# ${hash[1]!.trim()}\n\n${body}` : `# ${hash[1]!.trim()}`;
+  }
+  const firstBreak = output.indexOf("\n\n");
+  if (firstBreak > 0) {
+    const firstLine = output.slice(0, firstBreak).trim();
+    const words = firstLine.split(/\s+/).filter(Boolean);
+    if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(firstLine)) {
+      const body = clipToWordBudget(output.slice(firstBreak + 2).trim(), target);
+      return body ? `${firstLine}\n\n${body}` : firstLine;
+    }
+  }
+  return clipToWordBudget(output, target);
 }

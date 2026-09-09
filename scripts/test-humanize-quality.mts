@@ -39,6 +39,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "../src/lib/humanize-quality";
+import { countWords } from "../src/lib/words";
 import type { HumanizeResult } from "../src/lib/humanize-engine";
 import {
   extractGrubbyHumanizePayload,
@@ -571,13 +572,19 @@ Rainforests also illustrate a much broader set of global development debates. It
   const longWikiBody = Array.from({ length: 12 }, (_, i) =>
     `Paragraph ${i + 1} explains the same topic with complete sentences and normal punctuation for readers.`,
   ).join("\n\n");
-  const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody);
+  const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody, 14_000, 24, 80);
   assert(
-    "formatted Wikipedia essay keeps a short lead, not the full article",
+    "formatted Wikipedia essay sizes to the target word length",
     fullWikiEssay.includes("Paragraph 1") &&
-      !fullWikiEssay.includes("Paragraph 12") &&
-      fullWikiEssay.split(/\n\s*\n/).length <= 3,
-    `paras=${fullWikiEssay.split(/\n\s*\n/).length}`,
+      countWords(fullWikiEssay) <= 100 &&
+      countWords(fullWikiEssay) >= 40,
+    `words=${countWords(fullWikiEssay)}`,
+  );
+  const longTargetWiki = formatWikipediaEditorText("Essay Topic", longWikiBody, 14_000, 24, 200);
+  assert(
+    "formatted Wikipedia essay grows when the input word target is larger",
+    countWords(longTargetWiki) > countWords(fullWikiEssay),
+    `short=${countWords(fullWikiEssay)} long=${countWords(longTargetWiki)}`,
   );
   const essayFormatted = formatEssayParagraphs(
     "Road Safety\n\nPeople overlook hazards every day when they rush\n\nDrivers who text take serious risks on busy roads",
@@ -1015,8 +1022,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     runHumanizationFn.includes("NO_WIKIPEDIA_MATCH"),
   );
   assert(
-    "Humanize engine formats Wikipedia and model output as essay paragraphs",
-    engineSource.includes("formatEssayParagraphs"),
+    "Humanize engine sizes Wikipedia output to the input word length",
+    engineSource.includes("fitWikipediaOutputToInput"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
@@ -1024,8 +1031,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
       wikiSource.includes("findWikipediaLiveMatch") &&
       !wikiSource.includes("findRelatedWikipediaPage") &&
-      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 850") &&
-      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 2"),
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 14_000") &&
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 24"),
   );
   const workspaceSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),

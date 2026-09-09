@@ -17,7 +17,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { applyInputTitle, formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
+import { applyInputTitle, formatEssayParagraphs, extractUserTitle, fitWikipediaOutputToInput } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
 import { findWikipediaLiveMatch, findWikipediaMatch } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -324,9 +324,26 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     (await findWikipediaLiveMatch(request.text)) ?? findWikipediaMatch(request.text);
 
   if (wikipediaHit) {
+    let output = fitWikipediaOutputToInput(
+      applyInputTitle(wikipediaHit.output, request.text),
+      request.text,
+    );
+    output = formatEssayParagraphs(output);
+
+    const inputWords = countWords(request.text);
+    const outputWords = countWords(output);
+    // A tiny Wikipedia blurb is not useful for a long draft — match length via rewrite.
+    if (inputWords >= 80 && outputWords < inputWords * 0.8 && canRewriteWithModel()) {
+      console.info("[humanize] Wikipedia text shorter than input; using Vertex rewrite for length match", {
+        inputWords,
+        outputWords,
+      });
+      return runModelHumanization(request);
+    }
+
     return resolveStoredHit({
       ...wikipediaHit,
-      output: applyInputTitle(wikipediaHit.output, request.text),
+      output,
     });
   }
 
