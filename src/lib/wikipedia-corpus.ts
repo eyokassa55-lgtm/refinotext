@@ -270,6 +270,48 @@ const WEAK_SOLO_TOPIC_TOKENS = new Set([
 ]);
 
 /**
+ * Polysemous nouns. Alone they must not open a Wikipedia page when the heading
+ * names a more specific compound (Cultural Memory → not biology Memory).
+ */
+const AMBIGUOUS_SOLO_TOPIC_TOKENS = new Set([
+  "memory",
+  "culture",
+  "identity",
+  "society",
+  "community",
+  "development",
+  "change",
+  "growth",
+  "structure",
+  "process",
+  "system",
+  "information",
+  "communication",
+  "science",
+  "art",
+  "music",
+  "language",
+  "mind",
+  "brain",
+  "consciousness",
+  "behavior",
+  "behaviour",
+  "experience",
+  "knowledge",
+  "learning",
+  "family",
+  "nation",
+  "state",
+  "order",
+  "model",
+  "theory",
+  "practice",
+  "movement",
+  "network",
+  "service",
+]);
+
+/**
  * Abstract essay framing words. Alone they must not select a Wikipedia page when
  * the heading also names a concrete subject (Collaboration of Organs → Organs).
  */
@@ -372,6 +414,10 @@ const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
   "collaboration of organs": ["organ (biology)", "organ system", "human body", "organ"],
   organs: ["organ (biology)", "organ system", "organ"],
   organ: ["organ (biology)", "organ system"],
+  "cultural memory": ["collective memory", "cultural memory", "national identity"],
+  "collective memory": ["cultural memory", "collective memory"],
+  "national identity": ["national identity", "cultural identity", "nation"],
+  "cultural identity": ["cultural identity", "cultural memory", "national identity"],
 };
 
 const TOPIC_PHRASE_BREAK =
@@ -558,7 +604,22 @@ export function titleMatchesUserTopic(title: string, userKeys: Iterable<string>)
       const solo = matchTokens[0]!;
       if (WEAK_SOLO_TOPIC_TOKENS.has(solo) || solo.length < 4) continue;
       if (ABSTRACT_HEADING_TOKENS.has(solo) && userTokens.length >= 2) continue;
+      // Cultural Memory → not bare Memory / Culture / Identity.
+      if (AMBIGUOUS_SOLO_TOPIC_TOKENS.has(solo) && userTokens.length >= 2) continue;
       return true;
+    }
+
+    // Cultural memory → Collective memory (configured aliases).
+    const phrase = userTokens.join(" ");
+    for (const alias of topicAliasQueries(phrase)) {
+      if (topicKey(tokenizeTopic(alias)) === titleKey) return true;
+    }
+    // Also try contiguous bigrams inside longer headings.
+    for (let i = 0; i < userTokens.length - 1; i += 1) {
+      const bigram = `${userTokens[i]} ${userTokens[i + 1]}`;
+      for (const alias of [bigram, ...topicAliasQueries(bigram)]) {
+        if (topicKey(tokenizeTopic(alias)) === titleKey) return true;
+      }
     }
   }
   return false;
@@ -604,22 +665,21 @@ function liveSearchQueries(text: string): string[] {
       for (const alias of topicAliasQueries(stripped.join(" "))) push(alias);
     }
     // Prefer concrete nouns over abstract framing ("Organs" before "Collaboration").
+    // Do not solo-search ambiguous words when a compound exists (Cultural Memory → not Memory).
     const concrete = stripped.filter((token) => !ABSTRACT_HEADING_TOKENS.has(token));
+    const allowAmbiguousSolo = concrete.length < 2;
     for (const token of concrete) {
-      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token)) push(token);
-    }
-    for (const token of stripped) {
-      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token) && !ABSTRACT_HEADING_TOKENS.has(token)) {
-        push(token);
-      }
+      if (token.length < 4 || WEAK_SOLO_TOPIC_TOKENS.has(token)) continue;
+      if (!allowAmbiguousSolo && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(token)) continue;
+      push(token);
     }
   }
 
   // Body nouns help metaphorical titles (Collaboration of Organs → heart, lungs, organ).
   for (const token of contentTopicTokens(text).slice(0, 8)) {
-    if (!ABSTRACT_HEADING_TOKENS.has(token) && !WEAK_SOLO_TOPIC_TOKENS.has(token)) {
-      push(token);
-    }
+    if (ABSTRACT_HEADING_TOKENS.has(token) || WEAK_SOLO_TOPIC_TOKENS.has(token)) continue;
+    if (AMBIGUOUS_SOLO_TOPIC_TOKENS.has(token)) continue;
+    push(token);
   }
 
   return queries
@@ -627,7 +687,9 @@ function liveSearchQueries(text: string): string[] {
       const rank = (value: string) => {
         const normalized = value.toLowerCase();
         const tokens = tokenizeTopic(normalized);
-        if (tokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token)) && tokens.length === 1) return 5;
+        if (tokens.length >= 2 && tokens.every((token) => !ABSTRACT_HEADING_TOKENS.has(token))) return 0;
+        if (tokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token)) && tokens.length === 1) return 6;
+        if (tokens.length === 1 && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(tokens[0]!)) return 5;
         if (normalized === "e-commerce" || normalized === "electronic commerce") return 0;
         if (normalized.includes("commerce") || normalized.includes("trade")) return 1;
         if (normalized.includes("shopping")) return 3;
@@ -1013,8 +1075,87 @@ function pageAlignsWithDraft(
   }
   const ratio = hits / signals.length;
 
+  const headingConcrete = headingConcreteTokens(userText);
+  if (headingConcrete.length >= 2) {
+    const headingHits = headingConcrete.filter((token) => extractTokens.has(token)).length;
+    // Cultural Memory must keep cultural/national signals — not biology Memory.
+    if (headingHits < 2) return false;
+  }
+
   // Require real subject overlap (heart/lung/organ), not shared filler words.
   return hits >= 2 && ratio >= 0.28;
+}
+
+function headingConcreteTokens(userText: string): string[] {
+  const tokens = new Set<string>();
+  for (const phrase of userTopicPhrases(userText)) {
+    for (const token of tokenizeTopic(phrase)) {
+      if (
+        token.length >= 4 &&
+        !ABSTRACT_HEADING_TOKENS.has(token) &&
+        !WEAK_SOLO_TOPIC_TOKENS.has(token)
+      ) {
+        tokens.add(token);
+      }
+    }
+  }
+  return [...tokens];
+}
+
+function headingTopicBigrams(userText: string): string[] {
+  const grams: string[] = [];
+  const seen = new Set<string>();
+  for (const phrase of userTopicPhrases(userText)) {
+    const tokens = skipPreamble(skipLeadingFrames(tokenizeTopic(phrase))).filter(
+      (token) => !ABSTRACT_HEADING_TOKENS.has(token) && !WEAK_SOLO_TOPIC_TOKENS.has(token),
+    );
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+      const gram = `${tokens[i]} ${tokens[i + 1]}`;
+      if (seen.has(gram)) continue;
+      seen.add(gram);
+      grams.push(gram);
+    }
+  }
+  return grams;
+}
+
+/** Best rematch score: multi-word title overlap beats ambiguous single-word collisions. */
+function scoreWikipediaCandidate(
+  page: WikipediaRow,
+  userText: string,
+  userKeys: Set<string>,
+  contentTokens: readonly string[],
+): number {
+  const title = page.topic;
+  const titleTokens = tokenizeTopic(title);
+  const titleLower = title.toLowerCase();
+  const heading = headingConcreteTokens(userText);
+  const sharedHeading = titleTokens.filter((token) => heading.includes(token)).length;
+  const signals = alignmentSignalTokens(userText, contentTokens);
+  const extract = page.rawExtract || page.output || page.source_text;
+  const overlap = contentOverlapRatio(extract, signals.length >= 2 ? signals : contentTokens.slice(0, 16));
+
+  let score = sharedHeading * 5 + overlap * 10;
+  if (titleMatchesUserTopic(title, userKeys)) score += 4;
+  for (const gram of headingTopicBigrams(userText)) {
+    if (titleLower.includes(gram)) score += 12;
+  }
+  for (const userKey of userKeys) {
+    const phrase = tokensFromKey(userKey).join(" ");
+    for (const alias of topicAliasQueries(phrase)) {
+      if (topicKey(tokenizeTopic(alias)) === topicKey(titleTokens)) {
+        score += 10;
+        break;
+      }
+    }
+  }
+  if (titleTokens.length === 1 && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(titleTokens[0]!)) {
+    score -= 15;
+  }
+  if (heading.length >= 2 && sharedHeading < 2) {
+    score -= 8;
+  }
+  return score;
 }
 
 function strongUserTopicTokens(userKeys: Iterable<string>): string[] {
@@ -1028,7 +1169,10 @@ function strongUserTopicTokens(userKeys: Iterable<string>): string[] {
     }
   }
   // Collaboration of Organs → match on organs, never on collaboration alone.
-  return concrete.size > 0 ? [...concrete] : [...all];
+  // Cultural Memory → keep cultural+memory, but closest-match must not key only on memory.
+  if (concrete.size === 0) return [...all];
+  const nonAmbiguous = [...concrete].filter((token) => !AMBIGUOUS_SOLO_TOPIC_TOKENS.has(token));
+  return nonAmbiguous.length > 0 ? nonAmbiguous : [...concrete];
 }
 
 /**
@@ -1054,45 +1198,30 @@ async function findClosestLiveWikipediaPage(
 
       const titleTokens = tokenizeTopic(title);
       const sharedStrong = titleTokens.filter((token) => strongTokens.includes(token));
+      const sharedAmbiguousOnly =
+        sharedStrong.length > 0 &&
+        sharedStrong.every((token) => AMBIGUOUS_SOLO_TOPIC_TOKENS.has(token));
       const sharedAbstractOnly =
         sharedStrong.length === 0 &&
         titleTokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token));
       if (sharedStrong.length === 0 && !titleMatchesUserTopic(title, userKeys)) continue;
       // Never treat "Collaboration…" history pages as related to metaphorical essays.
       if (sharedAbstractOnly && sharedStrong.length === 0) continue;
+      // Cultural Memory must not rematch through bare Memory / Culture / Identity.
+      if (sharedAmbiguousOnly && !titleMatchesUserTopic(title, userKeys)) continue;
 
       const page = await fetchWikipediaPage(title);
       if (!page) continue;
       if (!preferProsePage(userText, page)) continue;
       if (!pageAlignsWithDraft(page, userText, contentTokens)) continue;
 
-      const signals = alignmentSignalTokens(userText, contentTokens);
-      const overlap = contentOverlapRatio(
-        page.rawExtract || page.output || page.source_text,
-        signals.length >= 2 ? signals : contentTokens.slice(0, 16),
-      );
-      let score = sharedStrong.length * 3 + overlap * 8;
-      if (titleMatchesUserTopic(title, userKeys)) score += 5;
-      if (titleTokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token))) {
-        score -= titleTokens.every((token) => ABSTRACT_HEADING_TOKENS.has(token) || TITLE_QUALIFIERS.has(token))
-          ? 6
-          : 2;
-      }
-      for (const userKey of userKeys) {
-        const phrase = tokensFromKey(userKey).join(" ");
-        for (const alias of topicAliasQueries(phrase)) {
-          if (topicKey(tokenizeTopic(alias)) === topicKey(titleTokens)) {
-            score += 4;
-            break;
-          }
-        }
-      }
-      if (overlap < 0.28) continue;
+      const score = scoreWikipediaCandidate(page, userText, userKeys, contentTokens);
+      if (score < 8) continue;
       if (!best || score > best.score) best = { row: page, score };
     }
   }
 
-  return best && best.score >= 3 ? best.row : null;
+  return best && best.score >= 8 ? best.row : null;
 }
 
 function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean {
@@ -1109,6 +1238,7 @@ function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean 
       const solo = queryTokens[0]!;
       if (WEAK_SOLO_TOPIC_TOKENS.has(solo) || solo.length < 4) continue;
       if (ABSTRACT_HEADING_TOKENS.has(solo) && userTokens.length >= 2) continue;
+      if (AMBIGUOUS_SOLO_TOPIC_TOKENS.has(solo) && userTokens.length >= 2) continue;
       return true;
     }
     const phrase = userTokens.join(" ");
@@ -1120,9 +1250,9 @@ function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean 
 }
 
 /**
- * Look up the draft on the full English Wikipedia API (not the local 3000-row file).
- * Same/related topic pages win; weak keyword collisions are rejected so Humanize
- * can fall back to the tuned model only when nothing fits.
+ * Look up the draft on the full English Wikipedia API (not the local corpus file).
+ * Scores candidates and returns the best same-topic rematch; weak keyword
+ * collisions (Memory for Cultural Memory, Collaboration for Organs) are rejected.
  */
 export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
@@ -1131,6 +1261,18 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   const contentTokens = contentTopicTokens(userText);
 
   let mathFallback: WikipediaRow | null = null;
+  let best: { row: WikipediaRow; score: number } | null = null;
+  const seen = new Set<string>();
+
+  const consider = (page: WikipediaRow) => {
+    const key = page.topic.trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    if (!pageAlignsWithDraft(page, userText, contentTokens)) return;
+    const score = scoreWikipediaCandidate(page, userText, userKeys, contentTokens);
+    if (score < 6) return;
+    if (!best || score > best.score) best = { row: page, score };
+  };
 
   for (const query of liveSearchQueries(userText)) {
     const queryKey = topicKey(tokenizeTopic(query));
@@ -1141,11 +1283,10 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
       if (!preferProsePage(userText, exact)) {
         mathFallback ??= exact;
       } else if (
-        (titleMatchesUserTopic(exact.topic, userKeys) ||
-          topicKey(tokenizeTopic(exact.topic)) === queryKey) &&
-        pageAlignsWithDraft(exact, userText, contentTokens)
+        titleMatchesUserTopic(exact.topic, userKeys) ||
+        topicKey(tokenizeTopic(exact.topic)) === queryKey
       ) {
-        return toMatch(exact, 0.97, "topic");
+        consider(exact);
       }
     }
 
@@ -1162,13 +1303,18 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
         mathFallback ??= page;
         continue;
       }
-      if (!pageAlignsWithDraft(page, userText, contentTokens)) continue;
-      return toMatch(page, 0.95, "topic");
+      consider(page);
     }
   }
 
+  if (best) {
+    const confidence = best.score >= 18 ? 0.97 : best.score >= 12 ? 0.95 : 0.9;
+    return toMatch(best.row, confidence, "topic");
+  }
+
   if (mathFallback && pageAlignsWithDraft(mathFallback, userText, contentTokens)) {
-    return toMatch(mathFallback, 0.8, "topic");
+    const score = scoreWikipediaCandidate(mathFallback, userText, userKeys, contentTokens);
+    if (score >= 8) return toMatch(mathFallback, 0.8, "topic");
   }
 
   const related = await findClosestLiveWikipediaPage(userText, userKeys, contentTokens);

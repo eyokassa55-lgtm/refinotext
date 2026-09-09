@@ -182,6 +182,13 @@ The heart and lungs collaborate closely. The heart pumps blood through the body,
 The digestive system also works with other organs. The stomach and intestines break down food, and the liver helps process nutrients so the body can use them for energy and repair.
 `;
 
+const CULTURAL_MEMORY_ESSAY = `# The Role of Cultural Memory in Shaping National Identity
+
+Cultural memory is the shared stories, traditions, and experiences that help communities understand where they came from. It shapes national identity by connecting people to heroes, struggles, and achievements across generations.
+
+Schools, museums, monuments, and public ceremonies keep those memories alive. When a nation remembers its past together, citizens often feel a stronger sense of belonging and purpose.
+`;
+
 const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
 
 Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
@@ -797,6 +804,19 @@ Rainforests also illustrate a much broader set of global development debates. It
     titleMatchesUserTopic("Organ (biology)", ["collaboration\u0001organ"]),
   );
   assert(
+    "Memory alone is not the topic for Cultural Memory",
+    !titleMatchesUserTopic("Memory", ["cultural\u0001memory"]),
+  );
+  assert(
+    "Cultural memory matches Cultural Memory",
+    titleMatchesUserTopic("Cultural memory", ["cultural\u0001memory"]),
+  );
+  assert(
+    "Collective memory matches Cultural Memory",
+    titleMatchesUserTopic("Collective memory", ["cultural\u0001memory"]) ||
+      titleMatchesUserTopic("Collective memory", ["collective\u0001memory"]),
+  );
+  assert(
     "Internet of things is not related to Dangerous Things in Life",
     !titleMatchesUserTopic("Internet of things", ["dangerous\u0001things"]),
   );
@@ -1226,6 +1246,17 @@ Rainforests also illustrate a much broader set of global development debates. It
         organsWiki.output,
       ),
     `topic=${organsWiki?.topic ?? "none"} opening=${organsWiki?.output.slice(0, 120) ?? "none"}`,
+  );
+  const culturalMemoryWiki = await findWikipediaLiveMatch(CULTURAL_MEMORY_ESSAY);
+  assert(
+    "Cultural Memory matches collective/cultural memory (not biology Memory)",
+    culturalMemoryWiki?.kind === "topic" &&
+      /cultural memory|collective memory|national identity/i.test(culturalMemoryWiki.topic) &&
+      /\bcultur|\bnation|\btradition|\bcollective|\bidentit/i.test(culturalMemoryWiki.output) &&
+      !/\bamnesia\b|\bneuron\b|\bsensory processor\b|\bencoding\b.*\bstorage\b/i.test(
+        culturalMemoryWiki.output,
+      ),
+    `topic=${culturalMemoryWiki?.topic ?? "none"} opening=${culturalMemoryWiki?.output.slice(0, 140) ?? "none"}`,
   );
   assert(
     "Dangerous Things in Life has no same-topic Wikipedia page (Vertex rewrite path)",
