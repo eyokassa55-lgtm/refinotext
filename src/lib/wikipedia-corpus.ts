@@ -220,6 +220,8 @@ const TOPIC_PREAMBLE = new Set([
 const TITLE_QUALIFIERS = new Set([
   "natural",
   "biophysical",
+  "biology",
+  "biological",
   "overview",
   "introduction",
   "concept",
@@ -267,6 +269,97 @@ const WEAK_SOLO_TOPIC_TOKENS = new Set([
   "modern",
 ]);
 
+/**
+ * Abstract essay framing words. Alone they must not select a Wikipedia page when
+ * the heading also names a concrete subject (Collaboration of Organs → Organs).
+ */
+const ABSTRACT_HEADING_TOKENS = new Set([
+  "collaboration",
+  "cooperation",
+  "partnership",
+  "relationship",
+  "relationships",
+  "importance",
+  "impact",
+  "impacts",
+  "role",
+  "roles",
+  "power",
+  "meaning",
+  "value",
+  "values",
+  "effect",
+  "effects",
+  "benefit",
+  "benefits",
+  "challenge",
+  "challenges",
+  "overview",
+  "analysis",
+  "study",
+  "nature",
+  "concept",
+  "concepts",
+  "idea",
+  "ideas",
+  "issue",
+  "issues",
+  "problem",
+  "problems",
+  "aspect",
+  "aspects",
+  "significance",
+  "influence",
+  "connection",
+  "connections",
+  "interaction",
+  "interactions",
+]);
+
+/**
+ * Generic draft words that inflate Wikipedia overlap without proving the same topic
+ * (WWII “collaboration” pages share human/body/work/system with biology essays).
+ */
+const GENERIC_ALIGNMENT_TOKENS = new Set([
+  "also",
+  "alone",
+  "body",
+  "break",
+  "bring",
+  "closely",
+  "down",
+  "each",
+  "energy",
+  "food",
+  "healthy",
+  "help",
+  "helps",
+  "human",
+  "job",
+  "keep",
+  "like",
+  "made",
+  "many",
+  "need",
+  "none",
+  "other",
+  "own",
+  "process",
+  "pumps",
+  "receive",
+  "remove",
+  "repair",
+  "system",
+  "team",
+  "through",
+  "together",
+  "use",
+  "while",
+  "without",
+  "work",
+  "works",
+]);
+
 /** Related encyclopedia titles for common essay headings. */
 const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
   "digital trade": ["e-commerce", "electronic commerce", "digital commerce", "trade", "online shopping"],
@@ -276,10 +369,29 @@ const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
   "e-commerce": ["electronic commerce", "digital trade", "online shopping"],
   "online trade": ["e-commerce", "digital trade", "electronic commerce"],
   "international trade": ["trade", "digital trade"],
+  "collaboration of organs": ["organ (biology)", "organ system", "human body", "organ"],
+  organs: ["organ (biology)", "organ system", "organ"],
+  organ: ["organ (biology)", "organ system"],
 };
 
 const TOPIC_PHRASE_BREAK =
   /\b(?:is|are|was|were|has|have|had|do|does|did|can|will|may|might|must|should|would|could|means|refers|plays|remains|becomes|became|makes|make|made)\b/i;
+
+/** Light plural fold so organs↔organ and lungs↔lung align with Wikipedia titles. */
+function normalizeTopicToken(token: string): string {
+  if (token.length >= 5 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  if (token.length >= 4 && token.endsWith("ses")) return token.slice(0, -2);
+  if (
+    token.length >= 4 &&
+    token.endsWith("s") &&
+    !token.endsWith("ss") &&
+    !token.endsWith("us") &&
+    !token.endsWith("is")
+  ) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
 
 function tokenizeTopic(text: string): string[] {
   return text
@@ -287,6 +399,7 @@ function tokenizeTopic(text: string): string[] {
     .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
     .split(/\s+/)
     .map((token) => token.replace(/^['’-]+|['’-]+$/g, ""))
+    .map(normalizeTopicToken)
     .filter((token) => {
       if (!token || STOPWORDS.has(token)) return false;
       if (SHORT_TOPIC_TERMS.has(token)) return true;
@@ -436,10 +549,16 @@ export function titleMatchesUserTopic(title: string, userKeys: Iterable<string>)
     }
 
     // Digital Trade → Trade / Digital trade (title is a strong subset of the heading).
-    if (titleTokens.every((token) => userTokenSet.has(token))) {
-      if (titleTokens.length >= 2) return true;
-      const solo = titleTokens[0]!;
-      if (!WEAK_SOLO_TOPIC_TOKENS.has(solo) && solo.length >= 4) return true;
+    // Organ (biology) → Collaboration of Organs (ignore disambiguators like biology).
+    // Not Collaboration alone for "Collaboration of Organs".
+    const coreTitle = titleTokens.filter((token) => !TITLE_QUALIFIERS.has(token));
+    const matchTokens = coreTitle.length > 0 ? coreTitle : titleTokens;
+    if (matchTokens.every((token) => userTokenSet.has(token))) {
+      if (matchTokens.length >= 2) return true;
+      const solo = matchTokens[0]!;
+      if (WEAK_SOLO_TOPIC_TOKENS.has(solo) || solo.length < 4) continue;
+      if (ABSTRACT_HEADING_TOKENS.has(solo) && userTokens.length >= 2) continue;
+      return true;
     }
   }
   return false;
@@ -484,23 +603,40 @@ function liveSearchQueries(text: string): string[] {
     if (stripped.length >= 2) {
       for (const alias of topicAliasQueries(stripped.join(" "))) push(alias);
     }
-    // Digital Trade → also search "trade" and "digital" when they are strong tokens.
-    for (const token of stripped) {
+    // Prefer concrete nouns over abstract framing ("Organs" before "Collaboration").
+    const concrete = stripped.filter((token) => !ABSTRACT_HEADING_TOKENS.has(token));
+    for (const token of concrete) {
       if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token)) push(token);
     }
+    for (const token of stripped) {
+      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token) && !ABSTRACT_HEADING_TOKENS.has(token)) {
+        push(token);
+      }
+    }
   }
+
+  // Body nouns help metaphorical titles (Collaboration of Organs → heart, lungs, organ).
+  for (const token of contentTopicTokens(text).slice(0, 8)) {
+    if (!ABSTRACT_HEADING_TOKENS.has(token) && !WEAK_SOLO_TOPIC_TOKENS.has(token)) {
+      push(token);
+    }
+  }
+
   return queries
     .sort((left, right) => {
       const rank = (value: string) => {
         const normalized = value.toLowerCase();
+        const tokens = tokenizeTopic(normalized);
+        if (tokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token)) && tokens.length === 1) return 5;
         if (normalized === "e-commerce" || normalized === "electronic commerce") return 0;
         if (normalized.includes("commerce") || normalized.includes("trade")) return 1;
         if (normalized.includes("shopping")) return 3;
+        if (tokens.every((token) => !ABSTRACT_HEADING_TOKENS.has(token))) return 1;
         return 2;
       };
       return rank(left) - rank(right) || right.length - left.length || left.localeCompare(right);
     })
-    .slice(0, 12);
+    .slice(0, 14);
 }
 
 function titleLabels(row: WikipediaRow): string[] {
@@ -820,12 +956,40 @@ function draftLooksLikeEntityBio(text: string): boolean {
   return ENTITY_LEAD_PATTERN.test(lead) || PERSON_BIO_LEAD_PATTERN.test(lead);
 }
 
+function alignmentSignalTokens(userText: string, contentTokens: readonly string[]): string[] {
+  const headingConcrete = new Set<string>();
+  for (const phrase of userTopicPhrases(userText)) {
+    for (const token of tokenizeTopic(phrase)) {
+      if (
+        token.length >= 4 &&
+        !ABSTRACT_HEADING_TOKENS.has(token) &&
+        !WEAK_SOLO_TOPIC_TOKENS.has(token) &&
+        !GENERIC_ALIGNMENT_TOKENS.has(token)
+      ) {
+        headingConcrete.add(token);
+      }
+    }
+  }
+
+  const fromBody = contentTokens.filter(
+    (token) =>
+      token.length >= 4 &&
+      !ABSTRACT_HEADING_TOKENS.has(token) &&
+      !WEAK_SOLO_TOPIC_TOKENS.has(token) &&
+      !GENERIC_ALIGNMENT_TOKENS.has(token),
+  );
+
+  // Prefer concrete heading nouns (Organs) plus distinctive body nouns (heart, lungs).
+  const merged = [...headingConcrete, ...fromBody.filter((token) => !headingConcrete.has(token))];
+  return merged.slice(0, 16);
+}
+
 function pageAlignsWithDraft(
   page: WikipediaRow,
   userText: string,
   contentTokens: readonly string[],
 ): boolean {
-  const extract = page.output || page.source_text;
+  const extract = page.output || page.source_text || page.rawExtract || "";
   const lead = extract.replace(/^#\s+[^\n]+\n*/, "").slice(0, 520);
   if (
     (ENTITY_LEAD_PATTERN.test(lead) || PERSON_BIO_LEAD_PATTERN.test(lead)) &&
@@ -834,20 +998,37 @@ function pageAlignsWithDraft(
     return false;
   }
   if (contentTokens.length < 4) return true;
-  const sample = contentTokens.slice(0, 16);
-  const ratio = contentOverlapRatio(extract, sample);
-  // Soft gate: prefer same-topic pages; do not over-reject related encyclopedia leads.
-  return ratio >= 0.08 || contentTokens.length < 8;
+
+  const signals = alignmentSignalTokens(userText, contentTokens);
+  if (signals.length < 2) {
+    const sample = contentTokens.slice(0, 12);
+    const ratio = contentOverlapRatio(extract, sample);
+    return ratio >= 0.35;
+  }
+
+  const extractTokens = new Set(tokenizeTopic(extract));
+  let hits = 0;
+  for (const token of signals) {
+    if (extractTokens.has(token)) hits += 1;
+  }
+  const ratio = hits / signals.length;
+
+  // Require real subject overlap (heart/lung/organ), not shared filler words.
+  return hits >= 2 && ratio >= 0.28;
 }
 
 function strongUserTopicTokens(userKeys: Iterable<string>): string[] {
-  const tokens = new Set<string>();
+  const all = new Set<string>();
+  const concrete = new Set<string>();
   for (const key of userKeys) {
     for (const token of tokensFromKey(key)) {
-      if (token.length >= 4 && !WEAK_SOLO_TOPIC_TOKENS.has(token)) tokens.add(token);
+      if (token.length < 4 || WEAK_SOLO_TOPIC_TOKENS.has(token)) continue;
+      all.add(token);
+      if (!ABSTRACT_HEADING_TOKENS.has(token)) concrete.add(token);
     }
   }
-  return [...tokens];
+  // Collaboration of Organs → match on organs, never on collaboration alone.
+  return concrete.size > 0 ? [...concrete] : [...all];
 }
 
 /**
@@ -873,30 +1054,45 @@ async function findClosestLiveWikipediaPage(
 
       const titleTokens = tokenizeTopic(title);
       const sharedStrong = titleTokens.filter((token) => strongTokens.includes(token));
+      const sharedAbstractOnly =
+        sharedStrong.length === 0 &&
+        titleTokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token));
       if (sharedStrong.length === 0 && !titleMatchesUserTopic(title, userKeys)) continue;
+      // Never treat "Collaboration…" history pages as related to metaphorical essays.
+      if (sharedAbstractOnly && sharedStrong.length === 0) continue;
 
       const page = await fetchWikipediaPage(title);
       if (!page) continue;
       if (!preferProsePage(userText, page)) continue;
       if (!pageAlignsWithDraft(page, userText, contentTokens)) continue;
 
-      const overlap = contentOverlapRatio(page.output || page.source_text, contentTokens.slice(0, 16));
-      let score = sharedStrong.length * 2 + overlap * 4;
+      const signals = alignmentSignalTokens(userText, contentTokens);
+      const overlap = contentOverlapRatio(
+        page.rawExtract || page.output || page.source_text,
+        signals.length >= 2 ? signals : contentTokens.slice(0, 16),
+      );
+      let score = sharedStrong.length * 3 + overlap * 8;
       if (titleMatchesUserTopic(title, userKeys)) score += 5;
+      if (titleTokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token))) {
+        score -= titleTokens.every((token) => ABSTRACT_HEADING_TOKENS.has(token) || TITLE_QUALIFIERS.has(token))
+          ? 6
+          : 2;
+      }
       for (const userKey of userKeys) {
         const phrase = tokensFromKey(userKey).join(" ");
         for (const alias of topicAliasQueries(phrase)) {
           if (topicKey(tokenizeTopic(alias)) === topicKey(titleTokens)) {
-            score += 3;
+            score += 4;
             break;
           }
         }
       }
+      if (overlap < 0.28) continue;
       if (!best || score > best.score) best = { row: page, score };
     }
   }
 
-  return best && best.score >= 2 ? best.row : null;
+  return best && best.score >= 3 ? best.row : null;
 }
 
 function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean {
@@ -906,13 +1102,16 @@ function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean 
 
   const queryTokens = tokensFromKey(queryKey);
   for (const userKey of userKeys) {
-    const userTokens = new Set(tokensFromKey(userKey));
-    if (queryTokens.every((token) => userTokens.has(token))) {
+    const userTokens = tokensFromKey(userKey);
+    const userTokenSet = new Set(userTokens);
+    if (queryTokens.every((token) => userTokenSet.has(token))) {
       if (queryTokens.length >= 2) return true;
       const solo = queryTokens[0]!;
-      if (!WEAK_SOLO_TOPIC_TOKENS.has(solo) && solo.length >= 4) return true;
+      if (WEAK_SOLO_TOPIC_TOKENS.has(solo) || solo.length < 4) continue;
+      if (ABSTRACT_HEADING_TOKENS.has(solo) && userTokens.length >= 2) continue;
+      return true;
     }
-    const phrase = tokensFromKey(userKey).join(" ");
+    const phrase = userTokens.join(" ");
     for (const alias of topicAliasQueries(phrase)) {
       if (topicKey(tokenizeTopic(alias)) === queryKey) return true;
     }

@@ -173,6 +173,15 @@ Life is full of dangers that come from nature, human carelessness, and unhealthy
 Road accidents are one of the most common dangers. Speeding, phone use while driving, and driving under the influence cause many crashes every year. Wearing a seatbelt and following traffic laws can reduce serious injury.
 `;
 
+const COLLABORATION_OF_ORGANS_ESSAY = `### The Collaboration of Organs
+
+The human body is made of many organs that work together like a team. Each organ has its own job, but none of them can keep the body healthy alone.
+
+The heart and lungs collaborate closely. The heart pumps blood through the body, while the lungs bring in oxygen and remove carbon dioxide. Without that partnership, cells would not receive the oxygen they need.
+
+The digestive system also works with other organs. The stomach and intestines break down food, and the liver helps process nutrients so the body can use them for energy and repair.
+`;
+
 const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
 
 Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
@@ -780,6 +789,14 @@ Rainforests also illustrate a much broader set of global development debates. It
     titleMatchesUserTopic("Trade", ["digital\u0001trade"]),
   );
   assert(
+    "Collaboration alone is not the topic for Collaboration of Organs",
+    !titleMatchesUserTopic("Collaboration", ["collaboration\u0001organ"]),
+  );
+  assert(
+    "Organ (biology) matches Collaboration of Organs",
+    titleMatchesUserTopic("Organ (biology)", ["collaboration\u0001organ"]),
+  );
+  assert(
     "Internet of things is not related to Dangerous Things in Life",
     !titleMatchesUserTopic("Internet of things", ["dangerous\u0001things"]),
   );
@@ -1192,6 +1209,17 @@ Rainforests also illustrate a much broader set of global development debates. It
         !/\bMeat Beat Manifesto\b/i.test(dangerousThingsWiki.output) &&
         !/\bJohn Stephen Corrigan\b/i.test(dangerousThingsWiki.output)),
     `opening=${dangerousThingsWiki?.output.slice(0, 160) ?? "none"}`,
+  );
+  const organsWiki = await findWikipediaLiveMatch(COLLABORATION_OF_ORGANS_ESSAY);
+  assert(
+    "Collaboration of Organs matches biology (not trade/history collaboration)",
+    organsWiki?.kind === "topic" &&
+      /organ \(biology\)|organ system|human body/i.test(organsWiki.topic) &&
+      /\borgan\b|\btissue\b|\bheart\b|\blung/i.test(organsWiki.output) &&
+      !/\bRoman Empire\b|\bbarter\b|\bcomparative advantage\b|\bCossack\b|\bWorld War II\b/i.test(
+        organsWiki.output,
+      ),
+    `topic=${organsWiki?.topic ?? "none"} opening=${organsWiki?.output.slice(0, 120) ?? "none"}`,
   );
   assert(
     "Dangerous Things in Life has no same-topic Wikipedia page (Vertex rewrite path)",
