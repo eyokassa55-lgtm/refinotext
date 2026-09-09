@@ -33,6 +33,7 @@ import {
 } from "@/lib/wikipedia-corpus";
 import { pickWikipediaStyleExamples } from "@/lib/wikipedia-style-examples";
 import { scrubAiEssayMarks } from "@/lib/humanize-voice";
+import { humanizeLocally } from "@/lib/humanize-local";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -426,15 +427,24 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     });
   }
 
-  // 3) Last resort only: model rewrite + strip AI filler marks.
-  if (canRewriteWithModel()) {
-    console.info("[humanize] no human Wikipedia/training match; model rewrite with AI-mark scrub");
-    return runModelHumanization(request);
+  // 3) Offline local rewrite of the user's draft — no Gemini/Vertex API calls.
+  // Writing providers are currently unauthorized; training/Wikipedia data covers
+  // topic essays above, and unmatched drafts (emails, notes) are rewritten locally.
+  console.info("[humanize] [LOCAL_DATA]", {
+    words: countWords(request.text),
+    reason: "no-model-api",
+  });
+  const local = humanizeLocally(request.text);
+  if (!local) {
+    throw new HumanizationFailedError(
+      "Could not humanize this text from local data. Please try again.",
+      "EMPTY_RESPONSE",
+      502,
+    );
   }
-
-  throw new HumanizationFailedError(
-    "No Wikipedia article matches this topic, and the rewrite model is not configured.",
-    "NO_WIKIPEDIA_MATCH",
-    422,
-  );
+  return {
+    text: local,
+    source: "FINE_TUNED_MODEL",
+    retrieval: null,
+  };
 }
