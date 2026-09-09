@@ -24,7 +24,7 @@ import {
   formatWikipediaEditorText,
 } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findDatabaseMatch, findTopicMatch } from "@/lib/training-retrieval";
+import { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } from "@/lib/training-retrieval";
 import {
   findWikipediaLiveMatch,
   WIKIPEDIA_EDITOR_MAX_CHARS,
@@ -361,12 +361,19 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   // 1) Stored human training outputs (wikipedia_training_pairs / essay gold text).
   const storedHit = findTopicMatch(request.text) ?? findDatabaseMatch(request.text);
-  if (storedHit) {
+  if (storedHit && storedMatchAlignsWithDraft(request.text, storedHit)) {
     return resolveStoredHit({
       ...storedHit,
       output: formatEssayParagraphs(
         applyInputTitle(storedHit.output, request.text),
       ),
+    });
+  }
+  if (storedHit) {
+    console.info("[humanize] skipped stored hit because title/body topic did not align", {
+      row: storedHit.index,
+      kind: storedHit.kind,
+      score: storedHit.score,
     });
   }
 

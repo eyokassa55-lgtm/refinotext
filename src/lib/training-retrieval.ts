@@ -1068,6 +1068,70 @@ function isSameUnderlyingDraft(query: string, doc: string, overlap: number): boo
   return true;
 }
 
+function draftBodyText(text: string): string {
+  const trimmed = text.trim();
+  const heading = extractHeadingLine(trimmed);
+  if (!heading) return trimmed;
+  const lines = trimmed.split(/\n/);
+  const first = lines[0]?.trim() ?? "";
+  const firstPlain = first
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*•]\s+/, "")
+    .replace(/^\*\*(.+)\*\*$/, "$1")
+    .trim();
+  if (firstPlain.toLowerCase() === heading.toLowerCase()) {
+    return lines.slice(1).join("\n").trim();
+  }
+  return trimmed;
+}
+
+function contentTopicTokens(text: string): string[] {
+  const body = draftBodyText(text);
+  if (!body) return [];
+  const counts = new Map<string, number>();
+  for (const token of tokenizeTopic(body)) {
+    if (!isTopicKeyword(token) || TOPIC_FRAMES.has(token)) continue;
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([token]) => token)
+    .slice(0, 16);
+}
+
+function headingSubjectTokens(text: string): string[] {
+  const heading = extractHeadingLine(text);
+  if (!heading) return [];
+  return titleClauses(heading)
+    .flatMap((clause) => subjectKeywords(clause))
+    .slice(0, 8);
+}
+
+export function storedMatchAlignsWithDraft(
+  userText: string,
+  match: Pick<DatabaseTrainingMatch, "input" | "output" | "kind">,
+): boolean {
+  if (match.kind === "exact" || match.kind === "near_exact") return true;
+
+  const userHeading = headingSubjectTokens(userText);
+  const storedHeading = headingSubjectTokens(match.input || match.output);
+  if (userHeading.length >= 2 && storedHeading.length >= 2) {
+    const storedHeadingSet = new Set(storedHeading);
+    const headingHits = userHeading.filter((token) => termPresent(token, storedHeadingSet)).length;
+    if (headingHits < 2) return false;
+  } else if (userHeading[0] && storedHeading[0]) {
+    const storedHeadingSet = new Set(storedHeading);
+    if (!termPresent(userHeading[0], storedHeadingSet)) return false;
+  }
+
+  const userBody = contentTopicTokens(userText);
+  if (userBody.length < 3) return true;
+
+  const storedTokens = new Set(tokenizeTopic(`${match.input}\n\n${match.output}`));
+  const bodyHits = userBody.filter((token) => termPresent(token, storedTokens)).length;
+  return bodyHits >= 2 && bodyHits / userBody.length >= 0.22;
+}
+
 /**
  * ai_text is the lookup sample. If the user pasted that draft, or a truncated /
  * lightly edited copy of it, return the paired human_text from the same row.

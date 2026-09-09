@@ -559,7 +559,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const { findExactTrainingMatch, getTrainingLookupStats, getTrainingPairs } = await import(
     "../src/lib/training-lookup"
   );
-  const { findDatabaseMatch, findTopicMatch } = await import("../src/lib/training-retrieval");
+  const { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
   const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
@@ -605,14 +605,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   const truncatedWiki =
     "E-commerce refers to buying online. Typical transactions include the purchase of products (such as books from Amazon) or services (such as";
   const { endOnCompleteSentence } = await import("../src/lib/humanize-output");
-  const repaired = endOnCompleteSentence(truncatedWiki);
+  const repairedWiki = endOnCompleteSentence(truncatedWiki);
   assert(
     "truncated Wikipedia extracts never keep an unfinished final phrase",
-    repaired.endsWith(".") &&
-      !/\bsuch as\s*$/i.test(repaired) &&
-      !/\([^)]*$/.test(repaired) &&
-      /buying online/i.test(repaired),
-    repaired,
+    repairedWiki.endsWith(".") &&
+      !/\bsuch as\s*$/i.test(repairedWiki) &&
+      !/\([^)]*$/.test(repairedWiki) &&
+      /buying online/i.test(repairedWiki),
+    repairedWiki,
   );
   const essayFormatted = formatEssayParagraphs(
     "Road Safety\n\nPeople overlook hazards every day when they rush\n\nDrivers who text take serious risks on busy roads",
@@ -947,20 +947,24 @@ Rainforests also illustrate a much broader set of global development debates. It
       marketplaceTopic.output === ecommercePair!.output,
     `row=${marketplaceTopic?.index} stored=${ecommercePair?.index}`,
   );
+  assert(
+    "stored e-commerce row is rejected when the marketplace body drifts away from that title",
+    Boolean(marketplaceTopic) && !storedMatchAlignsWithDraft(DIGITAL_MARKETPLACE_ESSAY, marketplaceTopic!),
+    `row=${marketplaceTopic?.index}`,
+  );
   const engineMarketplace = await runEngineHumanization({
     text: DIGITAL_MARKETPLACE_ESSAY,
     intensity: 75,
   });
   assert(
-    "Humanize uses the tuned model for e-commerce or a Vertex rewrite for a Digital Marketplace draft",
+    "Humanize keeps the marketplace title and does not return the mismatched stored e-commerce essay",
     ((engineMarketplace.source === "TOPIC_TRAINING_MATCH" || engineMarketplace.source === "FINE_TUNED_MODEL")) &&
       engineMarketplace.text !== ecommercePair!.output &&
-      engineMarketplace.text.startsWith(
-        "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce",
-      ) &&
+      engineMarketplace.text.startsWith("The Digital Marketplace: Navigating the Promises and Perils of E-Commerce") &&
       /e-commerce|electronic commerce|online shopping|digital marketplace|customers|products/i.test(
         engineMarketplace.text,
       ) &&
+      !/\btraditional retail\b|\babstract\.\b/i.test(engineMarketplace.text) &&
       !/\bJack Dangers\b|\bMeat Beat Manifesto\b|\bAmal Graafstra\b/i.test(
         engineMarketplace.text,
       ),
