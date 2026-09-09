@@ -72,10 +72,16 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Prefer live English Wikipedia (full encyclopedia via API) for ~95% of
- * drafts. The Vertex tuned model is only the rare fallback when no related
- * Wikipedia page exists.
+ * Live Wikipedia is the primary path (~95%). The Vertex tuned model (trained on
+ * the 20k Wikipedia rewrite pairs + essay pairs) is used ~5% of the time, and
+ * also whenever no related Wikipedia page fits.
  */
+const WIKIPEDIA_ROUTE_RATE = 0.95;
+
+function shouldPreferWikipediaRoute(): boolean {
+  return Math.random() < WIKIPEDIA_ROUTE_RATE;
+}
+
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
 }
@@ -320,7 +326,13 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // Full English Wikipedia via API — not the local ~3000-row file.
+  // ~5%: use the tuned rewrite model even when a Wikipedia page exists.
+  if (!shouldPreferWikipediaRoute() && canRewriteWithModel()) {
+    console.info("[humanize] tuned-model route (5% mix)");
+    return runModelHumanization(request);
+  }
+
+  // ~95%: live English Wikipedia via API — not the local corpus file.
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
 
   if (wikipediaHit) {
@@ -366,7 +378,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     });
   }
 
-  // Rare path: no related encyclopedia page — rewrite with the tuned model.
+  // No related encyclopedia page — rewrite with the tuned model.
   if (canRewriteWithModel()) {
     console.info("[humanize] no live Wikipedia topic; using Vertex rewrite (fallback)");
     return runModelHumanization(request);

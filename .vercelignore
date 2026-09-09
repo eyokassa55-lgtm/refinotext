@@ -1,0 +1,10 @@
+# Large training / corpus files — not needed on the Vercel runtime
+# (Humanize uses live Wikipedia API + Vertex tuned endpoint).
+data/wikipedia_750.jsonl
+data/wikipedia_750.xlsx
+data/wikipedia_training_pairs.jsonl
+data/training_data_full.jsonl
+data/wikipedia_collect_20k.log
+data/humanizer_train_*.jsonl
+data/humanizer_validation_*.jsonl
+*.log

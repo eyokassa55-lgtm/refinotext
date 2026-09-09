@@ -1,10 +1,10 @@
 /**
  * Dataset contract for training / export helpers.
  *
- * Humanize uses the live English Wikipedia API (full encyclopedia) as the
- * main path (~95%). The fine-tuned Vertex model is only the fallback (~5%)
- * when no related Wikipedia page exists. The local wikipedia_750 file is
- * not used at inference.
+ * Humanize mixes two paths at inference:
+ *   ~95% live English Wikipedia API (encyclopedia prose)
+ *   ~5%  Vertex tuned model (trained on 20k Wikipedia pairs + essay rewrites)
+ * The local wikipedia_750 file is training/offline data, not the live route.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

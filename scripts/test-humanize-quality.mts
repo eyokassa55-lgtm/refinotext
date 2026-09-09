@@ -1048,6 +1048,12 @@ Rainforests also illustrate a much broader set of global development debates. It
       runHumanizationFn.includes("findWikipediaLiveMatch"),
   );
   assert(
+    "Humanize mixes Wikipedia ~95% with the tuned model ~5%",
+    engineSource.includes("WIKIPEDIA_ROUTE_RATE = 0.95") &&
+      runHumanizationFn.includes("shouldPreferWikipediaRoute") &&
+      runHumanizationFn.includes("tuned-model route (5% mix)"),
+  );
+  assert(
     "Humanize engine still reports NO_WIKIPEDIA_MATCH when rewrite model is unavailable",
     runHumanizationFn.includes("NO_WIKIPEDIA_MATCH"),
   );
