@@ -1,8 +1,9 @@
 /**
  * Dataset contract for training / export helpers.
  *
- * Humanize uses the TOPN1 Vertex tuned model as the only path (100%),
- * trained on ~20,722 pairs (20k Wikipedia + 722 essay rewrites).
+ * Humanize prefers live Wikipedia prose (same style as wikipedia_training_pairs
+ * `output` rows). The TOPN1 tuned model is the fallback, prompted with a
+ * BEFORE/AFTER example from those Wikipedia training outputs.
  *
  * Column mapping:
  *   ai_text   → JSONL `input`  (or `ai_text`)

@@ -12,10 +12,19 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingRoot: path.join(__dirname),
   outputFileTracingIncludes: {
-    "/api/humanize": ["./data/training_data.jsonl"],
-    "/src/app/api/humanize/route": ["./data/training_data.jsonl"],
-    "src/app/api/humanize/route.ts": ["./data/training_data.jsonl"],
-    "/src/app/api/humanize/route.js": ["./data/training_data.jsonl"],
+    "/api/humanize": ["./data/training_data.jsonl", "./data/wikipedia_style_examples.jsonl"],
+    "/src/app/api/humanize/route": [
+      "./data/training_data.jsonl",
+      "./data/wikipedia_style_examples.jsonl",
+    ],
+    "src/app/api/humanize/route.ts": [
+      "./data/training_data.jsonl",
+      "./data/wikipedia_style_examples.jsonl",
+    ],
+    "/src/app/api/humanize/route.js": [
+      "./data/training_data.jsonl",
+      "./data/wikipedia_style_examples.jsonl",
+    ],
   },
   serverExternalPackages: [
     "@prisma/client",

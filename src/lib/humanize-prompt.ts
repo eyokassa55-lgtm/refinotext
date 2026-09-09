@@ -284,20 +284,20 @@ Never turn a multi-paragraph draft into a short summary.
 Return only the rewritten text.`;
 
 /**
- * Rewrite instruction for OG REFINO rewrite (v4) training.
- * Teaches the gold human_text edit. Not a copy of the input, and not a
- * lookup of a different stored essay on a related topic.
+ * Rewrite instruction for OG REFINO rewrite (v4) training / inference.
+ * Gold targets are Wikipedia-style human prose from wikipedia_training_pairs.
  */
-export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the draft into natural human prose.
+export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the user's draft into natural human prose — the same plain, factual cadence as a clear encyclopedia article written by a person.
 
-This is an editing job, not a copy job and not a lookup job.
-Change the sentence openings, rhythm, and transitions. Swapping a few words is not enough.
-Keep the same topic, meaning, facts, names, numbers, dates, length, and paragraph breaks.
-Write complete essay paragraphs with normal punctuation (periods, commas, question marks).
-Do not replace the draft with a Wikipedia article, biography, or different essay on a related subject.
-Do not invent a new topic. Do not cut, omit, or summarize information from the draft.
-Do not drop paragraphs. Do not add a title, commentary, or new claims.
-Ordinary words are better than polished template phrasing. A little repetition is fine.
+This is an editing job on the user's draft only.
+- Keep the same topic, meaning, facts, names, numbers, dates, and roughly the same length and paragraph breaks.
+- Change openings, rhythm, and wording enough that it no longer reads like a chatbot essay.
+- Prefer concrete nouns and short common words over polished template phrasing.
+- Mix very short sentences with longer ones. Do not keep a steady, even cadence.
+- Do not start with dictionary definitions like "X is the ability to…" or "X is an important part of…".
+- Do not use: In conclusion, Furthermore, Moreover, Additionally, In today's world, It is important to note, unlock, delve, tapestry, landscape, realm, pivotal, crucial, underscore.
+- Do not invent a new topic. Do not drop the user's claims. Do not add a title or commentary.
+- Do not paste a different article. Rewrite THIS draft only.
 Return only the rewritten text.`;
 
 /** System line that matches the bound rewrite-trained endpoint. */
@@ -489,24 +489,26 @@ export function buildHumanRewriteInstruction(
   const demo = examples.find((example) => example.input?.trim() && example.output.trim());
   const demoBlock = demo
     ? `
-EXAMPLE of how much to rewrite (different topic — copy the amount of rewriting, not the topic):
-BEFORE:
+STYLE TARGET from Wikipedia training pairs (different topic — copy the human cadence of AFTER, not the topic or facts):
+BEFORE (stiff AI draft):
 ${clipStyleReference(demo.input ?? "")}
 
-AFTER:
+AFTER (natural Wikipedia-style human prose):
 ${clipStyleReference(demo.output)}
 `
     : "";
 
   return `${activeRewriteSystemInstruction()}
+The user message is the draft to rewrite. Pass through every fact from that draft.
 ${lengthNote}
-Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
-Use short common words. Prefer clear sentences over long academic phrasing.
-Use proper essay paragraphs separated by blank lines. End every sentence completely — never stop mid-phrase (no "such as…").
+Keep every name, date, and number exactly as written. Rewrite the grammar around them.
+Sound like a careful human writer: uneven sentence lengths, plain wording, no chatbot template.
+Avoid stock essay closers and definition openings.
+Use proper essay paragraphs separated by blank lines. End every sentence completely.
 Match the draft length closely (within about 10%). Do not return a short summary.
-Do not switch topics. Do not paste an encyclopedia article. Keep the user's meaning end to end.
+Do not switch topics. Keep the user's meaning end to end.
 ${demoBlock}
-Rewrite ONLY the user's draft. Do not write about the example topic.
+Rewrite ONLY the user's draft below. Do not write about the example topic.
 Return only the rewritten user draft.`;
 }
 
