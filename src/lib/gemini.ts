@@ -292,10 +292,9 @@ function modelsToTry(
   }
 
   const targets: { provider: GenerateProvider; model: string }[] = [];
-  if (hasVertexEndpointEnv() || isVertexConfigured()) {
-    targets.push({ provider: "vertex-base", model: BASE_VERTEX_MODEL });
-  }
 
+  // Prefer Gemini API first for base rewrites — Vertex publisher models often
+  // fail with 403 on this project while the API key path works.
   if (isGeminiApiConfigured()) {
     const primary = getGeminiApiModel();
     targets.push({ provider: "gemini-api", model: primary.startsWith("gemini-") ? primary : BASE_VERTEX_MODEL });
@@ -304,6 +303,10 @@ function modelsToTry(
         targets.push({ provider: "gemini-api", model });
       }
     }
+  }
+
+  if (hasVertexEndpointEnv() || isVertexConfigured()) {
+    targets.push({ provider: "vertex-base", model: BASE_VERTEX_MODEL });
   }
 
   if (targets.length === 0) {
@@ -517,10 +520,16 @@ export async function generateText(
         });
 
         if (sanitized.code === "MODEL_NOT_FOUND") break;
-        if (sanitized.code === "INVALID_VERTEX_ENDPOINT") throw sanitized;
-        if (sanitized.code === "INVALID_SERVICE_ACCOUNT") throw sanitized;
+        // Keep going through other providers for auth/config failures on one target.
+        if (
+          sanitized.code === "INVALID_VERTEX_ENDPOINT" ||
+          sanitized.code === "INVALID_SERVICE_ACCOUNT" ||
+          sanitized.code === "UNAUTHORIZED" ||
+          sanitized.code === "MISSING_API_KEY"
+        ) {
+          break;
+        }
         if (!isRetryable(sanitized) || attempt === MAX_ATTEMPTS_PER_MODEL) {
-          if (!isRetryable(sanitized)) throw sanitized;
           break;
         }
 

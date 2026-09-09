@@ -113,15 +113,31 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         }),
       });
 
-      const data = (await res.json()) as HumanizeResponse | ApiErrorResponse;
+      const raw = await res.text();
+      let data: HumanizeResponse | ApiErrorResponse | null = null;
+      try {
+        data = raw ? (JSON.parse(raw) as HumanizeResponse | ApiErrorResponse) : null;
+      } catch {
+        setError(
+          res.status >= 500
+            ? "The humanizer timed out or hit a server error. Please try again."
+            : "The humanizer returned an unexpected response. Please try again.",
+        );
+        return;
+      }
 
       if (!res.ok) {
-        const apiError = data as ApiErrorResponse;
+        const apiError = (data ?? {}) as ApiErrorResponse;
         if (apiError.code === "NO_WIKIPEDIA_MATCH") {
           setError(null);
           return;
         }
         setError(apiError.error || "Humanization failed. Please try again.");
+        return;
+      }
+
+      if (!data || !("output" in data) || typeof data.output !== "string") {
+        setError("The humanizer returned an empty response. Please try again.");
         return;
       }
 

@@ -9,6 +9,7 @@ import {
   CreditError,
   saveHumanizationAndCharge,
 } from "@/lib/credits";
+import { GeminiError } from "@/lib/gemini";
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
@@ -181,18 +182,26 @@ export async function POST(req: NextRequest) {
     output = result.text;
     source = toApiSource(result.source);
   } catch (error) {
-    const code =
-      error instanceof HumanizationFailedError ? error.code : "HUMANIZATION_FAILED";
-    const message =
-      error instanceof HumanizationFailedError
-        ? error.message
-        : "Humanization failed. No credits were charged.";
-    const status =
-      error instanceof HumanizationFailedError
-        ? getHumanizationErrorStatus(error)
-        : 502;
+    if (error instanceof HumanizationFailedError) {
+      return errorResponse(error.message, error.code, getHumanizationErrorStatus(error), {
+        creditsRefunded: 0,
+        creditsRemaining: check.balance,
+      });
+    }
+    if (error instanceof GeminiError) {
+      return errorResponse(
+        error.message,
+        error.code || "HUMANIZATION_FAILED",
+        error.status ?? 502,
+        {
+          creditsRefunded: 0,
+          creditsRemaining: check.balance,
+        },
+      );
+    }
 
-    return errorResponse(message, code, status, {
+    console.error("[humanize] unexpected rewrite failure", error);
+    return errorResponse("Humanization failed. No credits were charged.", "HUMANIZATION_FAILED", 502, {
       creditsRefunded: 0,
       creditsRemaining: check.balance,
     });

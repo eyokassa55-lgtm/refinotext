@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  GeminiError,
   generateText,
   getVertexConfig,
   hasVertexEndpointEnv,
@@ -98,11 +99,23 @@ function canRewriteWithModel(): boolean {
 }
 
 function unmatchedRewriteBackend(): GenerateBackend {
-  // Unseen drafts: prefer base Gemini + Wikipedia AFTER examples.
-  // The tuned endpoint too often echoes the draft or keeps chatbot cadence that detectors mark AI.
+  // Prefer Gemini API base rewrite when available. Fall back to the tuned Vertex
+  // endpoint, then Vertex publisher models.
   if (isGeminiApiConfigured()) return "base";
   if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
   return "base";
+}
+
+function toHumanizationError(error: unknown): never {
+  if (error instanceof HumanizationFailedError) throw error;
+  if (error instanceof GeminiError) {
+    throw new HumanizationFailedError(
+      error.message,
+      error.code || "HUMANIZATION_FAILED",
+      error.status ?? 502,
+    );
+  }
+  throw error;
 }
 
 function unmatchedRewriteTemperature(backend: GenerateBackend, intensity?: number): number {
@@ -191,6 +204,14 @@ function rewritePenalty(input: string, output: string): number {
 }
 
 async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+  try {
+    return await runModelHumanizationInner(request);
+  } catch (error) {
+    toHumanizationError(error);
+  }
+}
+
+async function runModelHumanizationInner(request: HumanizeRequest): Promise<HumanizeResult> {
   if (!canRewriteWithModel()) {
     throw new HumanizationFailedError(
       "The rewrite model is not configured.",
