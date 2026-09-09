@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  GeminiError,
   generateText,
   getVertexConfig,
   hasVertexEndpointEnv,
@@ -17,9 +16,7 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { applyInputTitle, formatEssayParagraphs, extractUserTitle, fitWikipediaOutputToInput, formatWikipediaEditorText } from "@/lib/humanize-output";
-import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findWikipediaLiveMatch, WIKIPEDIA_EDITOR_MAX_CHARS, WIKIPEDIA_EDITOR_MAX_PARAGRAPHS } from "@/lib/wikipedia-corpus";
+import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -72,16 +69,9 @@ const REJECT_SHORT_RATIO = 0.8;
 const MAX_REWRITE_REPAIRS = 2;
 
 /**
- * Live Wikipedia is the primary path (~95%). The Vertex tuned model (trained on
- * the 20k Wikipedia rewrite pairs + essay pairs) is used ~5% of the time, and
- * also whenever no related Wikipedia page fits.
+ * TOPN1 Vertex tuned model is the only Humanize path (100%).
+ * Trained on ~20,722 pairs (20k Wikipedia + 722 essay rewrites).
  */
-const WIKIPEDIA_ROUTE_RATE = 0.95;
-
-function shouldPreferWikipediaRoute(): boolean {
-  return Math.random() < WIKIPEDIA_ROUTE_RATE;
-}
-
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
 }
@@ -107,18 +97,6 @@ function rewriteGenerationOptions(temperature: number) {
   };
 }
 
-function wrapAsError(error: unknown): HumanizationFailedError {
-  if (error instanceof HumanizationFailedError) return error;
-  if (error instanceof GeminiError) {
-    return new HumanizationFailedError(error.message, error.code, error.status);
-  }
-
-  return new HumanizationFailedError(
-    "Humanization failed. Please try again.",
-    "HUMANIZATION_FAILED",
-  );
-}
-
 async function rewriteWithModel(
   request: HumanizeRequest,
   options: {
@@ -137,31 +115,6 @@ async function rewriteWithModel(
 
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
-}
-
-function databaseRetrieval(hit: DatabaseTrainingMatch): HumanizeRetrievalSummary {
-  return {
-    band: "high",
-    matches: [{ index: hit.index, score: hit.score }],
-  };
-}
-
-/**
- * Return the Wikipedia article for a related/same topic. Format as essay
- * paragraphs; keep the user's title when present.
- */
-function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
-  console.info("[humanize] [TOPIC_MATCH]", {
-    row: hit.index,
-    kind: hit.kind,
-    score: hit.score,
-    source: hit.index >= 90_000 ? "wikipedia-live" : "wikipedia-corpus",
-  });
-  return {
-    text: formatEssayParagraphs(hit.output),
-    source: "TOPIC_TRAINING_MATCH",
-    retrieval: databaseRetrieval(hit),
-  };
 }
 
 function rewritePenalty(input: string, output: string): number {
@@ -326,67 +279,15 @@ The last version copied the draft. Change the sentence openings. Keep every fact
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // ~5%: use the tuned rewrite model even when a Wikipedia page exists.
-  if (!shouldPreferWikipediaRoute() && canRewriteWithModel()) {
-    console.info("[humanize] tuned-model route (5% mix)");
-    return runModelHumanization(request);
-  }
-
-  // ~95%: live English Wikipedia via API — not the local corpus file.
-  const wikipediaHit = await findWikipediaLiveMatch(request.text);
-
-  if (wikipediaHit) {
-    const inputWords = countWords(request.text);
-    const topic = wikipediaHit.topic?.trim() || extractUserTitle(request.text) || "Article";
-    const sizedFromRaw = wikipediaHit.rawExtract
-      ? formatWikipediaEditorText(
-          topic,
-          wikipediaHit.rawExtract,
-          WIKIPEDIA_EDITOR_MAX_CHARS,
-          WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
-          inputWords,
-        )
-      : wikipediaHit.output;
-
-    let output = fitWikipediaOutputToInput(
-      applyInputTitle(sizedFromRaw, request.text),
-      request.text,
-    );
-    output = formatEssayParagraphs(output);
-
-    const outputWords = countWords(output);
-    const endsComplete = /[.!?]["”']?\s*$/.test(output.trim());
-
-    // Equal length is required. If Wikipedia cannot reach ~input length with
-    // complete sentences, use the tuned rewrite instead of a short cut-off.
-    if (
-      inputWords >= 80 &&
-      (!endsComplete || outputWords < inputWords * 0.9) &&
-      canRewriteWithModel()
-    ) {
-      console.info("[humanize] Wikipedia output too short or incomplete; using Vertex for length match", {
-        inputWords,
-        outputWords,
-        endsComplete,
-      });
-      return runModelHumanization(request);
-    }
-
-    return resolveStoredHit({
-      ...wikipediaHit,
-      output,
-    });
-  }
-
-  // No related encyclopedia page — rewrite with the tuned model.
+  // 100%: TOPN1 tuned rewrite model (~20,722 training pairs).
   if (canRewriteWithModel()) {
-    console.info("[humanize] no live Wikipedia topic; using Vertex rewrite (fallback)");
+    console.info("[humanize] tuned-model route (100% main humanizer)");
     return runModelHumanization(request);
   }
 
   throw new HumanizationFailedError(
-    "No Wikipedia article matches this topic, and the rewrite model is not configured.",
-    "NO_WIKIPEDIA_MATCH",
-    422,
+    "The rewrite model is not configured.",
+    "MISSING_VERTEX_CONFIG",
+    503,
   );
 }

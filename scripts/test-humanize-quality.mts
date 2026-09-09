@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Humanizer quality tests.
  * Offline checks never call a model. Live Vertex checks run when
  * TUNED_MODEL_ENDPOINT is set. Full rewrite samples require RUN_VERTEX_LIVE=1.
@@ -53,10 +53,10 @@ let failed = 0;
 function assert(label: string, condition: boolean, detail = "") {
   if (condition) {
     passed += 1;
-    console.log(`  PASS  ${label}${detail ? ` — ${detail}` : ""}`);
+    console.log(`  PASS  ${label}${detail ? ` â€” ${detail}` : ""}`);
   } else {
     failed += 1;
-    console.error(`  FAIL  ${label}${detail ? ` — ${detail}` : ""}`);
+    console.error(`  FAIL  ${label}${detail ? ` â€” ${detail}` : ""}`);
   }
 }
 
@@ -84,7 +84,7 @@ Critics such as Dr. Priya Nandakumar replied that the paper undercounted night-s
     name: "email",
     text: `Hi Jordan,
 
-Can we move Tuesday's 2:15 p.m. call with Priya Nandakumar to Wednesday? I need 25 minutes to review the €2,047.50 invoice from Harborline Analytics before we talk.
+Can we move Tuesday's 2:15 p.m. call with Priya Nandakumar to Wednesday? I need 25 minutes to review the â‚¬2,047.50 invoice from Harborline Analytics before we talk.
 
 Thanks,
 Sam`,
@@ -111,7 +111,7 @@ The recommended fix is operational, not a new rail line: move the first pull-out
   },
   {
     name: "numbers-names",
-    text: `Dr. Priya Nandakumar met Jordan Hale in Milwaukee on 17 April 2026. They reviewed invoice 8831 for €2,047.50 and a headcount of 4,812. Nandakumar said the 12% wait-time claim still depends on the 9:40 p.m. cutoff.`,
+    text: `Dr. Priya Nandakumar met Jordan Hale in Milwaukee on 17 April 2026. They reviewed invoice 8831 for â‚¬2,047.50 and a headcount of 4,812. Nandakumar said the 12% wait-time claim still depends on the 9:40 p.m. cutoff.`,
   },
   {
     name: "multi-paragraph",
@@ -119,7 +119,7 @@ The recommended fix is operational, not a new rail line: move the first pull-out
 
 Paragraph two keeps the names. Dr. Priya Nandakumar and Jordan Hale disagreed about night-shift coverage after 9:40 p.m.
 
-Paragraph three keeps the money. The follow-up contract is €2,047.50, due 3 September 2026, and should not be described as a "small tweak" if the yard gate is the real bottleneck.`,
+Paragraph three keeps the money. The follow-up contract is â‚¬2,047.50, due 3 September 2026, and should not be described as a "small tweak" if the yard gate is the real bottleneck.`,
   },
   {
     name: "simple-essay",
@@ -264,7 +264,7 @@ The strength is quiet because it does not need a speech. It needs a pattern that
 
 const DISCIPLINE_OF_BOREDOM_ESSAY = `The Discipline of Boredom
 
-Boredom is often treated as something to escape—a signal that nothing interesting is happening. People fill the gap with noise, tasks, and constant stimulation. The result is that empty time feels like a problem rather than a chance to notice what the mind does when nothing is asked of it.
+Boredom is often treated as something to escapeâ€”a signal that nothing interesting is happening. People fill the gap with noise, tasks, and constant stimulation. The result is that empty time feels like a problem rather than a chance to notice what the mind does when nothing is asked of it.
 
 I. Boredom as Empty Space
 Empty space is not always wasted. When a room is quiet, attention can settle on a thought that would not survive a crowded feed. Writers, students, and scientists have long used dull intervals to let an idea take shape. The discipline is to stay with that interval instead of reaching for the next distraction.
@@ -389,7 +389,7 @@ async function runOfflineTests() {
 
   const good = assessRewriteQuality(
     source,
-    `Dr. Priya Nandakumar sat down with Jordan Hale in Milwaukee on 17 April 2026. They went through invoice 8831 for €2,047.50 and the 4,812 headcount. Nandakumar noted that the 12% wait-time claim still hangs on the 9:40 p.m. cutoff.`,
+    `Dr. Priya Nandakumar sat down with Jordan Hale in Milwaukee on 17 April 2026. They went through invoice 8831 for â‚¬2,047.50 and the 4,812 headcount. Nandakumar noted that the 12% wait-time claim still hangs on the 9:40 p.m. cutoff.`,
   );
   assert("accepts a faithful rewrite", good.ok, good.issues.map((issue) => issue.code).join(",") || "clean");
 
@@ -403,7 +403,7 @@ async function runOfflineTests() {
   const droppedNumber = assessRewriteQuality(source, "Priya met Jordan and talked about an invoice.");
   assert("flags dropped numbers", droppedNumber.issues.some((issue) => issue.code === "MISSING_FACTS"));
 
-  const droppedName = assessRewriteQuality(source, "Someone met a colleague in Milwaukee on 17 April 2026 and reviewed invoice 8831 for €2,047.50 and 4,812 people, including the 12% wait-time claim and the 9:40 p.m. cutoff.");
+  const droppedName = assessRewriteQuality(source, "Someone met a colleague in Milwaukee on 17 April 2026 and reviewed invoice 8831 for â‚¬2,047.50 and 4,812 people, including the 12% wait-time claim and the 9:40 p.m. cutoff.");
   assert("flags dropped names", droppedName.issues.some((issue) => issue.code === "MISSING_NAMES"));
 
   const refusal = assessRewriteQuality(source, "I'm sorry, I cannot rewrite that.");
@@ -637,7 +637,7 @@ Rainforests also illustrate a much broader set of global development debates. It
 
 
       
-        φ
+        Ï†
       
     
     {\\displaystyle \\varphi }
@@ -646,7 +646,7 @@ Rainforests also illustrate a much broader set of global development debates. It
 
 
       
-        φ
+        Ï†
       
     
     {\\displaystyle \\varphi }
@@ -655,8 +655,8 @@ Rainforests also illustrate a much broader set of global development debates. It
 
 
       
-        ¬
-        φ
+        Â¬
+        Ï†
       
     
     {\\displaystyle \\lnot \\varphi }
@@ -826,16 +826,16 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineStoredSuccess = await runEngineHumanization({ text: firstPair.input, intensity: 75 });
   assert(
-    "a Success draft returns live Wikipedia Success, not training human_text",
-    engineStoredSuccess.source === "TOPIC_TRAINING_MATCH" &&
+    "a Success draft uses the tuned model for Success, not training human_text",
+    engineStoredSuccess.source === "FINE_TUNED_MODEL" &&
       /success/i.test(engineStoredSuccess.text.slice(0, 400)) &&
       engineStoredSuccess.text !== firstPair.output,
     `source=${engineStoredSuccess.source} opening=${engineStoredSuccess.text.slice(0, 80)}`,
   );
   const engineStoredTech = await runEngineHumanization({ text: oneWordSwap, intensity: 75 });
   assert(
-    "a Technology draft returns live Wikipedia Technology, not training human_text",
-    engineStoredTech.source === "TOPIC_TRAINING_MATCH" &&
+    "a Technology draft uses the tuned model for Technology, not training human_text",
+    engineStoredTech.source === "FINE_TUNED_MODEL" &&
       /technolog/i.test(engineStoredTech.text.slice(0, 400)),
     `source=${engineStoredTech.source} opening=${engineStoredTech.text.slice(0, 80)}`,
   );
@@ -952,9 +952,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "Humanize returns Wikipedia e-commerce or a Vertex rewrite for a Digital Marketplace draft",
-    (engineMarketplace.source === "TOPIC_TRAINING_MATCH" ||
-      engineMarketplace.source === "FINE_TUNED_MODEL") &&
+    "Humanize uses the tuned model for e-commerce or a Vertex rewrite for a Digital Marketplace draft",
+    (engineMarketplace.source === "FINE_TUNED_MODEL") &&
       engineMarketplace.text !== ecommercePair!.output &&
       engineMarketplace.text.startsWith(
         "The Digital Marketplace: Navigating the Promises and Perils of E-Commerce",
@@ -1052,34 +1051,15 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert(
-    "Humanize engine looks up topics on the live Wikipedia API only",
-    engineSource.includes("findWikipediaLiveMatch") &&
-      !engineSource.includes("findWikipediaMatch"),
+    "Humanize engine uses the TOPN1 tuned model as the only rewrite path",
+    engineSource.includes("tuned-model route (100% main humanizer)") &&
+      engineSource.includes("runModelHumanization") &&
+      !engineSource.includes("WIKIPEDIA_ROUTE_RATE") &&
+      !engineSource.includes("findWikipediaLiveMatch"),
   );
   assert(
-    "Humanize engine does not fall back to training_data.jsonl",
-    !engineSource.includes("findTopicMatch") && !engineSource.includes("findDatabaseMatch"),
-  );
-  const runHumanizationFn = engineSource.slice(engineSource.indexOf("export async function runHumanization"));
-  assert(
-    "Humanize engine falls back to Vertex rewrite when Wikipedia has no related match",
-    runHumanizationFn.includes("runModelHumanization") &&
-      runHumanizationFn.includes("canRewriteWithModel") &&
-      runHumanizationFn.includes("findWikipediaLiveMatch"),
-  );
-  assert(
-    "Humanize mixes Wikipedia ~95% with the tuned model ~5%",
-    engineSource.includes("WIKIPEDIA_ROUTE_RATE = 0.95") &&
-      runHumanizationFn.includes("shouldPreferWikipediaRoute") &&
-      runHumanizationFn.includes("tuned-model route (5% mix)"),
-  );
-  assert(
-    "Humanize engine still reports NO_WIKIPEDIA_MATCH when rewrite model is unavailable",
-    runHumanizationFn.includes("NO_WIKIPEDIA_MATCH"),
-  );
-  assert(
-    "Humanize engine sizes Wikipedia output to the input word length",
-    engineSource.includes("fitWikipediaOutputToInput"),
+    "Humanize engine reports MISSING_VERTEX_CONFIG when the rewrite model is unavailable",
+    engineSource.includes("MISSING_VERTEX_CONFIG"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
@@ -1125,14 +1105,14 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Technology for a #technology draft",
-    engineHashTech.source === "TOPIC_TRAINING_MATCH" && /technolog/i.test(engineHashTech.text),
+    "Humanize uses the tuned model for Technology for a #technology draft",
+    engineHashTech.source === "FINE_TUNED_MODEL" && /technolog/i.test(engineHashTech.text),
     `source=${engineHashTech.source} opening=${engineHashTech.text.slice(0, 80)}`,
   );
   const engineSuccess = await runEngineHumanization({ text: SUCCESS_CHATGPT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Success for a Success draft",
-    engineSuccess.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize uses the tuned model for Success for a Success draft",
+    engineSuccess.source === "FINE_TUNED_MODEL" &&
       /^Success\n\n/i.test(engineSuccess.text) &&
       /success/i.test(engineSuccess.text),
     `source=${engineSuccess.source} opening=${engineSuccess.text.slice(0, 80)}`,
@@ -1143,8 +1123,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   });
   assert(
     "Humanize keeps the input title The Discipline of Boredom",
-    (engineBoredom.source === "TOPIC_TRAINING_MATCH" ||
-      engineBoredom.source === "FINE_TUNED_MODEL") &&
+    (engineBoredom.source === "FINE_TUNED_MODEL") &&
       engineBoredom.text.startsWith("The Discipline of Boredom\n\n") &&
       !engineBoredom.text.startsWith("Boredom\n") &&
       !/^# /.test(engineBoredom.text) &&
@@ -1157,8 +1136,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   });
   assert(
     "Humanize output is plain essay paragraphs without Wikipedia math markup",
-    (engineConsistency.source === "TOPIC_TRAINING_MATCH" ||
-      engineConsistency.source === "FINE_TUNED_MODEL") &&
+    (engineConsistency.source === "FINE_TUNED_MODEL") &&
       engineConsistency.text.startsWith("The Quiet Strength of Consistency\n\n") &&
       !hasLatexDump(engineConsistency.text) &&
       !/displaystyle/.test(engineConsistency.text) &&
@@ -1170,20 +1148,20 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const enginePlainTech = await runEngineHumanization({ text: TECH_SCREENSHOT_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns live Wikipedia Technology for a technology draft",
-    enginePlainTech.source === "TOPIC_TRAINING_MATCH" && /technolog/i.test(enginePlainTech.text),
+    "Humanize uses the tuned model for Technology for a technology draft",
+    enginePlainTech.source === "FINE_TUNED_MODEL" && /technolog/i.test(enginePlainTech.text),
     `source=${enginePlainTech.source}`,
   );
   const engineEducation = await runEngineHumanization({ text: EDUCATION_ESSAY, intensity: 75 });
   assert(
     "Humanize returns the live Wikipedia Education article for an education draft",
-    engineEducation.source === "TOPIC_TRAINING_MATCH" && /education/i.test(engineEducation.text),
+    engineEducation.source === "FINE_TUNED_MODEL" && /education/i.test(engineEducation.text),
     `source=${engineEducation.source}`,
   );
   const engineAi = await runEngineHumanization({ text: AI_TECH_ESSAY, intensity: 75 });
   assert(
     "Humanize returns the live Wikipedia Artificial intelligence article for an AI draft",
-    engineAi.source === "TOPIC_TRAINING_MATCH" && /artificial intelligence/i.test(engineAi.text),
+    engineAi.source === "FINE_TUNED_MODEL" && /artificial intelligence/i.test(engineAi.text),
     `source=${engineAi.source}`,
   );
   const environmentHeadingTopic = findTopicMatch(ENVIRONMENT_HEADING_ESSAY);
@@ -1206,8 +1184,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineEnvironment = await runEngineHumanization({ text: ENVIRONMENT_HEADING_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Environment, not Water pollution",
-    engineEnvironment.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize uses the tuned model for Environment, not Water pollution",
+    engineEnvironment.source === "FINE_TUNED_MODEL" &&
       /environment/i.test(engineEnvironment.text) &&
       !/^water pollution/i.test(engineEnvironment.text),
     `source=${engineEnvironment.source} opening=${engineEnvironment.text.slice(0, 80)}`,
@@ -1304,8 +1282,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineHistory = await runEngineHumanization({ text: HISTORY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia History for a History draft",
-    engineHistory.source === "TOPIC_TRAINING_MATCH" && /histor/i.test(engineHistory.text),
+    "Humanize uses the tuned model for History for a History draft",
+    engineHistory.source === "FINE_TUNED_MODEL" && /histor/i.test(engineHistory.text),
     `source=${engineHistory.source}`,
   );
   const intelligenceWiki = await findWikipediaLiveMatch(INTELLIGENCE_ONLY_ESSAY);
@@ -1318,8 +1296,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const engineAmericanHistory = await runEngineHumanization({ text: AMERICAN_HISTORY_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia History of the United States for an American History draft",
-    engineAmericanHistory.source === "TOPIC_TRAINING_MATCH" &&
+    "Humanize uses the tuned model for History of the United States for an American History draft",
+    engineAmericanHistory.source === "FINE_TUNED_MODEL" &&
       /united states|american|history/i.test(engineAmericanHistory.text),
     `source=${engineAmericanHistory.source} opening=${engineAmericanHistory.text.slice(0, 80)}`,
   );
@@ -1345,8 +1323,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const enginePreambleSuccess = await runEngineHumanization({ text: PREAMBLE_SUCCESS_ESSAY, intensity: 75 });
   assert(
-    "Humanize returns Wikipedia Success for a preamble Success draft",
-    enginePreambleSuccess.source === "TOPIC_TRAINING_MATCH" && /success/i.test(enginePreambleSuccess.text),
+    "Humanize uses the tuned model for Success for a preamble Success draft",
+    enginePreambleSuccess.source === "FINE_TUNED_MODEL" && /success/i.test(enginePreambleSuccess.text),
     `source=${enginePreambleSuccess.source}`,
   );
   const engineGlobalization = await runEngineHumanization({
@@ -1355,8 +1333,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   });
   assert(
     "Humanize returns a close Wikipedia page or Vertex rewrite for Political Economy of Globalization",
-    (engineGlobalization.source === "TOPIC_TRAINING_MATCH" ||
-      engineGlobalization.source === "FINE_TUNED_MODEL") &&
+    (engineGlobalization.source === "FINE_TUNED_MODEL") &&
       /globalization|political economy|trade|market/i.test(engineGlobalization.text),
     `source=${engineGlobalization.source} opening=${engineGlobalization.text.slice(0, 100)}`,
   );
@@ -1378,7 +1355,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "Vertex export trains ai_text to human_text, not identity copy",
-    exportSource.includes("ai_text → human_text") &&
+    exportSource.includes("ai_text â†’ human_text") &&
       exportSource.includes("row.input ?? row.ai_text") &&
       exportSource.includes("row.output ?? row.human_text"),
   );
@@ -1391,7 +1368,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const trainSource = readFileSync(join(process.cwd(), "scripts", "start-vertex-tuning.mts"), "utf8");
   assert(
     "Vertex training job uses a validation URI under the 30% cap",
-    trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("≤30% of training size"),
+    trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("â‰¤30% of training size"),
   );
   assert(
     "Vertex rewrite job uses extra epochs and a larger adapter so it learns the edit",
@@ -1551,3 +1528,4 @@ async function main() {
 }
 
 await main();
+
