@@ -37,8 +37,8 @@ TARGET_COUNT = 3000
 MIN_EXTRACT_CHARS = 500
 STORE_MAX_CHARS = 4000
 EXCEL_MAX_CELL = 32767
-REQUEST_DELAY_SECONDS = 0.2
-CHECKPOINT_EVERY = 50
+CHECKPOINT_EVERY = 100
+REQUEST_DELAY_SECONDS = 0.12
 MAX_RETRIES = 6
 TIMEOUT_SECONDS = 45
 
@@ -1147,11 +1147,11 @@ def collect_articles(
                 title = candidates[candidate_index]
                 candidate_index += 1
             else:
-                if random_rounds >= 80:
+                if random_rounds >= 200:
                     progress(f"  Stopping {topic} at {counts[topic]}/{quota}; moving on")
                     break
                 random_rounds += 1
-                extras = client.random_titles(20)
+                extras = client.random_titles(40)
                 for extra in extras:
                     if normalize_title(extra) not in title_keys:
                         candidates.append(extra)
@@ -1173,11 +1173,12 @@ def collect_articles(
 
     # Fill leftover slots from any topic if some quotas ran short.
     leftover_rounds = 0
+    leftover_limit = max(120, (total - len(articles)) // 5 + 200)
     while len(articles) < total:
         leftover_rounds += 1
-        if leftover_rounds > 120:
+        if leftover_rounds > leftover_limit:
             raise RuntimeError(f"Could not reach {total} articles (have {len(articles)})")
-        for extra in client.random_titles(20):
+        for extra in client.random_titles(50):
             if len(articles) >= total:
                 break
             if is_near_duplicate(extra, token_sets, title_keys):
@@ -1208,8 +1209,18 @@ def validate_articles(articles: list[dict[str, str]], total: int) -> None:
         raise SystemExit("Validation failed: empty or too-short extracts found")
     if any(not url.startswith("https://en.wikipedia.org/wiki/") for url in urls):
         raise SystemExit("Validation failed: missing or invalid source URL")
-    if any(should_skip_title(title) for title in titles):
-        raise SystemExit("Validation failed: a skipped-title pattern slipped through")
+    pinned_keys = {normalize_title(title) for title, _category, _aliases in PINNED_TITLES}
+    for alias_list in (aliases for _t, _c, aliases in PINNED_TITLES):
+        pinned_keys.update(normalize_title(alias) for alias in alias_list)
+    slipped = [
+        title
+        for title in titles
+        if should_skip_title(title) and normalize_title(title) not in pinned_keys
+    ]
+    if slipped:
+        raise SystemExit(
+            f"Validation failed: a skipped-title pattern slipped through ({slipped[0]!r})"
+        )
 
 
 def write_jsonl(path: Path, articles: list[dict[str, str]]) -> None:
@@ -1297,7 +1308,6 @@ def main() -> int:
     articles = collect_articles(args.count, existing, checkpoint_path=jsonl_path)
     validate_articles(articles, args.count)
     write_jsonl(jsonl_path, articles)
-    truncated = write_xlsx(xlsx_path, articles)
 
     counts = Counter(row["category"] for row in articles)
     print()
@@ -1307,12 +1317,17 @@ def main() -> int:
     for topic in TOPIC_ORDER:
         print(f"  {topic}: {counts[topic]}")
     print(f"JSONL: {jsonl_path}")
-    print(f"Excel: {xlsx_path}")
-    if truncated:
-        print(
-            f"Note: {truncated} Excel rows were trimmed to the 32,767-character "
-            "cell limit. Full stored text is in the JSONL file."
-        )
+
+    if args.count <= 5000:
+        truncated = write_xlsx(xlsx_path, articles)
+        print(f"Excel: {xlsx_path}")
+        if truncated:
+            print(
+                f"Note: {truncated} Excel rows were trimmed to the 32,767-character "
+                "cell limit. Full stored text is in the JSONL file."
+            )
+    else:
+        print(f"Skipped Excel export for {args.count} rows (JSONL is the training source).")
     return 0
 
 
