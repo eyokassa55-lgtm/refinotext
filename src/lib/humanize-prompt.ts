@@ -289,9 +289,9 @@ Return only the rewritten text.`;
  */
 export const HUMAN_REWRITE_SYSTEM_INSTRUCTION = `Rewrite the user's draft into natural human prose — the same plain, factual cadence as a clear encyclopedia article written by a person.
 
-This is an editing job on the user's draft only.
-- Keep the same topic, meaning, facts, names, numbers, dates, and roughly the same length and paragraph breaks.
-- Change openings, rhythm, and wording enough that it no longer reads like a chatbot essay.
+This is a real rewrite, not a light polish.
+- Returning the draft almost unchanged is a failure. Most sentences must use new openings and different wording.
+- Keep the same topic, meaning, facts, names, numbers, and dates. Keep roughly the same length and paragraph breaks.
 - Prefer concrete nouns and short common words over polished template phrasing.
 - Mix very short sentences with longer ones. Do not keep a steady, even cadence.
 - Do not start with dictionary definitions like "X is the ability to…" or "X is an important part of…".
@@ -486,22 +486,37 @@ export function buildHumanRewriteInstruction(
       ? `The user's draft is ${words} words in ${Math.max(1, paragraphs)} paragraph(s). Write about ${words} words — stay within 15% of that count and keep those paragraph breaks. A half-length summary is not a rewrite and is not allowed.`
       : "Keep approximately the same length as the user's draft.";
 
-  const demo = examples.find((example) => example.input?.trim() && example.output.trim());
-  const demoBlock = demo
-    ? `
-STYLE TARGET from Wikipedia training pairs (different topic — copy the human cadence of AFTER, not the topic or facts):
-BEFORE (stiff AI draft):
+  const demos = examples
+    .filter((example) => example.input?.trim() && example.output.trim())
+    .slice(0, 2);
+  const demoBlock =
+    demos.length > 0
+      ? `
+STYLE TARGET from wikipedia_training_pairs (different topics — match the human AFTER cadence, never echo the BEFORE wording):
+${demos
+  .map(
+    (demo, index) => `Example ${index + 1}
+BEFORE (stiff AI draft — do not write like this):
 ${clipStyleReference(demo.input ?? "")}
 
-AFTER (natural Wikipedia-style human prose):
-${clipStyleReference(demo.output)}
+AFTER (human Wikipedia-style prose — write like this):
+${clipStyleReference(demo.output)}`,
+  )
+  .join("\n\n")}
 `
-    : "";
+      : "";
+
+  const intensity = request.intensity ?? 75;
+  const strengthNote =
+    intensity >= 85
+      ? "Ultra rewrite: change nearly every sentence opening and most phrasing while keeping every fact."
+      : "Rewrite enough that a side-by-side read shows clear new wording, not a near-copy.";
 
   return `${activeRewriteSystemInstruction()}
 The user message is the draft to rewrite. Pass through every fact from that draft.
 ${lengthNote}
-Keep every name, date, and number exactly as written. Rewrite the grammar around them.
+${strengthNote}
+Keep every name, date, and number exactly as written. Rewrite the grammar and sentence openings around them.
 Sound like a careful human writer: uneven sentence lengths, plain wording, no chatbot template.
 Avoid stock essay closers and definition openings.
 Use proper essay paragraphs separated by blank lines. End every sentence completely.

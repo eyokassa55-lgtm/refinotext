@@ -33,11 +33,26 @@ function loadExamples(): WikipediaStyleExample[] {
   return cached;
 }
 
-/** Pick one Wikipedia-training AFTER example as cadence reference (not content to copy). */
-export function pickWikipediaStyleExample(seedText: string): WikipediaStyleExample | null {
+/** Pick Wikipedia-training BEFORE→AFTER examples as cadence references (not content to copy). */
+export function pickWikipediaStyleExamples(
+  seedText: string,
+  count = 2,
+): WikipediaStyleExample[] {
   const examples = loadExamples();
-  if (examples.length === 0) return null;
+  if (examples.length === 0) return [];
   const digest = createHash("sha256").update(seedText).digest();
-  const index = digest[0]! % examples.length;
-  return examples[index] ?? null;
+  const start = digest[0]! % examples.length;
+  const picked: WikipediaStyleExample[] = [];
+  for (let offset = 0; offset < examples.length && picked.length < count; offset += 1) {
+    const example = examples[(start + offset) % examples.length];
+    if (!example) continue;
+    if (picked.some((row) => row.output === example.output)) continue;
+    picked.push(example);
+  }
+  return picked;
+}
+
+/** @deprecated Prefer pickWikipediaStyleExamples */
+export function pickWikipediaStyleExample(seedText: string): WikipediaStyleExample | null {
+  return pickWikipediaStyleExamples(seedText, 1)[0] ?? null;
 }

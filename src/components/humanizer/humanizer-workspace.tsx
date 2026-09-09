@@ -109,6 +109,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           text,
           requestId: requestIdRef.current,
           tone: style === "auto" ? undefined : style,
+          intensity: ultraMode ? 100 : 75,
         }),
       });
 
@@ -140,7 +141,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
-  }, [input, isSignedIn, style]);
+  }, [input, isSignedIn, style, ultraMode]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

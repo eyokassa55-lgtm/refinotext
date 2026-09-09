@@ -172,7 +172,12 @@ export async function POST(req: NextRequest) {
   let output: string;
   let source: "database" | "model";
   try {
-    const result = await runHumanization({ text });
+    const result = await runHumanization({
+      text,
+      tone: parsed.tone,
+      readability: parsed.readability,
+      intensity: parsed.intensity,
+    });
     output = result.text;
     source = toApiSource(result.source);
   } catch (error) {
@@ -200,9 +205,9 @@ export async function POST(req: NextRequest) {
       wordCount: check.wordCount,
       text,
       output,
-      tone: null,
-      readability: null,
-      intensity: null,
+      tone: parsed.tone ?? null,
+      readability: parsed.readability ?? null,
+      intensity: parsed.intensity ?? null,
     });
 
     return humanizeSuccess({

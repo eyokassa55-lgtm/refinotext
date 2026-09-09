@@ -425,7 +425,7 @@ async function runOfflineTests() {
   assert("flags a near-copy rewrite", nearCopy.issues.some((issue) => issue.code === "TOO_SIMILAR"));
   assert(
     "phrase copy is high for a near-copy",
-    phraseCopyRatio(nearCopySource, nearCopy.output) >= 0.32,
+    phraseCopyRatio(nearCopySource, nearCopy.output) >= 0.28,
   );
 
   const padded = assessRewriteQuality(

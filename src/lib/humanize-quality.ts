@@ -405,7 +405,7 @@ export function assessRewriteQuality(
     });
   }
 
-  if (inCount >= 80 && phraseCopyRatio(input, output) >= 0.32) {
+  if (inCount >= 80 && phraseCopyRatio(input, output) >= 0.28) {
     issues.push({
       code: "TOO_SIMILAR",
       message: "The rewrite copied too much of the original wording.",
@@ -463,6 +463,7 @@ export function assessRewriteQuality(
       "MISSING_QUOTES",
       "INVENTED_FACTS",
       "COPIED_RETRIEVED",
+      "TOO_SIMILAR",
     ].includes(issue.code),
   );
 
