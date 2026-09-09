@@ -502,7 +502,8 @@ ${clipStyleReference(demo.output)}
 ${lengthNote}
 Keep every name, date, and number exactly as written. Rewrite the grammar around them, including messy opening lines like "my name is…". Do not delete those details.
 Use short common words. Prefer clear sentences over long academic phrasing.
-Use proper essay paragraphs separated by blank lines. End sentences with punctuation.
+Use proper essay paragraphs separated by blank lines. End every sentence completely — never stop mid-phrase (no "such as…").
+Match the draft length closely (within about 10%). Do not return a short summary.
 Do not switch topics. Do not paste an encyclopedia article. Keep the user's meaning end to end.
 ${demoBlock}
 Rewrite ONLY the user's draft. Do not write about the example topic.

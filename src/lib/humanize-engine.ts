@@ -17,9 +17,9 @@ import {
   phraseCopyRatio,
   stripModelChrome,
 } from "@/lib/humanize-quality";
-import { applyInputTitle, formatEssayParagraphs, extractUserTitle, fitWikipediaOutputToInput } from "@/lib/humanize-output";
+import { applyInputTitle, formatEssayParagraphs, extractUserTitle, fitWikipediaOutputToInput, formatWikipediaEditorText } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
+import { findWikipediaLiveMatch, WIKIPEDIA_EDITOR_MAX_CHARS, WIKIPEDIA_EDITOR_MAX_PARAGRAPHS } from "@/lib/wikipedia-corpus";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 import { countWords } from "@/lib/words";
 
@@ -324,11 +324,41 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
 
   if (wikipediaHit) {
+    const inputWords = countWords(request.text);
+    const topic = wikipediaHit.topic?.trim() || extractUserTitle(request.text) || "Article";
+    const sizedFromRaw = wikipediaHit.rawExtract
+      ? formatWikipediaEditorText(
+          topic,
+          wikipediaHit.rawExtract,
+          WIKIPEDIA_EDITOR_MAX_CHARS,
+          WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
+          inputWords,
+        )
+      : wikipediaHit.output;
+
     let output = fitWikipediaOutputToInput(
-      applyInputTitle(wikipediaHit.output, request.text),
+      applyInputTitle(sizedFromRaw, request.text),
       request.text,
     );
     output = formatEssayParagraphs(output);
+
+    const outputWords = countWords(output);
+    const endsComplete = /[.!?]["”']?\s*$/.test(output.trim());
+
+    // Equal length is required. If Wikipedia cannot reach ~input length with
+    // complete sentences, use the tuned rewrite instead of a short cut-off.
+    if (
+      inputWords >= 80 &&
+      (!endsComplete || outputWords < inputWords * 0.9) &&
+      canRewriteWithModel()
+    ) {
+      console.info("[humanize] Wikipedia output too short or incomplete; using Vertex for length match", {
+        inputWords,
+        outputWords,
+        endsComplete,
+      });
+      return runModelHumanization(request);
+    }
 
     return resolveStoredHit({
       ...wikipediaHit,
@@ -336,7 +366,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     });
   }
 
-  // ~5% path: no related encyclopedia page — rewrite with the tuned model.
+  // Rare path: no related encyclopedia page — rewrite with the tuned model.
   if (canRewriteWithModel()) {
     console.info("[humanize] no live Wikipedia topic; using Vertex rewrite (fallback)");
     return runModelHumanization(request);

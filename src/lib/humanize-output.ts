@@ -60,10 +60,53 @@ export function splitHumanizeOutput(text: string): {
   return { title: null, paragraphs: toParagraphs(trimmed) };
 }
 
+function lastSentenceEndIndex(text: string): number {
+  let best = -1;
+  const pattern = /[.!?]["”']?(?=\s|$)/g;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index === undefined) continue;
+    best = match.index + match[0].length;
+  }
+  return best;
+}
+
+function dropUnclosedParens(text: string): string {
+  let out = text.trim();
+  for (let guard = 0; guard < 8; guard += 1) {
+    const lastOpen = out.lastIndexOf("(");
+    const lastClose = out.lastIndexOf(")");
+    if (lastOpen <= lastClose) break;
+    out = out.slice(0, lastOpen).replace(/[ ,;:]+$/g, "").trim();
+  }
+  return out;
+}
+
+/** Always end on a finished sentence — never leave "(such as…" style cuts. */
+export function endOnCompleteSentence(text: string): string {
+  const trimmed = dropUnclosedParens(text.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim());
+  if (!trimmed) return "";
+  // Preserve paragraph breaks while checking the final paragraph.
+  const parts = trimmed.split(/\n\s*\n/);
+  const lastPart = parts[parts.length - 1] ?? "";
+  if (/[.!?]["”']?$/.test(lastPart.trim())) return trimmed;
+
+  const flat = trimmed.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+  const end = lastSentenceEndIndex(flat);
+  if (end >= 20) {
+    const complete = flat.slice(0, end).trim();
+    // Rebuild rough paragraphs from complete sentences when possible.
+    return complete;
+  }
+  return "";
+}
+
 function ensureTerminalPunctuation(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return trimmed;
+  const trimmed = dropUnclosedParens(text.trim());
+  if (!trimmed) return "";
   if (/[.!?…]["”']?$/.test(trimmed)) return trimmed;
+  // Do not invent an ending for clearly truncated fragments.
+  if (/\b(such as|including|for example|e\.g\.|i\.e\.)\s*$/i.test(trimmed)) return "";
+  if (/[,:;]\s*$/.test(trimmed)) return "";
   return `${trimmed}.`;
 }
 
@@ -71,13 +114,15 @@ function toParagraphs(text: string): string[] {
   const blocks = text
     .split(/\n\s*\n/)
     .map((block) => block.replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ").trim())
+    .map((block) => dropUnclosedParens(block))
     .filter((block) => Boolean(block) && !isBrokenSentence(block))
-    .map(ensureTerminalPunctuation);
+    .map(ensureTerminalPunctuation)
+    .filter(Boolean);
   if (blocks.length >= 2) return blocks;
 
   const block = blocks[0];
   if (!block) return [];
-  return splitLongBlock(block).map(ensureTerminalPunctuation);
+  return splitLongBlock(block).map(ensureTerminalPunctuation).filter(Boolean);
 }
 
 /** Essay body: blank-line paragraphs, cleaned spacing, terminal punctuation. */
@@ -106,23 +151,13 @@ export function formatEssayParagraphs(text: string): string {
   return toParagraphs(trimmed).join("\n\n");
 }
 
-function dropUnclosedParens(text: string): string {
-  const lastOpen = text.lastIndexOf("(");
-  const lastClose = text.lastIndexOf(")");
-  if (lastOpen > lastClose) {
-    const before = text.slice(0, lastOpen).replace(/[ ,;:]+$/g, "").trim();
-    if (!before) return "";
-    return /[.!?]$/.test(before) ? before : `${before}.`;
-  }
-  return text.trim();
-}
-
 function isBrokenSentence(sentence: string): boolean {
   const trimmed = sentence.trim();
   if (!trimmed) return true;
   if (/^[,);:]/.test(trimmed)) return true;
   if (/^[eg]\.\s/i.test(trimmed)) return true;
   if (/^[a-z]/.test(trimmed)) return true;
+  if (/\b(such as|including|for example)\s*$/i.test(trimmed)) return true;
   return false;
 }
 
@@ -353,22 +388,14 @@ function polishProse(text: string): string {
     .trim();
 }
 
-function endOnCompleteSentence(text: string): string {
-  const trimmed = text.trim();
-  if (/[.!?]["”']?$/.test(trimmed)) return trimmed;
-  const last = Math.max(trimmed.lastIndexOf(". "), trimmed.lastIndexOf("? "), trimmed.lastIndexOf("! "));
-  if (last >= 200) return trimmed.slice(0, last + 1).trim();
-  return trimmed;
-}
-
 function clipToBudget(text: string, maxChars: number): string {
   if (maxChars <= 0 || text.length <= maxChars) return endOnCompleteSentence(text);
   const slice = text.slice(0, maxChars);
   const paragraph = slice.lastIndexOf("\n\n");
-  const sentence = slice.lastIndexOf(". ");
-  const cut = Math.max(paragraph, sentence);
-  if (cut >= 400) {
-    return endOnCompleteSentence(slice.slice(0, sentence === cut ? cut + 1 : cut));
+  const end = lastSentenceEndIndex(slice);
+  const cut = Math.max(paragraph, end);
+  if (cut >= 120) {
+    return endOnCompleteSentence(slice.slice(0, cut));
   }
   return endOnCompleteSentence(slice);
 }
@@ -380,8 +407,8 @@ function clipToBudget(text: string, maxChars: number): string {
 export function formatWikipediaEditorText(
   title: string,
   extract: string,
-  maxChars = 14_000,
-  maxParagraphs = 24,
+  maxChars = 20_000,
+  maxParagraphs = 40,
   targetWords = 0,
 ): string {
   const heading = title.replace(/^#+\s*/, "").trim();
@@ -427,23 +454,37 @@ export function formatWikipediaEditorText(
       .slice(0, maxParagraphs)
       .join("\n\n");
   }
+  body = endOnCompleteSentence(body);
   if (!heading || body.length < 80) return body;
   return `# ${heading}\n\n${body}`;
 }
 
-/** Trim prose to about `targetWords`, ending on a complete sentence. */
+/**
+ * Keep prose near `targetWords`, always finishing on a complete sentence.
+ * Prefers a little overflow over cutting mid-thought.
+ */
 export function clipToWordBudget(text: string, targetWords: number): string {
   const trimmed = text.trim();
-  if (targetWords <= 0) return trimmed;
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length <= targetWords) return endOnCompleteSentence(trimmed);
+  if (targetWords <= 0) return endOnCompleteSentence(trimmed);
 
-  const slice = words.slice(0, targetWords).join(" ");
-  const sentenceEnd = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("? "), slice.lastIndexOf("! "));
-  if (sentenceEnd >= Math.min(80, Math.floor(slice.length * 0.45))) {
-    return endOnCompleteSentence(slice.slice(0, sentenceEnd + 1));
+  const sentences =
+    trimmed.match(/[^.!?]+[.!?]+(?:["”']\s*|\s+|$)/g)?.map((part) => dropUnclosedParens(part.trim())).filter(Boolean) ??
+    [];
+  if (sentences.length === 0) return endOnCompleteSentence(trimmed);
+
+  const picked: string[] = [];
+  let words = 0;
+  for (const sentence of sentences) {
+    const next = countWords(sentence);
+    if (picked.length > 0 && words >= targetWords) break;
+    if (picked.length > 0 && words + next > targetWords * 1.18 && words >= targetWords * 0.9) {
+      break;
+    }
+    picked.push(sentence);
+    words += next;
   }
-  return endOnCompleteSentence(slice);
+
+  return endOnCompleteSentence(picked.join(" ").replace(/\s+/g, " ").trim());
 }
 
 /**

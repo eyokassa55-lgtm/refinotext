@@ -10,8 +10,8 @@ import { countWords } from "@/lib/words";
 /** On-disk name is historical. Humanize uses live English Wikipedia, not this file. */
 export const WIKIPEDIA_DATASET_FILENAME = "wikipedia_750.jsonl";
 /** Upper bound while fetching; final output is sized to the input word count. */
-export const WIKIPEDIA_EDITOR_MAX_CHARS = 14_000;
-export const WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 24;
+export const WIKIPEDIA_EDITOR_MAX_CHARS = 20_000;
+export const WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 40;
 export const WIKIPEDIA_INDEX_OFFSET = 10_000;
 
 export type WikipediaListItem = {
@@ -30,6 +30,8 @@ type WikipediaRow = WikipediaArticle & {
   output: string;
   aliases: string[];
   mathHeavy?: boolean;
+  /** Raw plaintext extract before editor clipping — used to match input length. */
+  rawExtract?: string;
 };
 
 function candidatePaths(): string[] {
@@ -589,6 +591,8 @@ function toMatch(row: WikipediaRow, score: number, kind: DatabaseTrainingMatch["
     input: row.input,
     output: row.output,
     kind,
+    rawExtract: row.rawExtract,
+    topic: row.topic,
   };
 }
 
@@ -684,6 +688,7 @@ function liveRowFromExtract(title: string, extract: string, pageUrl: string): Wi
     input: `${title}\n\n${output}`,
     output,
     aliases: [],
+    rawExtract: extract,
     mathHeavy: (extract.match(/\\displaystyle/g) ?? []).length >= 3,
   };
 }
@@ -700,7 +705,7 @@ async function fetchWikipediaPage(title: string): Promise<WikipediaRow | null> {
     prop: "extracts|info|pageprops",
     explaintext: "1",
     exsectionformat: "plain",
-    exchars: "12000",
+    // Do not set exchars — MediaWiki caps it around 1200 chars and truncates mid-sentence.
     inprop: "url",
     ppprop: "disambiguation",
     redirects: "1",

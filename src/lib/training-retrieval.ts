@@ -1025,6 +1025,9 @@ export type DatabaseTrainingMatch = {
   input: string;
   output: string;
   kind: "exact" | "near_exact" | "similarity" | "topic";
+  /** Optional full Wikipedia plaintext used to size output to the input. */
+  rawExtract?: string;
+  topic?: string;
 };
 
 function lockedPair(

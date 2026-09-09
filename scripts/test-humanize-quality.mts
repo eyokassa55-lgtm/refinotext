@@ -572,7 +572,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   const longWikiBody = Array.from({ length: 12 }, (_, i) =>
     `Paragraph ${i + 1} explains the same topic with complete sentences and normal punctuation for readers.`,
   ).join("\n\n");
-  const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody, 14_000, 24, 80);
+  const fullWikiEssay = formatWikipediaEditorText("Essay Topic", longWikiBody, 20_000, 40, 80);
   assert(
     "formatted Wikipedia essay sizes to the target word length",
     fullWikiEssay.includes("Paragraph 1") &&
@@ -580,11 +580,23 @@ Rainforests also illustrate a much broader set of global development debates. It
       countWords(fullWikiEssay) >= 40,
     `words=${countWords(fullWikiEssay)}`,
   );
-  const longTargetWiki = formatWikipediaEditorText("Essay Topic", longWikiBody, 14_000, 24, 200);
+  const longTargetWiki = formatWikipediaEditorText("Essay Topic", longWikiBody, 20_000, 40, 200);
   assert(
     "formatted Wikipedia essay grows when the input word target is larger",
     countWords(longTargetWiki) > countWords(fullWikiEssay),
     `short=${countWords(fullWikiEssay)} long=${countWords(longTargetWiki)}`,
+  );
+  const truncatedWiki =
+    "E-commerce refers to buying online. Typical transactions include the purchase of products (such as books from Amazon) or services (such as";
+  const { endOnCompleteSentence } = await import("../src/lib/humanize-output");
+  const repaired = endOnCompleteSentence(truncatedWiki);
+  assert(
+    "truncated Wikipedia extracts never keep an unfinished final phrase",
+    repaired.endsWith(".") &&
+      !/\bsuch as\s*$/i.test(repaired) &&
+      !/\([^)]*$/.test(repaired) &&
+      /buying online/i.test(repaired),
+    repaired,
   );
   const essayFormatted = formatEssayParagraphs(
     "Road Safety\n\nPeople overlook hazards every day when they rush\n\nDrivers who text take serious risks on busy roads",
@@ -1032,8 +1044,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     wikiSource.includes("https://en.wikipedia.org/w/api.php") &&
       wikiSource.includes("findWikipediaLiveMatch") &&
       wikiSource.includes("findClosestLiveWikipediaPage") &&
-      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 14_000") &&
-      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 24"),
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_CHARS = 20_000") &&
+      wikiSource.includes("WIKIPEDIA_EDITOR_MAX_PARAGRAPHS = 40"),
   );
   const workspaceSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-workspace.tsx"),
