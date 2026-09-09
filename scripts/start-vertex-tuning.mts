@@ -9,12 +9,12 @@
  *
  * Optional:
  * - VALIDATION_DATA_GCS_URI=gs://bucket/path/humanizer_validationOG_v4.jsonl
- *   (defaults to the training URI so validation is the full set, not a 90-row holdout)
+ *   (must be ≤ 30% of training size; export writes a ~15% subsample)
  *
  * Run: npm run train:vertex
  */
 import { config } from "dotenv";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GoogleAuth } from "google-auth-library";
 
@@ -54,12 +54,16 @@ async function main() {
     return;
   }
 
-  const localRows = readFileSync(join(process.cwd(), "data", "training_data.jsonl"), "utf8")
+  const fullPath = join(process.cwd(), "data", "training_data_full.jsonl");
+  const legacyPath = join(process.cwd(), "data", "training_data.jsonl");
+  const localSource = existsSync(fullPath) ? fullPath : legacyPath;
+  const localRows = readFileSync(localSource, "utf8")
     .split(/\r?\n/)
     .filter(Boolean).length;
+  console.log(`Local training source: ${localSource}`);
   console.log(`Local training rows: ${localRows}`);
   console.log(`Training URI: ${datasetUri}`);
-  console.log(`Validation URI: ${validationUri} (full set, not a 90-row holdout)`);
+  console.log(`Validation URI: ${validationUri} (≤30% of training size)`);
   console.log(`Job name: ${displayName}`);
   console.log(`Base model: ${baseModel}`);
   console.log("Hyperparameters: epochs=8 adapter=8 learningRateMultiplier=5");

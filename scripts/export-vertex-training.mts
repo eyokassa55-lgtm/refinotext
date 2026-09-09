@@ -1,28 +1,32 @@
 /**
- * Convert data/training_data.jsonl into Vertex supervised tuning JSONL.
+ * Convert training rewrite pairs into Vertex supervised tuning JSONL.
  *
- * Uses every stored pair — every topic, not one subject. Identity training
- * (human_text → human_text) makes the model lazy: at inference it copies
- * the user's draft. Each gold human_text already reads as human. This export
- * teaches the actual edit for the full set:
+ * Prefers data/training_data_full.jsonl (existing essays + Wikipedia pairs)
+ * when present; otherwise uses data/training_data.jsonl.
+ *
+ * Teaches the rewrite edit:
  *   user  = ai_text  (stiff draft)
  *   model = human_text (gold rewrite)
  *
- * The system line is a rewrite task, not “find the matching stored essay,”
- * so a related stored paper must not replace the user's draft.
- *
- * Writes the full 722-row set to both training and validation files.
- * No topic filter. Do not hold out a 90-row holdout.
+ * Vertex requires validation size ≤ 30% of training size. Training keeps every
+ * pair; validation is a deterministic ~15% subsample (well under the cap).
  *
  * Run: npm run export:vertex-training
  */
-import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { HUMAN_REWRITE_SYSTEM_INSTRUCTION } from "../src/lib/humanize-prompt";
 
-const sourcePath = join(process.cwd(), "data", "training_data.jsonl");
+const fullSourcePath = join(process.cwd(), "data", "training_data_full.jsonl");
+const legacySourcePath = join(process.cwd(), "data", "training_data.jsonl");
+const sourcePath = existsSync(fullSourcePath) ? fullSourcePath : legacySourcePath;
 const trainPath = join(process.cwd(), "data", "humanizer_train_v4.jsonl");
 const validationPath = join(process.cwd(), "data", "humanizer_validation_v4.jsonl");
+
+/** Keep validation under Vertex's 30% of training limit (use ~15%). */
+const VALIDATION_FRACTION = 0.15;
+const MAX_VALIDATION_RATIO = 0.3;
 
 const systemText = HUMAN_REWRITE_SYSTEM_INSTRUCTION;
 const lines = readFileSync(sourcePath, "utf8")
@@ -66,16 +70,42 @@ if (exported.length + skippedIdentity !== lines.length) {
   );
 }
 if (exported.length < 700) {
-  throw new Error(`Expected the full rewrite set, got ${exported.length} rows.`);
+  throw new Error(`Expected at least 700 rewrite pairs, got ${exported.length} rows.`);
 }
 
-const body = `${exported.join("\n")}\n`;
-writeFileSync(trainPath, body, "utf8");
-writeFileSync(validationPath, body, "utf8");
-console.log(
-  `Training rows: ${exported.length} of ${lines.length} (every stored pair, ai_text → human_text, skipped ${skippedIdentity} identical pairs, no topic filter) → ${trainPath}`,
+const trainBody = `${exported.join("\n")}\n`;
+writeFileSync(trainPath, trainBody, "utf8");
+
+const maxValidation = Math.floor(exported.length * MAX_VALIDATION_RATIO);
+const targetValidation = Math.min(
+  maxValidation,
+  Math.max(50, Math.floor(exported.length * VALIDATION_FRACTION)),
 );
-console.log(`Validation rows: ${exported.length} (full set, not a 90-row holdout) → ${validationPath}`);
+
+const ranked = exported
+  .map((row, index) => ({
+    row,
+    rank: createHash("sha256").update(row).digest("hex"),
+    index,
+  }))
+  .sort((left, right) => left.rank.localeCompare(right.rank) || left.index - right.index);
+
+const validationRows = ranked.slice(0, targetValidation).map((entry) => entry.row);
+if (validationRows.length > maxValidation) {
+  throw new Error(
+    `Validation ${validationRows.length} exceeds 30% of training ${exported.length} (max ${maxValidation}).`,
+  );
+}
+
+writeFileSync(validationPath, `${validationRows.join("\n")}\n`, "utf8");
+
+console.log(`Source: ${sourcePath}`);
+console.log(
+  `Training rows: ${exported.length} of ${lines.length} (every stored pair, ai_text → human_text, skipped ${skippedIdentity} identical pairs) → ${trainPath}`,
+);
+console.log(
+  `Validation rows: ${validationRows.length} (~${Math.round((validationRows.length / exported.length) * 100)}% of training, Vertex max 30%) → ${validationPath}`,
+);
 
 const downloads = join("C:/Users/hp/Downloads");
 try {

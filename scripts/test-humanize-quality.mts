@@ -1334,8 +1334,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert("model rewrite API source stays model", toApiSource("FINE_TUNED_MODEL") === "model");
   const exportSource = readFileSync(join(process.cwd(), "scripts", "export-vertex-training.mts"), "utf8");
   assert(
-    "v4 Vertex export writes the full set to validation, not a 90-row holdout",
-    exportSource.includes("humanizer_validation_v4.jsonl") && exportSource.includes("not a 90-row holdout"),
+    "v4 Vertex export keeps validation under 30% of training",
+    exportSource.includes("humanizer_validation_v4.jsonl") &&
+      exportSource.includes("MAX_VALIDATION_RATIO") &&
+      exportSource.includes("0.3"),
   );
   assert(
     "Vertex export trains ai_text to human_text, not identity copy",
@@ -1351,8 +1353,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const trainSource = readFileSync(join(process.cwd(), "scripts", "start-vertex-tuning.mts"), "utf8");
   assert(
-    "Vertex training job uses a full-set validation URI",
-    trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("not a 90-row holdout"),
+    "Vertex training job uses a validation URI under the 30% cap",
+    trainSource.includes("VALIDATION_DATA_GCS_URI") && trainSource.includes("≤30% of training size"),
   );
   assert(
     "Vertex rewrite job uses extra epochs and a larger adapter so it learns the edit",

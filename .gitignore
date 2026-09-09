@@ -50,6 +50,10 @@ data/humanizer_validation_v3.jsonl
 data/humanizer_train_v4.jsonl
 data/humanizer_validation_v4.jsonl
 
+# generated Wikipedia fine-tune pairs (from npm run build:wikipedia-training)
+data/wikipedia_training_pairs.jsonl
+data/training_data_full.jsonl
+
 # python
 __pycache__/
 *.pyc
