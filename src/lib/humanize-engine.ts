@@ -383,6 +383,7 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
 /**
  * Final safety gate: never ship a Wikipedia body that only shares a title keyword
  * (Decision Fatigue title + Pilot decision-making body).
+ * Same-topic encyclopedia pages (Cristiano Ronaldo → Cristiano Ronaldo) must pass.
  */
 function wikipediaOutputMatchesDraftBody(
   userText: string,
@@ -390,14 +391,23 @@ function wikipediaOutputMatchesDraftBody(
 ): boolean {
   const wikiBody = (hit.rawExtract || hit.output || "").replace(/^#\s+[^\n]+\n*/, "");
   const draftBody = userText.replace(/^#\s+[^\n]+\n*/, "");
-  const draftLower = draftBody.toLowerCase();
+  const draftLower = `${userText}\n${draftBody}`.toLowerCase();
   const wikiLower = `${hit.topic || ""}\n${wikiBody}`.toLowerCase();
+  const topic = (hit.topic || "").trim().toLowerCase();
 
+  const wikiLead = `${hit.topic || ""}\n${wikiBody}`.slice(0, 700).toLowerCase();
   const domainMarkers = [
-    /\b(?:pilot|aviation|aeronautical|aircraft|cockpit|airspace|airport)\b/i,
+    /\b(?:pilot decision|aeronautical decision|aviation accident|flight deck|airspace)\b/i,
+    /\b(?:pilot|aviation|aeronautical|aircraft|cockpit)\b/i,
   ];
+  // Only reject when the PAGE LEAD is about that domain (not a bio that mentions a private jet).
   for (const pattern of domainMarkers) {
-    if (pattern.test(wikiLower) && !pattern.test(draftLower)) return false;
+    if (pattern.test(wikiLead) && !pattern.test(draftLower)) return false;
+  }
+
+  // Draft is clearly about this exact Wikipedia article (person, place, concept).
+  if (topic.length >= 4 && draftLower.includes(topic)) {
+    return true;
   }
 
   const subject = draftLower.match(
@@ -432,6 +442,11 @@ function wikipediaOutputMatchesDraftBody(
           "would",
           "could",
           "should",
+          "known",
+          "played",
+          "helped",
+          "often",
+          "called",
         ].includes(token),
     )
     .slice(0, 12);
@@ -443,7 +458,7 @@ function wikipediaOutputMatchesDraftBody(
       .filter(Boolean),
   );
   const hits = top.filter((token) => wikiTokens.has(token)).length;
-  return hits / top.length >= 0.35;
+  return hits / top.length >= 0.28;
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {

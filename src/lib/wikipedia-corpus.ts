@@ -1288,7 +1288,10 @@ function bodyMatchSignals(contentTokens: readonly string[]): string[] {
 
 /** Domain markers that must not appear in a Wikipedia page unless also in the draft. */
 const DOMAIN_CLASH_MARKERS: Array<{ id: string; pattern: RegExp }> = [
-  { id: "aviation", pattern: /\b(?:pilot|aviation|aeronautical|aircraft|cockpit|airspace|airport|flight deck)\b/i },
+  {
+    id: "aviation",
+    pattern: /\b(?:pilot decision|aeronautical decision|aviation accident|flight deck|airspace|aeronautical|cockpit)\b/i,
+  },
   { id: "military", pattern: /\b(?:battlefield|infantry|artillery|naval warfare|combatant)\b/i },
   { id: "software", pattern: /\b(?:source code|compiler|runtime|api endpoint|javascript|python package)\b/i },
   { id: "sports", pattern: /\b(?:touchdown|offside|innings|grand slam|championship game)\b/i },
@@ -1332,10 +1335,13 @@ function draftSubjectBigrams(userText: string): string[] {
 }
 
 function pageHasDomainClash(page: WikipediaRow, userText: string): boolean {
-  const pageText = `${page.topic}\n${page.output || page.source_text || page.rawExtract || ""}`.slice(0, 2500);
+  const pageLead = `${page.topic}\n${(page.output || page.source_text || page.rawExtract || "").replace(/^#\s+[^\n]+\n*/, "")}`.slice(
+    0,
+    700,
+  );
   const draft = userText.slice(0, 2500);
   for (const marker of DOMAIN_CLASH_MARKERS) {
-    if (marker.pattern.test(pageText) && !marker.pattern.test(draft)) {
+    if (marker.pattern.test(pageLead) && !marker.pattern.test(draft)) {
       return true;
     }
   }
