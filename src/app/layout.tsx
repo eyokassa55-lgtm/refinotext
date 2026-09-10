@@ -127,6 +127,7 @@ export default function RootLayout({
         ) : (
           children
         )}
+        {/* Single GA4 install for every App Router page; ID comes from NEXT_PUBLIC_GA_ID only. */}
         {gaId ? <GoogleAnalytics gaId={gaId} /> : null}
       </body>
     </html>
