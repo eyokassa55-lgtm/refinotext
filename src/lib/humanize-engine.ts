@@ -25,7 +25,7 @@ import {
   formatWikipediaEditorText,
 } from "@/lib/humanize-output";
 import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } from "@/lib/training-retrieval";
+import { findDatabaseMatch, storedMatchAlignsWithDraft } from "@/lib/training-retrieval";
 import {
   findWikipediaLiveMatch,
   WIKIPEDIA_EDITOR_MAX_CHARS,
@@ -88,8 +88,8 @@ const COPY_RETRY_RATIO = 0.16;
 const COPY_REJECT_RATIO = 0.28;
 
 /**
- * Prefer live Wikipedia prose (same style as wikipedia_training_pairs outputs).
- * Fall back to TOPN1 with a Wikipedia-training style example in the prompt.
+ * Prefer live English Wikipedia (full encyclopedia API). The ~20k training pairs
+ * were for fine-tuning only and are not searched at Humanize time.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
@@ -164,7 +164,7 @@ function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
     row: hit.index,
     kind: hit.kind,
     score: hit.score,
-    source: hit.index >= 90_000 ? "wikipedia-live" : "wikipedia-corpus",
+    source: hit.index >= 90_000 ? "wikipedia-live-full" : "training-exact",
   });
   return {
     text: formatEssayParagraphs(hit.output),
@@ -381,26 +381,8 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // 1) Stored human training outputs (wikipedia_training_pairs / essay gold text).
-  const storedHit = findTopicMatch(request.text) ?? findDatabaseMatch(request.text);
-  if (storedHit && storedMatchAlignsWithDraft(request.text, storedHit)) {
-    return resolveStoredHit({
-      ...storedHit,
-      output: formatEssayParagraphs(
-        applyInputTitle(storedHit.output, request.text),
-      ),
-    });
-  }
-  if (storedHit) {
-    console.info("[humanize] skipped stored hit because title/body topic did not align", {
-      row: storedHit.index,
-      kind: storedHit.kind,
-      score: storedHit.score,
-    });
-  }
-
-  // 2) Live Wikipedia — real human encyclopedia prose (same style as pair outputs).
-  // Never replace this with the tuned model: generated text is what detectors mark 100% AI.
+  // 1) Full English Wikipedia via live API (millions of articles — NOT the ~20k training file).
+  // The 20,722 pairs were only for Vertex fine-tuning; Humanize does not search that file.
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
   if (wikipediaHit) {
     const inputWords = countWords(request.text);
@@ -421,18 +403,35 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     );
     output = formatEssayParagraphs(output);
 
+    console.info("[humanize] [WIKIPEDIA_LIVE]", {
+      topic: wikipediaHit.topic,
+      score: wikipediaHit.score,
+      source: "en.wikipedia.org API (full encyclopedia)",
+    });
+
     return resolveStoredHit({
       ...wikipediaHit,
       output,
     });
   }
 
-  // 3) Offline local rewrite of the user's draft — no Gemini/Vertex API calls.
-  // Writing providers are currently unauthorized; training/Wikipedia data covers
-  // topic essays above, and unmatched drafts (emails, notes) are rewritten locally.
+  // 2) Exact / near-exact paste of a stored training draft only (not topic guess from 722 rows).
+  const exactHit = findDatabaseMatch(request.text);
+  if (
+    exactHit &&
+    (exactHit.kind === "exact" || exactHit.kind === "near_exact") &&
+    storedMatchAlignsWithDraft(request.text, exactHit)
+  ) {
+    return resolveStoredHit({
+      ...exactHit,
+      output: formatEssayParagraphs(applyInputTitle(exactHit.output, request.text)),
+    });
+  }
+
+  // 3) Offline local rewrite when Wikipedia has no same-topic page.
   console.info("[humanize] [LOCAL_DATA]", {
     words: countWords(request.text),
-    reason: "no-model-api",
+    reason: "no-wikipedia-live-match",
   });
   const local = humanizeLocally(request.text);
   if (!local) {
