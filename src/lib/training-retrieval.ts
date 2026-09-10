@@ -1129,7 +1129,8 @@ export function storedMatchAlignsWithDraft(
 
   const storedTokens = new Set(tokenizeTopic(`${match.input}\n\n${match.output}`));
   const bodyHits = userBody.filter((token) => termPresent(token, storedTokens)).length;
-  return bodyHits >= 2 && bodyHits / userBody.length >= 0.22;
+  // Prefer body agreement over title-only collisions.
+  return bodyHits >= 3 && bodyHits / userBody.length >= 0.45;
 }
 
 /**

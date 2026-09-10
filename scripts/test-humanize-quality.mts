@@ -189,6 +189,11 @@ Cultural memory is the shared stories, traditions, and experiences that help com
 Schools, museums, monuments, and public ceremonies keep those memories alive. When a nation remembers its past together, citizens often feel a stronger sense of belonging and purpose.
 `;
 
+const GETTING_LOST_ESSAY = `# The Art of Getting Lost: Rediscovering Wonder in an Optimized World
+
+Modern life is designed for efficiency. Maps, schedules, and recommendation engines reduce friction until surprise nearly disappears. Getting lost is not only spatial disorientation; it is a deliberate step away from optimized routines so curiosity and freedom can return. Technology often removes the small accidents that once sparked wonder. When every route is planned, we forget how discovery feels.
+`;
+
 const FRANCE_PEACEFUL_ASSEMBLY_ESSAY = `Country’s Stance
 
 France supports peaceful assembly under the International Covenant on Civil and Political Rights and the European Convention on Human Rights. It opposes using force automatically or for political purposes and believes authorities must distinguish peaceful protesters from violent individuals.
@@ -1250,6 +1255,32 @@ Rainforests also illustrate a much broader set of global development debates. It
       ),
     `topic=${culturalMemoryWiki?.topic ?? "none"} opening=${culturalMemoryWiki?.output.slice(0, 140) ?? "none"}`,
   );
+  const gettingLostWiki = await findWikipediaLiveMatch(GETTING_LOST_ESSAY);
+  assert(
+    "Getting Lost metaphorical essay does not rematch spatial-disorientation Wikipedia",
+    gettingLostWiki === null ||
+      (!/\bspatial reference\b|\bbehavioral geography\b|\bdisorientation\b/i.test(gettingLostWiki.output) &&
+        /\befficienc|\bwonder|\bcuriosit|\boptim/i.test(gettingLostWiki.output)),
+    `topic=${gettingLostWiki?.topic ?? "none"} opening=${gettingLostWiki?.output.slice(0, 140) ?? "none"}`,
+  );
+  try {
+    const engineGettingLost = await runEngineHumanization({
+      text: GETTING_LOST_ESSAY,
+      intensity: 100,
+    });
+    assert(
+      "Getting Lost keeps the essay body topic (not Wikipedia Getting lost definition)",
+      /\befficienc|\bwonder|\bcuriosit|\boptim|surprise|routines|technology/i.test(engineGettingLost.text) &&
+        !/\bspatial reference\b|\bbehavioral geography\b/i.test(engineGettingLost.text),
+      `source=${engineGettingLost.source} opening=${engineGettingLost.text.slice(0, 160)}`,
+    );
+  } catch (error) {
+    assert(
+      "Getting Lost keeps the essay body topic (not Wikipedia Getting lost definition)",
+      error instanceof HumanizationFailedError,
+      String(error),
+    );
+  }
   const franceAssemblyWiki = await findWikipediaLiveMatch(FRANCE_PEACEFUL_ASSEMBLY_ESSAY);
   assert(
     "France peaceful-assembly draft matches Freedom of assembly (not ICCPR treaty)",

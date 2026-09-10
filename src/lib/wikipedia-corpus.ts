@@ -126,6 +126,105 @@ const STOPWORDS = new Set([
   "by",
   "from",
   "as",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "it",
+  "its",
+  "this",
+  "that",
+  "these",
+  "those",
+  "they",
+  "them",
+  "their",
+  "we",
+  "our",
+  "you",
+  "your",
+  "he",
+  "she",
+  "his",
+  "her",
+  "who",
+  "what",
+  "when",
+  "where",
+  "why",
+  "how",
+  "which",
+  "if",
+  "then",
+  "than",
+  "so",
+  "not",
+  "no",
+  "nor",
+  "only",
+  "just",
+  "also",
+  "very",
+  "too",
+  "can",
+  "could",
+  "would",
+  "should",
+  "may",
+  "might",
+  "will",
+  "shall",
+  "do",
+  "does",
+  "did",
+  "done",
+  "have",
+  "has",
+  "had",
+  "having",
+  "into",
+  "over",
+  "under",
+  "again",
+  "further",
+  "once",
+  "here",
+  "there",
+  "all",
+  "any",
+  "both",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "same",
+  "own",
+  "away",
+  "best",
+  "still",
+  "even",
+  "well",
+  "back",
+  "much",
+  "many",
+  "while",
+  "about",
+  "after",
+  "before",
+  "between",
+  "through",
+  "during",
+  "without",
+  "within",
+  "across",
+  "against",
+  "among",
 ]);
 
 const SHORT_TOPIC_TERMS = new Set(["ai", "ml", "vr", "ar", "gpu", "iot"]);
@@ -309,6 +408,12 @@ const AMBIGUOUS_SOLO_TOPIC_TOKENS = new Set([
   "movement",
   "network",
   "service",
+  // Metaphorical essay titles ("The Art of Getting Lost") must not solo-match.
+  "lost",
+  "getting",
+  "wonder",
+  "optimized",
+  "optimised",
 ]);
 
 /**
@@ -420,6 +525,8 @@ const GENERIC_ALIGNMENT_TOKENS = new Set([
 
 /** Related encyclopedia titles for common essay headings. */
 const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
+  environment: ["natural environment", "environmental protection"],
+  "natural environment": ["environment", "environmental science"],
   "digital trade": ["e-commerce", "electronic commerce", "digital commerce", "trade", "online shopping"],
   "digital marketplace": ["e-commerce", "electronic commerce", "online shopping", "digital commerce"],
   ecommerce: ["e-commerce", "electronic commerce", "digital trade"],
@@ -558,6 +665,43 @@ function isAbstractTopicHeading(heading: string): boolean {
   return concrete.length === 0;
 }
 
+/**
+ * Creative / metaphorical titles ("The Art of Getting Lost: …") name a vibe, not
+ * an encyclopedia subject. Topic must come from the body, not the heading.
+ */
+function isMetaphoricalEssayHeading(heading: string): boolean {
+  const lower = heading.toLowerCase();
+  if (
+    /\b(art of|rediscovering|rethinking|navigating|embracing|exploring|journey of|power of|beauty of|paradox of|myth of|cost of|price of)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  // Long poetic titles with a subtitle rarely map to a single wiki page.
+  if (/[:–—]/.test(heading) && tokenizeTopic(heading).length >= 8) return true;
+  return false;
+}
+
+/**
+ * Minimum body-token overlap for a Wikipedia rematch.
+ * ~0.50 raw overlap maps to ~90% topic confidence (same subject, not title-only).
+ */
+const BODY_TOPIC_MATCH_MIN = 0.5;
+/** Accept only when scaled topic confidence reaches this bar. */
+const TOPIC_CONFIDENCE_MIN = 0.9;
+
+function topicMatchConfidence(bodyRatio: number, titleAgreesWithBody: boolean): number {
+  // Scale body overlap into topic confidence; ~90% required to accept a rematch.
+  // Title agreement (Environment → Natural environment) may lift a solid body hit,
+  // but never a near-zero body hit (Getting Lost title vs spatial-disorientation page).
+  let confidence = Math.min(1, bodyRatio / 0.45);
+  if (titleAgreesWithBody && bodyRatio >= 0.22) {
+    confidence = Math.max(confidence, 0.9);
+  }
+  return confidence;
+}
+
 /** Subject phrases from the essay body when the title is only a section label. */
 function bodySubjectPhrases(text: string): string[] {
   const body = draftBodyText(text).slice(0, 1200);
@@ -579,6 +723,8 @@ function bodySubjectPhrases(text: string): string[] {
     /\binternational covenant on civil and political rights\b/gi,
     /\buse of force\b/gi,
     /\bpublic order\b/gi,
+    /\bnatural environment\b/gi,
+    /\bthe environment\b/gi,
   ];
   for (const pattern of known) {
     for (const match of body.matchAll(pattern)) {
@@ -627,12 +773,13 @@ function userTopicPhrases(text: string): string[] {
 
   // Titled drafts keep the heading as the topic. Body nouns must not
   // pull in a related article (Environment is not Water pollution).
-  // Exception: abstract section titles like "Country's Stance" / "Proposed Solutions"
-  // — then use the body subject (peaceful assembly, freedom of assembly).
-  const useBodyTopics = !heading || isAbstractTopicHeading(heading);
+  // Exception: abstract section titles ("Country's Stance") and metaphorical
+  // essay titles ("The Art of Getting Lost") — topic comes from the body.
+  const useBodyTopics =
+    !heading || isAbstractTopicHeading(heading) || isMetaphoricalEssayHeading(heading);
   if (useBodyTopics) {
-    if (!heading) {
-      const clause = openingClause(text);
+    if (!heading || isMetaphoricalEssayHeading(heading) || isAbstractTopicHeading(heading)) {
+      const clause = openingClause(draftBodyText(text) || text);
       add(clause);
       const commaParts = clause.split(",").map((part) => part.trim()).filter(Boolean);
       const afterComma = commaParts[commaParts.length - 1];
@@ -776,6 +923,9 @@ function liveSearchQueries(text: string): string[] {
           normalized === "peaceful assembly" ||
           normalized === "right to protest"
         ) {
+          return -1;
+        }
+        if (normalized === "natural environment" || normalized === "the environment") {
           return -1;
         }
         if (normalized.includes("covenant") || normalized.includes("convention on human")) return 5;
@@ -1110,32 +1260,15 @@ function draftLooksLikeEntityBio(text: string): boolean {
   return ENTITY_LEAD_PATTERN.test(lead) || PERSON_BIO_LEAD_PATTERN.test(lead);
 }
 
-function alignmentSignalTokens(userText: string, contentTokens: readonly string[]): string[] {
-  const headingConcrete = new Set<string>();
-  for (const phrase of userTopicPhrases(userText)) {
-    for (const token of tokenizeTopic(phrase)) {
-      if (
-        token.length >= 4 &&
-        !ABSTRACT_HEADING_TOKENS.has(token) &&
-        !WEAK_SOLO_TOPIC_TOKENS.has(token) &&
-        !GENERIC_ALIGNMENT_TOKENS.has(token)
-      ) {
-        headingConcrete.add(token);
-      }
-    }
-  }
-
-  const fromBody = contentTokens.filter(
+/** Distinctive body tokens used to prove the Wikipedia page matches what the draft says. */
+function bodyMatchSignals(contentTokens: readonly string[]): string[] {
+  return contentTokens.filter(
     (token) =>
       token.length >= 4 &&
       !ABSTRACT_HEADING_TOKENS.has(token) &&
       !WEAK_SOLO_TOPIC_TOKENS.has(token) &&
       !GENERIC_ALIGNMENT_TOKENS.has(token),
   );
-
-  // Prefer concrete heading nouns (Organs) plus distinctive body nouns (heart, lungs).
-  const merged = [...headingConcrete, ...fromBody.filter((token) => !headingConcrete.has(token))];
-  return merged.slice(0, 16);
 }
 
 function pageAlignsWithDraft(
@@ -1153,29 +1286,44 @@ function pageAlignsWithDraft(
   }
   if (contentTokens.length < 4) return true;
 
-  const signals = alignmentSignalTokens(userText, contentTokens);
-  if (signals.length < 2) {
+  const heading = extractHeadingLine(userText);
+  const metaphorical = heading ? isMetaphoricalEssayHeading(heading) : false;
+  const titleAgrees =
+    !metaphorical &&
+    titleMatchesUserTopic(page.topic, new Set(userTopicKeys(userText)));
+
+  // Gate on BODY topic, not the title alone. Require ~90% topic confidence.
+  const bodySignals = bodyMatchSignals(contentTokens);
+  if (bodySignals.length >= 4) {
+    const bodyRatio = contentOverlapRatio(extract, bodySignals.slice(0, 24));
+    if (topicMatchConfidence(bodyRatio, titleAgrees) < TOPIC_CONFIDENCE_MIN) {
+      return false;
+    }
+  } else {
     const sample = contentTokens.slice(0, 12);
     const ratio = contentOverlapRatio(extract, sample);
-    return ratio >= 0.35;
+    if (topicMatchConfidence(ratio, titleAgrees) < TOPIC_CONFIDENCE_MIN) {
+      return false;
+    }
   }
 
   const extractTokens = new Set(tokenizeTopic(extract));
-  let hits = 0;
-  for (const token of signals) {
-    if (extractTokens.has(token)) hits += 1;
-  }
-  const ratio = hits / signals.length;
-
   const headingConcrete = headingConcreteTokens(userText);
-  if (headingConcrete.length >= 2) {
+  // For literal encyclopedia headings (Environment, Cultural Memory), keep the
+  // heading-overlap guard. Metaphorical titles must not pass on title words alone.
+  if (!metaphorical && headingConcrete.length >= 2) {
     const headingHits = headingConcrete.filter((token) => extractTokens.has(token)).length;
-    // Cultural Memory must keep cultural/national signals — not biology Memory.
     if (headingHits < 2) return false;
   }
 
-  // Require real subject overlap (heart/lung/organ), not shared filler words.
-  return hits >= 2 && ratio >= 0.28;
+  // Metaphorical / creative titles: body confidence above is enough; never
+  // accept on heading word overlap with a literal encyclopedia page.
+  if (metaphorical && !titleAgrees) {
+    const bodyRatio = contentOverlapRatio(extract, bodySignals.slice(0, 24));
+    if (bodyRatio < BODY_TOPIC_MATCH_MIN) return false;
+  }
+
+  return true;
 }
 
 function headingConcreteTokens(userText: string): string[] {
@@ -1211,7 +1359,7 @@ function headingTopicBigrams(userText: string): string[] {
   return grams;
 }
 
-/** Best rematch score: multi-word title overlap beats ambiguous single-word collisions. */
+/** Best rematch score: body-topic overlap beats title-only keyword collisions. */
 function scoreWikipediaCandidate(
   page: WikipediaRow,
   userText: string,
@@ -1223,14 +1371,28 @@ function scoreWikipediaCandidate(
   const titleLower = title.toLowerCase();
   const heading = headingConcreteTokens(userText);
   const sharedHeading = titleTokens.filter((token) => heading.includes(token)).length;
-  const signals = alignmentSignalTokens(userText, contentTokens);
+  const bodySignals = bodyMatchSignals(contentTokens);
   const extract = page.rawExtract || page.output || page.source_text;
-  const overlap = contentOverlapRatio(extract, signals.length >= 2 ? signals : contentTokens.slice(0, 16));
+  const bodyOverlap = contentOverlapRatio(
+    extract,
+    bodySignals.length >= 4 ? bodySignals.slice(0, 24) : contentTokens.slice(0, 16),
+  );
+  const headingLine = extractHeadingLine(userText);
+  const metaphorical = headingLine ? isMetaphoricalEssayHeading(headingLine) : false;
 
-  let score = sharedHeading * 5 + overlap * 10;
-  if (titleMatchesUserTopic(title, userKeys)) score += 4;
-  for (const gram of headingTopicBigrams(userText)) {
-    if (titleLower.includes(gram)) score += 12;
+  // Body match dominates (target ~90%+ for a real rematch).
+  let score = bodyOverlap * 40;
+  if (!metaphorical) {
+    score += sharedHeading * 3;
+    if (titleMatchesUserTopic(title, userKeys)) score += 4;
+    for (const gram of headingTopicBigrams(userText)) {
+      const gramTokens = gram.split(" ");
+      if (gramTokens.every((token) => contentTokens.includes(token)) && titleLower.includes(gram)) {
+        score += 8;
+      }
+    }
+  } else if (titleMatchesUserTopic(title, userKeys)) {
+    score += bodyOverlap >= BODY_TOPIC_MATCH_MIN ? 2 : -20;
   }
   for (const userKey of userKeys) {
     const phrase = tokensFromKey(userKey).join(" ");
@@ -1261,11 +1423,31 @@ function scoreWikipediaCandidate(
       score -= 14;
     }
   }
+  const environmentDraft =
+    contentTokens.includes("environment") ||
+    contentTokens.includes("ecosystem") ||
+    contentTokens.includes("pollution") ||
+    contentTokens.includes("deforestation");
+  if (environmentDraft) {
+    if (titleLower === "natural environment" || titleLower === "environment") {
+      score += 18;
+    }
+    if (titleLower === "environmental protection") {
+      score += 8;
+    }
+    if (titleLower.includes("water pollution") && !contentTokens.includes("pollution")) {
+      score -= 12;
+    }
+  }
   if (titleTokens.length === 1 && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(titleTokens[0]!)) {
     score -= 15;
   }
-  if (heading.length >= 2 && sharedHeading < 2) {
+  if (!metaphorical && heading.length >= 2 && sharedHeading < 2) {
     score -= 8;
+  }
+  // Only penalize when topic confidence itself is below the 90% bar.
+  if (topicMatchConfidence(bodyOverlap, !metaphorical && titleMatchesUserTopic(title, userKeys)) < TOPIC_CONFIDENCE_MIN) {
+    score -= 30;
   }
   return score;
 }
