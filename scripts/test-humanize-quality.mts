@@ -189,6 +189,17 @@ Cultural memory is the shared stories, traditions, and experiences that help com
 Schools, museums, monuments, and public ceremonies keep those memories alive. When a nation remembers its past together, citizens often feel a stronger sense of belonging and purpose.
 `;
 
+const FRANCE_PEACEFUL_ASSEMBLY_ESSAY = `Country’s Stance
+
+France supports peaceful assembly under the International Covenant on Civil and Political Rights and the European Convention on Human Rights. It opposes using force automatically or for political purposes and believes authorities must distinguish peaceful protesters from violent individuals.
+
+However, France also maintains that freedom of assembly does not protect attacks, arson, or serious destruction. Therefore, it supports limited and proportionate force when there is an immediate threat and peaceful measures have failed. France recognizes that its own controversies demonstrate the need for clearer rules, stronger oversight, and better accountability.
+
+Proposed Solutions
+
+France proposes an international de-escalation procedure requiring communication with organizers, clear warnings, safe exit routes, and targeted intervention before broader force is considered.
+`;
+
 const ENVIRONMENT_ESSAY = `Protecting the environment is no longer only a local issue. Air quality, rivers, and forests are linked to how cities produce energy, grow food, and throw things away.
 
 Planting trees, cutting waste, and using cleaner power can reduce harm, but they work best when governments, businesses, and households act together. A single recycling bin does not fix polluted water if factories still dump chemicals upstream.
@@ -1238,6 +1249,14 @@ Rainforests also illustrate a much broader set of global development debates. It
         culturalMemoryWiki.output,
       ),
     `topic=${culturalMemoryWiki?.topic ?? "none"} opening=${culturalMemoryWiki?.output.slice(0, 140) ?? "none"}`,
+  );
+  const franceAssemblyWiki = await findWikipediaLiveMatch(FRANCE_PEACEFUL_ASSEMBLY_ESSAY);
+  assert(
+    "France peaceful-assembly draft matches Freedom of assembly (not ICCPR treaty)",
+    franceAssemblyWiki?.kind === "topic" &&
+      /freedom of assembly/i.test(franceAssemblyWiki.topic) &&
+      !/international covenant on civil and political rights/i.test(franceAssemblyWiki.topic),
+    `topic=${franceAssemblyWiki?.topic ?? "none"} opening=${franceAssemblyWiki?.output.slice(0, 140) ?? "none"}`,
   );
   assert(
     "Dangerous Things in Life has no same-topic Wikipedia page (Vertex rewrite path)",

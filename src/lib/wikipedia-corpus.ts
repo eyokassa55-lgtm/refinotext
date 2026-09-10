@@ -356,6 +356,22 @@ const ABSTRACT_HEADING_TOKENS = new Set([
   "connections",
   "interaction",
   "interactions",
+  "stance",
+  "stances",
+  "position",
+  "positions",
+  "solution",
+  "solutions",
+  "proposed",
+  "proposal",
+  "proposals",
+  "recommendation",
+  "recommendations",
+  "introduction",
+  "conclusion",
+  "background",
+  "country",
+  "countries",
 ]);
 
 /**
@@ -418,6 +434,16 @@ const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
   "collective memory": ["cultural memory", "collective memory"],
   "national identity": ["national identity", "cultural identity", "nation"],
   "cultural identity": ["cultural identity", "cultural memory", "national identity"],
+  "peaceful assembly": [
+    "freedom of assembly",
+    "right to protest",
+    "demonstration",
+    "protest",
+  ],
+  "freedom of assembly": ["peaceful assembly", "right to protest", "demonstration"],
+  "right to protest": ["freedom of assembly", "peaceful assembly", "demonstration"],
+  "use of force": ["police use of force", "law enforcement", "freedom of assembly"],
+  "proportionate force": ["police use of force", "freedom of assembly"],
 };
 
 const TOPIC_PHRASE_BREAK =
@@ -442,9 +468,12 @@ function normalizeTopicToken(token: string): string {
 function tokenizeTopic(text: string): string[] {
   return text
     .toLowerCase()
+    .replace(/[’‘‛]/g, "'")
     .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
     .split(/\s+/)
-    .map((token) => token.replace(/^['’-]+|['’-]+$/g, ""))
+    .map((token) =>
+      token.replace(/^['’-]+|['’-]+$/g, "").replace(/'s$/i, "").replace(/'$/g, ""),
+    )
     .map(normalizeTopicToken)
     .filter((token) => {
       if (!token || STOPWORDS.has(token)) return false;
@@ -520,6 +549,55 @@ function headingRelatedPhrases(heading: string): string[] {
   return extras;
 }
 
+function isAbstractTopicHeading(heading: string): boolean {
+  const tokens = tokenizeTopic(heading).filter(
+    (token) => !WEAK_SOLO_TOPIC_TOKENS.has(token) && token.length >= 3,
+  );
+  if (tokens.length === 0) return true;
+  const concrete = tokens.filter((token) => !ABSTRACT_HEADING_TOKENS.has(token));
+  return concrete.length === 0;
+}
+
+/** Subject phrases from the essay body when the title is only a section label. */
+function bodySubjectPhrases(text: string): string[] {
+  const body = draftBodyText(text).slice(0, 1200);
+  const phrases: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const cleaned = raw.replace(/\s+/g, " ").trim();
+    if (!cleaned || seen.has(cleaned.toLowerCase())) return;
+    seen.add(cleaned.toLowerCase());
+    phrases.push(cleaned);
+  };
+
+  const known = [
+    /\bfreedom of assembly\b/gi,
+    /\bpeaceful assembly\b/gi,
+    /\bright to protest\b/gi,
+    /\bcivil and political rights\b/gi,
+    /\beuropean convention on human rights\b/gi,
+    /\binternational covenant on civil and political rights\b/gi,
+    /\buse of force\b/gi,
+    /\bpublic order\b/gi,
+  ];
+  for (const pattern of known) {
+    for (const match of body.matchAll(pattern)) {
+      if (match[0]) add(match[0]);
+    }
+  }
+
+  const clause = openingClause(body);
+  if (clause) {
+    add(clause);
+    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(clause)));
+    if (stripped.length >= 2 && stripped.length <= 5) {
+      add(stripped.slice(0, 3).join(" "));
+    }
+  }
+
+  return phrases.slice(0, 8);
+}
+
 function userTopicPhrases(text: string): string[] {
   const phrases: string[] = [];
   const seen = new Set<string>();
@@ -549,18 +627,24 @@ function userTopicPhrases(text: string): string[] {
 
   // Titled drafts keep the heading as the topic. Body nouns must not
   // pull in a related article (Environment is not Water pollution).
-  if (!heading) {
-    const clause = openingClause(text);
-    add(clause);
-    const commaParts = clause.split(",").map((part) => part.trim()).filter(Boolean);
-    const afterComma = commaParts[commaParts.length - 1];
-    if (afterComma && commaParts.length >= 2 && tokenizeTopic(afterComma).length <= 4) {
-      add(afterComma);
+  // Exception: abstract section titles like "Country's Stance" / "Proposed Solutions"
+  // — then use the body subject (peaceful assembly, freedom of assembly).
+  const useBodyTopics = !heading || isAbstractTopicHeading(heading);
+  if (useBodyTopics) {
+    if (!heading) {
+      const clause = openingClause(text);
+      add(clause);
+      const commaParts = clause.split(",").map((part) => part.trim()).filter(Boolean);
+      const afterComma = commaParts[commaParts.length - 1];
+      if (afterComma && commaParts.length >= 2 && tokenizeTopic(afterComma).length <= 4) {
+        add(afterComma);
+      }
+      const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(clause)));
+      if (stripped.length >= 1 && stripped.length <= 3) {
+        add(stripped.join(" "));
+      }
     }
-    const stripped = skipPreamble(skipLeadingFrames(tokenizeTopic(clause)));
-    if (stripped.length >= 1 && stripped.length <= 3) {
-      add(stripped.join(" "));
-    }
+    for (const phrase of bodySubjectPhrases(text)) add(phrase);
   }
 
   return phrases;
@@ -687,6 +771,14 @@ function liveSearchQueries(text: string): string[] {
       const rank = (value: string) => {
         const normalized = value.toLowerCase();
         const tokens = tokenizeTopic(normalized);
+        if (
+          normalized === "freedom of assembly" ||
+          normalized === "peaceful assembly" ||
+          normalized === "right to protest"
+        ) {
+          return -1;
+        }
+        if (normalized.includes("covenant") || normalized.includes("convention on human")) return 5;
         if (tokens.length >= 2 && tokens.every((token) => !ABSTRACT_HEADING_TOKENS.has(token))) return 0;
         if (tokens.some((token) => ABSTRACT_HEADING_TOKENS.has(token)) && tokens.length === 1) return 6;
         if (tokens.length === 1 && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(tokens[0]!)) return 5;
@@ -1149,6 +1241,26 @@ function scoreWikipediaCandidate(
       }
     }
   }
+  const assemblyDraft =
+    contentTokens.includes("assembly") ||
+    contentTokens.includes("peaceful") ||
+    contentTokens.includes("protest") ||
+    contentTokens.includes("protester");
+  if (assemblyDraft) {
+    if (
+      titleLower === "freedom of assembly" ||
+      titleLower === "right to protest" ||
+      titleLower.includes("freedom of assembly")
+    ) {
+      score += 22;
+    }
+    if (
+      titleLower.includes("international covenant on civil and political rights") ||
+      titleLower.includes("european convention on human rights")
+    ) {
+      score -= 14;
+    }
+  }
   if (titleTokens.length === 1 && AMBIGUOUS_SOLO_TOPIC_TOKENS.has(titleTokens[0]!)) {
     score -= 15;
   }
@@ -1259,6 +1371,18 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   const userKeys = new Set(userTopicKeys(userText));
   if (userKeys.size === 0) return null;
   const contentTokens = contentTopicTokens(userText);
+
+  // Peaceful-assembly / protest-policing drafts → Freedom of assembly (not the ICCPR treaty page).
+  if (/\b(peaceful assembly|freedom of assembly|right to protest)\b/i.test(userText)) {
+    const preferred = await fetchWikipediaPage("Freedom of assembly");
+    if (preferred) {
+      const softOk =
+        pageAlignsWithDraft(preferred, userText, contentTokens) ||
+        (/\bassembly\b/i.test(preferred.rawExtract || preferred.output || "") &&
+          /\b(peaceful|protest|force|police|rights?)\b/i.test(userText));
+      if (softOk) return toMatch(preferred, 0.97, "topic");
+    }
+  }
 
   let mathFallback: WikipediaRow | null = null;
   let bestRow: WikipediaRow | null = null;
