@@ -380,11 +380,77 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
   };
 }
 
+/**
+ * Final safety gate: never ship a Wikipedia body that only shares a title keyword
+ * (Decision Fatigue title + Pilot decision-making body).
+ */
+function wikipediaOutputMatchesDraftBody(
+  userText: string,
+  hit: Pick<DatabaseTrainingMatch, "topic" | "output" | "rawExtract">,
+): boolean {
+  const wikiBody = (hit.rawExtract || hit.output || "").replace(/^#\s+[^\n]+\n*/, "");
+  const draftBody = userText.replace(/^#\s+[^\n]+\n*/, "");
+  const draftLower = draftBody.toLowerCase();
+  const wikiLower = `${hit.topic || ""}\n${wikiBody}`.toLowerCase();
+
+  const domainMarkers = [
+    /\b(?:pilot|aviation|aeronautical|aircraft|cockpit|airspace|airport)\b/i,
+  ];
+  for (const pattern of domainMarkers) {
+    if (pattern.test(wikiLower) && !pattern.test(draftLower)) return false;
+  }
+
+  const subject = draftLower.match(
+    /\b(decision fatigue|ego depletion|freedom of assembly|peaceful assembly|cultural memory|natural environment|water pollution)\b/,
+  );
+  if (subject?.[1] && !wikiLower.includes(subject[1])) return false;
+
+  const draftTokens = draftLower
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 5);
+  const counts = new Map<string, number>();
+  for (const token of draftTokens) {
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([token]) => token)
+    .filter(
+      (token) =>
+        ![
+          "about",
+          "after",
+          "before",
+          "their",
+          "there",
+          "these",
+          "those",
+          "which",
+          "where",
+          "while",
+          "would",
+          "could",
+          "should",
+        ].includes(token),
+    )
+    .slice(0, 12);
+  if (top.length < 4) return true;
+  const wikiTokens = new Set(
+    wikiLower
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+  const hits = top.filter((token) => wikiTokens.has(token)).length;
+  return hits / top.length >= 0.35;
+}
+
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   // 1) Full English Wikipedia via live API (millions of articles — NOT the ~20k training file).
   // The 20,722 pairs were only for Vertex fine-tuning; Humanize does not search that file.
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
-  if (wikipediaHit) {
+  if (wikipediaHit && wikipediaOutputMatchesDraftBody(request.text, wikipediaHit)) {
     const inputWords = countWords(request.text);
     const topic = wikipediaHit.topic?.trim() || extractUserTitle(request.text) || "Article";
     const sizedFromRaw = wikipediaHit.rawExtract
@@ -412,6 +478,12 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     return resolveStoredHit({
       ...wikipediaHit,
       output,
+    });
+  }
+  if (wikipediaHit) {
+    console.info("[humanize] skipped Wikipedia hit — body topic did not match draft", {
+      topic: wikipediaHit.topic,
+      score: wikipediaHit.score,
     });
   }
 

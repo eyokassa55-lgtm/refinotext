@@ -414,6 +414,13 @@ const AMBIGUOUS_SOLO_TOPIC_TOKENS = new Set([
   "wonder",
   "optimized",
   "optimised",
+  "decision",
+  "decisions",
+  "fatigue",
+  "quiet",
+  "drift",
+  "choice",
+  "choices",
 ]);
 
 /**
@@ -551,6 +558,8 @@ const TOPIC_SEARCH_ALIASES: Record<string, string[]> = {
   "right to protest": ["freedom of assembly", "peaceful assembly", "demonstration"],
   "use of force": ["police use of force", "law enforcement", "freedom of assembly"],
   "proportionate force": ["police use of force", "freedom of assembly"],
+  "decision fatigue": ["decision fatigue", "ego depletion"],
+  "decision making": ["decision-making", "decision fatigue"],
 };
 
 const TOPIC_PHRASE_BREAK =
@@ -672,12 +681,14 @@ function isAbstractTopicHeading(heading: string): boolean {
 function isMetaphoricalEssayHeading(heading: string): boolean {
   const lower = heading.toLowerCase();
   if (
-    /\b(art of|rediscovering|rethinking|navigating|embracing|exploring|journey of|power of|beauty of|paradox of|myth of|cost of|price of)\b/i.test(
+    /\b(art of|rediscovering|rethinking|navigating|embracing|exploring|journey of|power of|beauty of|paradox of|myth of|cost of|price of|quiet drift|slow burn|hidden cost|true cost|gentle art)\b/i.test(
       lower,
     )
   ) {
     return true;
   }
+  // "The Quiet Drift of Decision Fatigue" / poetic "The X of Y" essay titles.
+  if (/^the\s+\w+\s+\w+\s+of\s+/i.test(heading.trim())) return true;
   // Long poetic titles with a subtitle rarely map to a single wiki page.
   if (/[:–—]/.test(heading) && tokenizeTopic(heading).length >= 8) return true;
   return false;
@@ -692,14 +703,13 @@ const BODY_TOPIC_MATCH_MIN = 0.5;
 const TOPIC_CONFIDENCE_MIN = 0.9;
 
 function topicMatchConfidence(bodyRatio: number, titleAgreesWithBody: boolean): number {
-  // Scale body overlap into topic confidence; ~90% required to accept a rematch.
-  // Title agreement (Environment → Natural environment) may lift a solid body hit,
-  // but never a near-zero body hit (Getting Lost title vs spatial-disorientation page).
-  let confidence = Math.min(1, bodyRatio / 0.45);
-  if (titleAgreesWithBody && bodyRatio >= 0.22) {
-    confidence = Math.max(confidence, 0.9);
+  // Title agreement (Environment → Natural environment) may lift a solid body hit.
+  // Without title agreement, require stronger body overlap so "decision" alone cannot
+  // rematch Pilot decision making for a Decision Fatigue essay.
+  if (titleAgreesWithBody && bodyRatio >= 0.28) {
+    return Math.max(Math.min(1, bodyRatio / 0.45), 0.9);
   }
-  return confidence;
+  return Math.min(1, bodyRatio / 0.6);
 }
 
 /** Subject phrases from the essay body when the title is only a section label. */
@@ -725,6 +735,8 @@ function bodySubjectPhrases(text: string): string[] {
     /\bpublic order\b/gi,
     /\bnatural environment\b/gi,
     /\bthe environment\b/gi,
+    /\bdecision fatigue\b/gi,
+    /\bego depletion\b/gi,
   ];
   for (const pattern of known) {
     for (const match of body.matchAll(pattern)) {
@@ -926,6 +938,9 @@ function liveSearchQueries(text: string): string[] {
           return -1;
         }
         if (normalized === "natural environment" || normalized === "the environment") {
+          return -1;
+        }
+        if (normalized === "decision fatigue" || normalized === "ego depletion") {
           return -1;
         }
         if (normalized.includes("covenant") || normalized.includes("convention on human")) return 5;
@@ -1271,6 +1286,83 @@ function bodyMatchSignals(contentTokens: readonly string[]): string[] {
   );
 }
 
+/** Domain markers that must not appear in a Wikipedia page unless also in the draft. */
+const DOMAIN_CLASH_MARKERS: Array<{ id: string; pattern: RegExp }> = [
+  { id: "aviation", pattern: /\b(?:pilot|aviation|aeronautical|aircraft|cockpit|airspace|airport|flight deck)\b/i },
+  { id: "military", pattern: /\b(?:battlefield|infantry|artillery|naval warfare|combatant)\b/i },
+  { id: "software", pattern: /\b(?:source code|compiler|runtime|api endpoint|javascript|python package)\b/i },
+  { id: "sports", pattern: /\b(?:touchdown|offside|innings|grand slam|championship game)\b/i },
+];
+
+function draftSubjectBigrams(userText: string): string[] {
+  const grams: string[] = [];
+  const seen = new Set<string>();
+  const push = (gram: string) => {
+    const key = gram.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    grams.push(key);
+  };
+  for (const phrase of userTopicPhrases(userText)) {
+    const tokens = skipPreamble(skipLeadingFrames(tokenizeTopic(phrase))).filter(
+      (token) => !ABSTRACT_HEADING_TOKENS.has(token) && !WEAK_SOLO_TOPIC_TOKENS.has(token),
+    );
+    for (let i = 0; i < tokens.length - 1; i += 1) {
+      push(`${tokens[i]} ${tokens[i + 1]}`);
+    }
+  }
+  const body = draftBodyText(userText).slice(0, 900).toLowerCase();
+  for (const match of body.matchAll(/\b([a-z][a-z'-]{2,})\s+([a-z][a-z'-]{2,})\b/g)) {
+    const left = normalizeTopicToken(match[1]!);
+    const right = normalizeTopicToken(match[2]!);
+    if (
+      !left ||
+      !right ||
+      STOPWORDS.has(left) ||
+      STOPWORDS.has(right) ||
+      ABSTRACT_HEADING_TOKENS.has(left) ||
+      WEAK_SOLO_TOPIC_TOKENS.has(left)
+    ) {
+      continue;
+    }
+    push(`${left} ${right}`);
+    if (grams.length >= 8) break;
+  }
+  return grams.slice(0, 8);
+}
+
+function pageHasDomainClash(page: WikipediaRow, userText: string): boolean {
+  const pageText = `${page.topic}\n${page.output || page.source_text || page.rawExtract || ""}`.slice(0, 2500);
+  const draft = userText.slice(0, 2500);
+  for (const marker of DOMAIN_CLASH_MARKERS) {
+    if (marker.pattern.test(pageText) && !marker.pattern.test(draft)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pageCoversDraftSubject(page: WikipediaRow, userText: string): boolean {
+  const extract = `${page.topic} ${page.output || page.source_text || page.rawExtract || ""}`.toLowerCase();
+  const bigrams = draftSubjectBigrams(userText);
+  if (bigrams.length === 0) return true;
+  // Prefer a real multi-word subject hit (decision fatigue), not a solo "decision".
+  const hits = bigrams.filter((gram) => extract.includes(gram)).length;
+  if (hits >= 1) return true;
+  // Alias rescue (decision fatigue → ego depletion).
+  for (const gram of bigrams) {
+    for (const alias of topicAliasQueries(gram)) {
+      if (extract.includes(alias.toLowerCase())) return true;
+    }
+  }
+  // Literal encyclopedia headings may still pass via strong title agreement below.
+  const heading = extractHeadingLine(userText);
+  if (heading && !isMetaphoricalEssayHeading(heading) && !isAbstractTopicHeading(heading)) {
+    return titleMatchesUserTopic(page.topic, new Set(userTopicKeys(userText)));
+  }
+  return false;
+}
+
 function pageAlignsWithDraft(
   page: WikipediaRow,
   userText: string,
@@ -1284,6 +1376,8 @@ function pageAlignsWithDraft(
   ) {
     return false;
   }
+  if (pageHasDomainClash(page, userText)) return false;
+  if (!pageCoversDraftSubject(page, userText)) return false;
   if (contentTokens.length < 4) return true;
 
   const heading = extractHeadingLine(userText);
@@ -1562,6 +1656,22 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
         pageAlignsWithDraft(preferred, userText, contentTokens) ||
         (/\bassembly\b/i.test(preferred.rawExtract || preferred.output || "") &&
           /\b(peaceful|protest|force|police|rights?)\b/i.test(userText));
+      if (softOk) return toMatch(preferred, 0.97, "topic");
+    }
+  }
+
+  // Psychology "decision fatigue" drafts — never Pilot / aeronautical decision making.
+  if (/\bdecision fatigue\b/i.test(userText)) {
+    const preferred =
+      (await fetchWikipediaPage("Decision fatigue")) ||
+      (await fetchWikipediaPage("Ego depletion"));
+    if (preferred) {
+      const softOk =
+        pageAlignsWithDraft(preferred, userText, contentTokens) ||
+        (/\bdecision fatigue\b|\bego depletion\b/i.test(
+          `${preferred.topic}\n${preferred.rawExtract || preferred.output || ""}`,
+        ) &&
+          !/\bpilot\b|\baeronautical\b|\baviation\b/i.test(preferred.topic));
       if (softOk) return toMatch(preferred, 0.97, "topic");
     }
   }

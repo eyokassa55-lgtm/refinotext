@@ -194,6 +194,11 @@ const GETTING_LOST_ESSAY = `# The Art of Getting Lost: Rediscovering Wonder in a
 Modern life is designed for efficiency. Maps, schedules, and recommendation engines reduce friction until surprise nearly disappears. Getting lost is not only spatial disorientation; it is a deliberate step away from optimized routines so curiosity and freedom can return. Technology often removes the small accidents that once sparked wonder. When every route is planned, we forget how discovery feels.
 `;
 
+const DECISION_FATIGUE_ESSAY = `# The Quiet Drift of Decision Fatigue
+
+Decision fatigue is the mental tiredness that builds up after making many choices through a day. Small decisions like what to eat or wear sit beside bigger ones about school, work, and relationships. Over time that load can drain mental energy until even simple choices feel hard.
+`;
+
 const FRANCE_PEACEFUL_ASSEMBLY_ESSAY = `Country’s Stance
 
 France supports peaceful assembly under the International Covenant on Civil and Political Rights and the European Convention on Human Rights. It opposes using force automatically or for political purposes and believes authorities must distinguish peaceful protesters from violent individuals.
@@ -1263,6 +1268,34 @@ Rainforests also illustrate a much broader set of global development debates. It
         /\befficienc|\bwonder|\bcuriosit|\boptim/i.test(gettingLostWiki.output)),
     `topic=${gettingLostWiki?.topic ?? "none"} opening=${gettingLostWiki?.output.slice(0, 140) ?? "none"}`,
   );
+  const decisionFatigueWiki = await findWikipediaLiveMatch(DECISION_FATIGUE_ESSAY);
+  assert(
+    "Decision Fatigue does not rematch Pilot / aeronautical decision making",
+    decisionFatigueWiki === null ||
+      (/decision fatigue|ego depletion/i.test(decisionFatigueWiki.topic) &&
+        !/\bpilot\b|\baeronautical\b|\baviation\b/i.test(decisionFatigueWiki.output)),
+    `topic=${decisionFatigueWiki?.topic ?? "none"} opening=${decisionFatigueWiki?.output.slice(0, 140) ?? "none"}`,
+  );
+  try {
+    const engineDecisionFatigue = await runEngineHumanization({
+      text: DECISION_FATIGUE_ESSAY,
+      intensity: 100,
+    });
+    assert(
+      "Decision Fatigue keeps psychology body (not pilot ADM Wikipedia)",
+      /\bdecision fatigue\b|\bmental\b|\bchoices?\b|\btired/i.test(engineDecisionFatigue.text) &&
+        !/\bpilot decision\b|\baeronautical decision\b|\baviation accidents\b/i.test(
+          engineDecisionFatigue.text,
+        ),
+      `source=${engineDecisionFatigue.source} opening=${engineDecisionFatigue.text.slice(0, 160)}`,
+    );
+  } catch (error) {
+    assert(
+      "Decision Fatigue keeps psychology body (not pilot ADM Wikipedia)",
+      error instanceof HumanizationFailedError,
+      String(error),
+    );
+  }
   try {
     const engineGettingLost = await runEngineHumanization({
       text: GETTING_LOST_ESSAY,
