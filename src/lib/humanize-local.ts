@@ -1,5 +1,5 @@
 import { scrubAiEssayMarks } from "@/lib/humanize-voice";
-import { formatEssayParagraphs } from "@/lib/humanize-output";
+import { extractUserTitle, formatEssayParagraphs } from "@/lib/humanize-output";
 
 /**
  * Offline rewrite: edits the user's own draft with phrase-level humanization.
@@ -78,24 +78,28 @@ export function humanizeLocally(text: string): string {
   const trimmed = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
   if (!trimmed) return "";
 
-  const scrubbed = scrubAiEssayMarks(trimmed);
+  // Hold the title aside: the scrubber joins lines that do not end in
+  // punctuation, which would fold a heading into the first paragraph.
+  const title = extractUserTitle(trimmed);
+  const source = title ? trimmed.replace(/^#?\s*[^\n]+\n+/, "") : trimmed;
+
+  const scrubbed = scrubAiEssayMarks(source);
   const blocks = scrubbed
     .split(/\n\s*\n/)
     .map((block) => block.replace(/[ \t]*\n[ \t]*/g, " ").trim())
     .filter(Boolean)
     .map(rewriteParagraph);
 
-  let output = blocks.join("\n\n");
-  output = formatEssayParagraphs(output);
+  let body = blocks.join("\n\n");
 
   // Guarantee visible change for short stiff emails even if few swaps fired.
-  if (output === scrubbed || output === trimmed) {
-    output = output
+  if (body === scrubbed || body === source) {
+    body = body
       .replace(/\bI would appreciate it if you could\b/gi, "Please")
       .replace(/\bas soon as possible\b/gi, "soon")
       .replace(/\badditional information\b/gi, "more details");
-    output = formatEssayParagraphs(output);
   }
 
+  const output = formatEssayParagraphs(title ? `${title}\n\n${body}` : body);
   return output.trim();
 }

@@ -22,7 +22,9 @@ import {
   buildOgRefinoInferenceInstruction,
   buildRepairSystemInstruction,
   buildStyleGuidedRewriteInstruction,
+  buildStyleRewriteInstruction,
   buildTunedSystemInstruction,
+  resolveEditorStyle,
 } from "../src/lib/humanize-prompt";
 import {
   findBannedAiPhrases,
@@ -1067,6 +1069,44 @@ Rainforests also illustrate a much broader set of global development debates. It
     { input: firstPair.input, output: firstPair.output },
   ]);
   assert("rewrite prompt keeps facts and paragraph breaks", /paragraph breaks/i.test(rewritePrompt));
+
+  assert(
+    "editor tabs map onto the rewriter style blocks",
+    resolveEditorStyle(undefined) === "AUTO" &&
+      resolveEditorStyle("academic") === "ACADEMIC" &&
+      resolveEditorStyle("professional") === "PROFESSIONAL" &&
+      resolveEditorStyle("friendly") === "FRIENDLY" &&
+      resolveEditorStyle("formal") === "FORMAL" &&
+      resolveEditorStyle("casual") === "CASUAL" &&
+      resolveEditorStyle("creative") === "CREATIVE",
+  );
+  const academicStylePrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    tone: "academic",
+    intensity: 75,
+  });
+  assert(
+    "style prompt names the selected style",
+    academicStylePrompt.includes("SELECTED STYLE: ACADEMIC") && !academicStylePrompt.includes("{style}"),
+  );
+  assert(
+    "style prompt carries the shared paragraph-opening rules",
+    /FIRST LINE RULE/.test(academicStylePrompt) &&
+      /NEVER start a paragraph with/.test(academicStylePrompt),
+  );
+  assert(
+    "style prompt ships every style block",
+    ["ACADEMIC", "PROFESSIONAL", "FRIENDLY", "FORMAL", "CASUAL", "CREATIVE"].every((block) =>
+      academicStylePrompt.includes(`\n${block}\n`),
+    ),
+  );
+  assert("style prompt states the source word count", /\d+ words/.test(academicStylePrompt));
+  assert(
+    "ultra mode asks for a stronger rewrite",
+    /Ultra rewrite/.test(
+      buildStyleRewriteInstruction({ text: NEW_ESSAY, tone: "academic", intensity: 100 }),
+    ),
+  );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
   const ogCue = buildOgRefinoInferenceInstruction({ text: NEW_ESSAY, intensity: 75 });
@@ -1076,9 +1116,9 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert(
-    "Humanize engine prefers live Wikipedia outputs, then tuned model with style examples",
+    "Humanize engine drives the model with the style prompt and keeps live Wikipedia as fallback",
     engineSource.includes("findWikipediaLiveMatch") &&
-      engineSource.includes("pickWikipediaStyleExample") &&
+      engineSource.includes("buildStyleRewriteInstruction") &&
       engineSource.includes("runModelHumanization"),
   );
   assert(

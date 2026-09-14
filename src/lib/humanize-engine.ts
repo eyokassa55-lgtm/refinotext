@@ -10,7 +10,7 @@ import {
   redactModelName,
   type GenerateBackend,
 } from "@/lib/gemini";
-import { buildHumanRewriteInstruction } from "@/lib/humanize-prompt";
+import { buildStyleRewriteInstruction, resolveEditorStyle } from "@/lib/humanize-prompt";
 import {
   assessRewriteQuality,
   missingFactsForRetry,
@@ -31,7 +31,6 @@ import {
   WIKIPEDIA_EDITOR_MAX_CHARS,
   WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
 } from "@/lib/wikipedia-corpus";
-import { pickWikipediaStyleExamples } from "@/lib/wikipedia-style-examples";
 import { scrubAiEssayMarks } from "@/lib/humanize-voice";
 import { humanizeLocally } from "@/lib/humanize-local";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -219,16 +218,12 @@ async function runModelHumanizationInner(request: HumanizeRequest): Promise<Huma
     );
   }
 
-  const styleExamples = pickWikipediaStyleExamples(request.text, 2);
-  const systemInstruction = buildHumanRewriteInstruction(
-    {
-      text: request.text,
-      tone: request.tone,
-      readability: request.readability,
-      intensity: request.intensity,
-    },
-    styleExamples,
-  );
+  const systemInstruction = buildStyleRewriteInstruction({
+    text: request.text,
+    tone: request.tone,
+    readability: request.readability,
+    intensity: request.intensity,
+  });
 
   let backend = unmatchedRewriteBackend();
   let temperature = unmatchedRewriteTemperature(backend, request.intensity);
@@ -241,7 +236,7 @@ async function runModelHumanizationInner(request: HumanizeRequest): Promise<Huma
         ? redactModelName(vertex.model)
         : redactModelName(geminiModel),
     provider: isGeminiApiConfigured() && backend === "base" ? "gemini-api" : backend,
-    styleExamples: styleExamples.length,
+    style: resolveEditorStyle(request.tone),
     intensity: request.intensity ?? 75,
   });
 
@@ -296,7 +291,7 @@ Put every one of them back. Rewrite the sentences around them. Do not delete inf
 Keep about ${inputWords} words.`
         : `${systemInstruction}
 The last version was too close to the draft (phrase overlap ${(copyRatio * 100).toFixed(0)}%). That is not a rewrite.
-Rewrite like the AFTER examples from wikipedia_training_pairs: new sentence openings, different wording, same facts.
+Give every paragraph a new opening built on a noun from the draft, and change the wording while keeping the same facts.
 Do not reuse long phrases from the draft. Keep every fact, name, number, paragraph break, and about ${inputWords} words.`;
 
     const repaired = stripModelChrome(
@@ -361,6 +356,8 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
     );
   }
 
+  // Peel any echoed title before scrubbing. The scrubber joins lines that do not
+  // end in punctuation, so a title left in place folds into the first paragraph.
   const titled = extractUserTitle(request.text);
   if (titled) {
     let body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
@@ -368,10 +365,12 @@ Do not reuse long phrases from the draft. Keep every fact, name, number, paragra
     if (firstLine.toLowerCase() === titled.toLowerCase()) {
       body = body.slice(firstLine.length).replace(/^\n+/, "").trim();
     }
-    output = `${titled}\n\n${body}`;
+    output = `${titled}\n\n${scrubAiEssayMarks(body)}`;
+  } else {
+    output = scrubAiEssayMarks(output);
   }
 
-  output = formatEssayParagraphs(scrubAiEssayMarks(output));
+  output = formatEssayParagraphs(output);
 
   return {
     text: output.trim(),
