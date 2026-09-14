@@ -171,6 +171,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       "500 credits per month (500 words)",
       "Up to 500 words per request",
       SHARED_REWRITE,
+      "English and Spanish",
       "Email support",
     ],
     cta: "Get started free",

@@ -1,9 +1,19 @@
 "use client";
 
-import { Check, ChevronDown, Globe } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { Check, ChevronDown, Globe, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
+import { useCreditBalance } from "@/hooks/use-credit-balance";
+import { isClerkEnabled } from "@/lib/auth-config";
+import { ROUTES } from "@/lib/constants";
 import {
+  hasPaidHumanizerAccess,
+  isPaidHumanizeLanguage,
+} from "@/lib/humanize-access";
+import {
+  DEFAULT_HUMANIZE_LANGUAGE,
   HUMANIZE_LANGUAGES,
   type HumanizeLanguageId,
   resolveHumanizeLanguage,
@@ -15,13 +25,57 @@ type LanguagePickerProps = {
   onChange: (id: HumanizeLanguageId) => void;
 };
 
-export function LanguagePicker({ value, onChange }: LanguagePickerProps) {
+type LanguagePickerInnerProps = LanguagePickerProps & {
+  paidUnlocked: boolean;
+  upgradeHref: string;
+};
+
+export function LanguagePicker(props: LanguagePickerProps) {
+  if (!isClerkEnabled) {
+    return (
+      <LanguagePickerInner
+        {...props}
+        paidUnlocked
+        upgradeHref={ROUTES.pricing}
+      />
+    );
+  }
+
+  return <LanguagePickerWithAuth {...props} />;
+}
+
+function LanguagePickerWithAuth(props: LanguagePickerProps) {
+  const { isSignedIn } = useAuth();
+  const { credits } = useCreditBalance(Boolean(isSignedIn));
+  const paidUnlocked = hasPaidHumanizerAccess(credits?.plan);
+
+  return (
+    <LanguagePickerInner
+      {...props}
+      paidUnlocked={paidUnlocked}
+      upgradeHref={isSignedIn ? ROUTES.pricing : ROUTES.signIn}
+    />
+  );
+}
+
+function LanguagePickerInner({
+  value,
+  onChange,
+  paidUnlocked,
+  upgradeHref,
+}: LanguagePickerInnerProps) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  const router = useRouter();
   const selected = resolveHumanizeLanguage(value);
+
+  useEffect(() => {
+    if (paidUnlocked) return;
+    if (isPaidHumanizeLanguage(value)) onChange(DEFAULT_HUMANIZE_LANGUAGE);
+  }, [onChange, paidUnlocked, value]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -90,25 +144,46 @@ export function LanguagePicker({ value, onChange }: LanguagePickerProps) {
           <ul className="flex flex-col">
             {HUMANIZE_LANGUAGES.map((language) => {
               const isSelected = language.id === selected.id;
+              const locked =
+                !paidUnlocked && isPaidHumanizeLanguage(language.id);
               return (
                 <li key={language.id}>
                   <button
                     type="button"
                     role="option"
                     aria-selected={isSelected}
+                    aria-label={
+                      locked
+                        ? `${language.nativeName} (locked — upgrade to unlock)`
+                        : language.nativeName
+                    }
+                    title={
+                      locked
+                        ? "Upgrade to unlock this language"
+                        : language.englishName
+                    }
                     onClick={() => {
+                      if (locked) {
+                        setOpen(false);
+                        router.push(upgradeHref);
+                        return;
+                      }
                       onChange(language.id);
                       setOpen(false);
                     }}
                     className={cn(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors",
-                      isSelected
-                        ? "bg-mint-dark text-foreground"
-                        : "text-foreground hover:bg-mint-dark/60",
+                      locked
+                        ? "text-muted hover:bg-mint-dark/60"
+                        : isSelected
+                          ? "bg-mint-dark text-foreground"
+                          : "text-foreground hover:bg-mint-dark/60",
                     )}
                   >
                     <span>{language.nativeName}</span>
-                    {isSelected ? (
+                    {locked ? (
+                      <Lock className="h-4 w-4 opacity-70" aria-hidden />
+                    ) : isSelected ? (
                       <Check className="h-4 w-4 text-primary" aria-hidden />
                     ) : null}
                   </button>

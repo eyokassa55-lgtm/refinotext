@@ -12,6 +12,7 @@ import {
 import { GeminiError } from "@/lib/gemini";
 import {
   hasPaidHumanizerAccess,
+  isPaidHumanizeLanguage,
   isPaidWritingStyle,
   isUltraIntensity,
 } from "@/lib/humanize-access";
@@ -157,6 +158,14 @@ export async function POST(req: NextRequest) {
   }
 
   const paidUnlocked = hasPaidHumanizerAccess(check.plan);
+  if (isPaidHumanizeLanguage(parsed.language) && !paidUnlocked) {
+    return errorResponse(
+      "Upgrade to unlock this language.",
+      "PAID_FEATURE",
+      402,
+      { plan: check.plan },
+    );
+  }
   if (isPaidWritingStyle(parsed.tone) && !paidUnlocked) {
     return errorResponse(
       "Upgrade to unlock this writing style.",

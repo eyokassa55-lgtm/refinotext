@@ -33,7 +33,7 @@ import {
   writeEditorVersions,
   type EditorVersion,
 } from "@/lib/editor-versions";
-import { hasPaidHumanizerAccess } from "@/lib/humanize-access";
+import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-access";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import type { Editor } from "@tiptap/react";
@@ -111,7 +111,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     if (paidUnlocked) return;
     if (style !== "auto") setStyle("auto");
     if (ultraMode) setUltraMode(false);
-  }, [paidUnlocked, style, ultraMode]);
+    if (isPaidHumanizeLanguage(language)) setLanguage("en");
+  }, [language, paidUnlocked, setLanguage, style, ultraMode]);
 
   const notifyStatus = (msg: string) => {
     setStatusMsg(msg);
@@ -129,6 +130,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     const text = (inputEditorRef.current?.getText() ?? input).trim();
     if (!text) {
       setError(HUMANIZER_ERRORS.empty);
+      return;
+    }
+
+    if (isPaidHumanizeLanguage(language) && !paidUnlocked) {
+      notifyStatus("Upgrade to unlock this language.");
+      router.push(upgradeHref);
       return;
     }
 
@@ -213,7 +220,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       setIsProcessing(false);
       setDocStatus((current) => (current === "humanizing" ? "ready" : current));
     }
-  }, [input, isSignedIn, language, router, style, ultraMode]);
+  }, [input, isSignedIn, language, paidUnlocked, router, style, ultraMode, upgradeHref]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

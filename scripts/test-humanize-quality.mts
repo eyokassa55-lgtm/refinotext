@@ -29,6 +29,7 @@ import {
 } from "../src/lib/humanize-prompt";
 import {
   hasPaidHumanizerAccess,
+  isPaidHumanizeLanguage,
   isPaidWritingStyle,
   isUltraIntensity,
 } from "../src/lib/humanize-access";
@@ -1148,6 +1149,15 @@ Rainforests also illustrate a much broader set of global development debates. It
       hasPaidHumanizerAccess("PRO") &&
       !isUltraIntensity(75) &&
       isUltraIntensity(100),
+  );
+  assert(
+    "English and Spanish are free and other languages are paid",
+    !isPaidHumanizeLanguage(undefined) &&
+      !isPaidHumanizeLanguage("en") &&
+      !isPaidHumanizeLanguage("es") &&
+      isPaidHumanizeLanguage("fr") &&
+      isPaidHumanizeLanguage("de") &&
+      isPaidHumanizeLanguage("zh"),
   );
   assert(
     "language list includes the editor dropdown options",
