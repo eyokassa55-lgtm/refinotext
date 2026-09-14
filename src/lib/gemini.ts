@@ -4,21 +4,25 @@ import { ApiError, GoogleGenAI } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+/** Fast models that currently work for new Gemini API keys. */
 const GEMINI_API_FALLBACK_MODELS = [
-  "gemini-flash-latest",
-  "gemini-3.6-flash",
   "gemini-3.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
+  "gemini-flash-lite-latest",
+  "gemini-3.1-flash-lite",
 ];
-const GEMINI_TIMEOUT_MS = 60_000;
-const MAX_ATTEMPTS_PER_MODEL = 3;
+const GEMINI_TIMEOUT_MS = 20_000;
+const VERTEX_TIMEOUT_MS = 60_000;
+const MAX_ATTEMPTS_PER_MODEL = 2;
+const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
-/** Models that currently fail on Gemini API for this project — skip to fallbacks. */
+/** Dead, retired, or too-slow IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
-  // New Gemini API keys are redirected away from these IDs (404 for new users).
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
   "gemini-1.5-flash",
   "gemini-1.5-flash-8b",
 ]);
@@ -257,7 +261,7 @@ function getVertexClient(config: VertexConfig): GoogleGenAI {
       project: config.project,
       location: config.location,
       googleAuthOptions: loadGoogleAuthOptions(),
-      httpOptions: { timeout: GEMINI_TIMEOUT_MS },
+      httpOptions: { timeout: VERTEX_TIMEOUT_MS },
     });
   }
 
@@ -298,7 +302,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function geminiApiTargets(): { provider: GenerateProvider; model: string }[] {
+function geminiApiTargets(limit?: number): { provider: GenerateProvider; model: string }[] {
   const targets: { provider: GenerateProvider; model: string }[] = [];
   if (!isGeminiApiConfigured()) return targets;
   const primary = getGeminiApiModel();
@@ -310,7 +314,7 @@ function geminiApiTargets(): { provider: GenerateProvider; model: string }[] {
       targets.push({ provider: "gemini-api", model });
     }
   }
-  return targets;
+  return typeof limit === "number" ? targets.slice(0, Math.max(1, limit)) : targets;
 }
 
 function modelsToTry(
@@ -318,7 +322,7 @@ function modelsToTry(
   geminiApiOnly = false,
 ): { provider: GenerateProvider; model: string }[] {
   if (geminiApiOnly) {
-    const targets = geminiApiTargets();
+    const targets = geminiApiTargets(2);
     if (targets.length === 0) {
       throw new GeminiError(
         "The writing service is not configured. Please try again later.",
@@ -445,16 +449,16 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
 
   if (
     status === 404 ||
-    status === 400 ||
     lower.includes("not found") ||
     lower.includes("is not found") ||
     lower.includes("invalid model") ||
-    lower.includes("model not found")
+    lower.includes("model not found") ||
+    lower.includes("no longer available")
   ) {
     return new GeminiError(
       "The writing service is temporarily unavailable. Please try again later.",
       "MODEL_NOT_FOUND",
-      status === 400 ? 400 : 404,
+      404,
     );
   }
 
@@ -475,9 +479,10 @@ function isRetryable(error: GeminiError): boolean {
 }
 
 function maxOutputTokensFor(text: string, requested?: number): number {
-  if (requested) return Math.min(8192, Math.max(256, requested));
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.min(8192, Math.max(256, Math.ceil(words * 2.2) + 160));
+  const sized = Math.min(2048, Math.max(256, Math.ceil(words * 2.4) + 160));
+  if (requested) return Math.min(sized, Math.max(256, requested));
+  return sized;
 }
 
 /**
@@ -502,11 +507,13 @@ async function generateOnce(
     );
   }
 
+  const timeoutMs = provider === "gemini-api" ? GEMINI_TIMEOUT_MS : VERTEX_TIMEOUT_MS;
   const client =
     provider === "gemini-api"
       ? getGeminiApiClient()
       : getVertexClient(requireVertexConfig());
   const tuned = provider === "vertex";
+  const thinkingBudget = options.thinkingBudget;
 
   const response = await client.models.generateContent({
     model,
@@ -517,13 +524,13 @@ async function generateOnce(
       },
     ],
     config: {
-      httpOptions: { timeout: GEMINI_TIMEOUT_MS },
+      httpOptions: { timeout: timeoutMs },
       temperature: options.temperature ?? (tuned ? 0 : 0.72),
       topP: options.topP ?? (tuned ? 0.1 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
       candidateCount: 1,
-      ...(typeof options.thinkingBudget === "number"
-        ? { thinkingConfig: { thinkingBudget: options.thinkingBudget, includeThoughts: false } }
+      ...(typeof thinkingBudget === "number" && thinkingBudget > 0
+        ? { thinkingConfig: { thinkingBudget, includeThoughts: false } }
         : {}),
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     },
@@ -560,9 +567,11 @@ export async function generateText(
 
   let lastError: GeminiError | null = null;
   const backend = options.backend ?? "tuned";
+  const geminiApiOnly = options.geminiApiOnly === true;
+  const maxAttempts = geminiApiOnly ? MAX_GEMINI_API_ATTEMPTS : MAX_ATTEMPTS_PER_MODEL;
 
-  for (const target of modelsToTry(backend, options.geminiApiOnly === true)) {
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
+  for (const target of modelsToTry(backend, geminiApiOnly)) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         console.info("[gemini] generateContent", {
           provider: target.provider,
@@ -593,7 +602,7 @@ export async function generateText(
         ) {
           break;
         }
-        if (!isRetryable(sanitized) || attempt === MAX_ATTEMPTS_PER_MODEL) {
+        if (!isRetryable(sanitized) || attempt === maxAttempts) {
           break;
         }
 

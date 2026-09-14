@@ -3,6 +3,7 @@ import "server-only";
 import {
   GeminiError,
   generateText,
+  getGeminiApiModel,
   isGeminiApiConfigured,
   redactModelName,
 } from "@/lib/gemini";
@@ -92,7 +93,7 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     readability: request.readability,
     intensity: request.intensity,
   });
-  const model = process.env.GEMINI_MODEL?.replace(/-+$/, "").trim() || "gemini-flash-latest";
+  const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
     style: resolveEditorStyle(request.tone),
@@ -103,10 +104,8 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     systemInstruction,
     temperature: rewriteTemperature(request.intensity),
     topP: REWRITE_TOP_P,
-    maxOutputTokens: 8192,
     backend: "base",
     geminiApiOnly: true,
-    thinkingBudget: 0,
   });
 }
 
