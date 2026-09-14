@@ -70,6 +70,7 @@ function PricingSectionInner({
     try {
       const res = await fetch("/api/checkout/polar", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productKey }),
       });

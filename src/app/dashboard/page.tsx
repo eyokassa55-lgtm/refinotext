@@ -5,6 +5,7 @@ import { ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { getCreditBalance } from "@/lib/credits";
+import { planLabel, syncPolarCheckoutOnReturn } from "@/lib/polar-fulfillment";
 import { prisma } from "@/lib/prisma";
 import { PAGE_SEO, pageMetadata } from "@/lib/seo";
 import { ensureCurrentUser } from "@/lib/users";
@@ -24,7 +25,18 @@ const TYPE_LABELS: Record<string, string> = {
   REFUND: "Refund",
 };
 
-export default async function DashboardPage() {
+function firstSearchParam(
+  value: string | string[] | undefined,
+): string | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!isClerkEnabled) {
     redirect(ROUTES.home);
   }
@@ -33,6 +45,13 @@ export default async function DashboardPage() {
   if (!user) {
     redirect(ROUTES.signIn);
   }
+
+  const params = await searchParams;
+  const checkoutNotice = await syncPolarCheckoutOnReturn({
+    user,
+    checkoutId: firstSearchParam(params.checkout_id),
+    checkoutFlag: firstSearchParam(params.checkout),
+  });
 
   const account = await getCreditBalance(user.id);
   if (!account) {
@@ -53,6 +72,20 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {checkoutNotice ? (
+        <p
+          className={
+            checkoutNotice.tone === "error"
+              ? "rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+              : checkoutNotice.tone === "pending"
+                ? "rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                : "rounded-xl border border-primary/20 bg-accent-light/60 px-4 py-3 text-sm text-foreground"
+          }
+        >
+          {checkoutNotice.message}
+        </p>
+      ) : null}
+
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           Your credits
@@ -108,7 +141,7 @@ export default async function DashboardPage() {
             Current plan
           </div>
           <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-foreground">
-            {account.plan.charAt(0) + account.plan.slice(1).toLowerCase()}
+            {planLabel(account.plan)}
           </p>
           <Link
             href={ROUTES.pricing}

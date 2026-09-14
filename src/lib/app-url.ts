@@ -71,3 +71,61 @@ export function isLegacyAppHost(host: string | null): boolean {
   const hostname = host.split(":")[0]?.toLowerCase();
   return LEGACY_APP_HOSTS.includes(hostname as (typeof LEGACY_APP_HOSTS)[number]);
 }
+
+export function isRefinoProductionHost(hostname: string): boolean {
+  const host = hostname.split(":")[0]?.toLowerCase() ?? "";
+  return host === PRODUCTION_HOST || host === `www.${PRODUCTION_HOST}`;
+}
+
+function requestHostname(headers: Headers, fallbackUrl: string): string {
+  const forwarded = headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
+  const host = forwarded.split(",")[0]?.trim().toLowerCase();
+  if (host) return host.split(":")[0] ?? host;
+  try {
+    return new URL(fallbackUrl).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Origin Polar should redirect back to. Matches the host the customer is on
+ * (apex or www) so Polar does not reject a success URL that is not allowlisted.
+ */
+export function getCheckoutOrigin(headers: Headers, fallbackUrl: string): string {
+  const hostname = requestHostname(headers, fallbackUrl);
+  if (isRefinoProductionHost(hostname)) {
+    return `https://${hostname}`;
+  }
+  if (isLocalHost(hostname)) {
+    const proto =
+      headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "http";
+    const host = (headers.get("x-forwarded-host") ?? headers.get("host") ?? hostname)
+      .split(",")[0]
+      ?.trim();
+    return `${proto === "https" ? "https" : "http"}://${host || hostname}`;
+  }
+  return getAppUrl();
+}
+
+export function getAlternateRefinoOrigin(origin: string): string | null {
+  try {
+    const url = new URL(origin);
+    if (!isRefinoProductionHost(url.hostname)) return null;
+    url.hostname =
+      url.hostname === PRODUCTION_HOST
+        ? `www.${PRODUCTION_HOST}`
+        : PRODUCTION_HOST;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function polarCheckoutSuccessUrl(origin: string): string {
+  return `${origin.replace(/\/$/, "")}/dashboard?checkout=success&checkout_id={CHECKOUT_ID}`;
+}
+
+export function polarCheckoutReturnUrl(origin: string): string {
+  return `${origin.replace(/\/$/, "")}/pricing`;
+}

@@ -42,7 +42,16 @@ export function redactPolarSecrets(value: string): string {
   return value
     .replace(/polar_oat_[A-Za-z0-9]+/gi, "[redacted-token]")
     .replace(/polar_at_[A-Za-z0-9]+/gi, "[redacted-token]")
-    .replace(/polar_whs_[A-Za-z0-9]+/gi, "[redacted-secret]");
+    .replace(/polar_whs_[A-Za-z0-9]+/gi, "[redacted-secret]")
+    .replace(/whsec_[A-Za-z0-9]+/gi, "[redacted-secret]");
+}
+
+export function polarErrorBody(error: unknown): string | null {
+  return getErrorBody(error);
+}
+
+export function isPolarValidationError(error: unknown): boolean {
+  return getErrorStatus(error) === 422;
 }
 
 export function isWrongPolarEnvironmentError(error: unknown): boolean {
@@ -109,7 +118,14 @@ function publicMessageForStatus(statusCode: number, body: string | null): string
     return `The selected plan is unavailable. Please try another plan or email ${SUPPORT_EMAIL}.`;
   }
   if (statusCode === 422) {
-    return "Polar rejected the checkout request. Check the server logs for the validation details.";
+    const hay = (body ?? "").toLowerCase();
+    if (hay.includes("success_url") || hay.includes("return_url")) {
+      return `Checkout could not start because Polar rejected the return URL. Email ${SUPPORT_EMAIL}.`;
+    }
+    if (hay.includes("customer") || hay.includes("email")) {
+      return `Checkout could not attach this customer. Sign in with the same account and try again, or email ${SUPPORT_EMAIL}.`;
+    }
+    return `Checkout could not be started. Please try again or email ${SUPPORT_EMAIL}.`;
   }
   if (body) {
     return `Polar checkout failed (${statusCode}).`;

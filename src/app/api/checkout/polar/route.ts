@@ -1,8 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
+import {
+  getAlternateRefinoOrigin,
+  getCheckoutOrigin,
+  isRefinoProductionHost,
+  polarCheckoutReturnUrl,
+  polarCheckoutSuccessUrl,
+} from "@/lib/app-url";
 import { getBillingProduct } from "@/lib/billing";
-import { env } from "@/lib/env";
 import { describePolarError } from "@/lib/polar-error";
 import { createPolarCheckout, getPolarTokenStatus } from "@/lib/polar";
 import { rateLimit } from "@/lib/rate-limit";
@@ -48,15 +54,22 @@ export async function POST(req: NextRequest) {
   }
 
   const token = getPolarTokenStatus();
+  const origin = getCheckoutOrigin(req.headers, req.url);
+  const hostname = new URL(origin).hostname;
+  const productionHost = isRefinoProductionHost(hostname);
+  const alternateOrigin = getAlternateRefinoOrigin(origin);
+
   console.info("[polar/checkout] request", {
     productKey: product.key,
     productId: product.productId,
     configuredServer: token.server,
     tokenPresent: token.present,
     tokenUsable: token.usable,
+    productionHost,
     clerkUserIdPresent: Boolean(user.clerkUserId),
     customerEmailPresent: Boolean(user.email),
     appUserIdPresent: Boolean(user.id),
+    polarCustomerPresent: Boolean(user.polarCustomerId),
   });
 
   if (!token.usable) {
@@ -69,15 +82,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const appUrl = env.appUrl.replace(/\/$/, "");
     const { checkout, server } = await createPolarCheckout({
       productId: product.productId,
       productKey: product.key,
+      customerId: user.polarCustomerId,
       externalCustomerId: user.clerkUserId,
       customerEmail: user.email,
       customerName: user.name ?? undefined,
-      successUrl: `${appUrl}/dashboard?checkout=success`,
-      returnUrl: `${appUrl}/pricing`,
+      successUrl: polarCheckoutSuccessUrl(origin),
+      returnUrl: polarCheckoutReturnUrl(origin),
+      alternateSuccessUrl: alternateOrigin
+        ? polarCheckoutSuccessUrl(alternateOrigin)
+        : null,
+      alternateReturnUrl: alternateOrigin
+        ? polarCheckoutReturnUrl(alternateOrigin)
+        : null,
+      allowSandbox: !productionHost,
       metadata: {
         app: "refinotext",
         productKey: product.key,

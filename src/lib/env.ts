@@ -1,4 +1,5 @@
 import { getAppUrl } from "@/lib/app-url";
+import { getConfiguredPolarServer } from "@/lib/polar-config";
 
 function cleanEnv(value: string | undefined): string | undefined {
   const cleaned = value?.trim().replace(/^["']|["']$/g, "");
@@ -65,7 +66,7 @@ export const env = {
       return value;
     },
     get server() {
-      return getEnv("POLAR_SERVER") === "production" ? "production" : "sandbox";
+      return getConfiguredPolarServer();
     },
   },
 } as const;
