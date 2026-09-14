@@ -301,8 +301,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </div>
         </div>
 
-        <div className="grid min-h-[min(70vh,640px)] gap-3 p-3 sm:grid-cols-2">
-          <section className="flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] sm:min-h-0 sm:h-full">
+        <div className="grid h-[min(70vh,640px)] max-h-[min(70vh,640px)] grid-cols-1 grid-rows-2 overflow-hidden gap-3 p-3 sm:grid-cols-2 sm:grid-rows-1">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb]">
             <div className="relative flex min-h-0 flex-1 flex-col">
               <textarea
                 ref={inputRef}
@@ -324,7 +324,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               </div>
             </div>
 
-            <div className="border-t-2 border-border/60">
+            <div className="border-t-2 border-border/60 shrink-0">
               <div className="flex items-center gap-2 px-3 py-2">
                 {isClerkEnabled ? (
                   <>
@@ -457,10 +457,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
           </section>
 
-          <section className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white sm:min-h-0 sm:h-full">
+          <section className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white">
             {output.trim() ? (
-              <>
-                <div className="flex items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="flex shrink-0 items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
                   <button
                     type="button"
                     title="Copy output"
@@ -506,10 +506,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     </button>
                   )}
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto px-6 py-6 sm:px-8 sm:py-7">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
                   <HumanizedOutputView text={output} />
                 </div>
-              </>
+              </div>
             ) : null}
 
             {isProcessing && (
