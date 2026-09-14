@@ -7,27 +7,32 @@ import {
   Check,
   Coffee,
   Copy,
-  ChevronDown,
   Download,
   GraduationCap,
   Heart,
   Keyboard,
   Lightbulb,
   Loader2,
+  Lock,
   UploadCloud,
   Wand2,
   Zap,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useCreditBalance } from "@/hooks/use-credit-balance";
+import { useHumanizeLanguage } from "@/hooks/use-humanize-language";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { APP_LOGO_SRC, ROUTES } from "@/lib/constants";
+import { hasPaidHumanizerAccess } from "@/lib/humanize-access";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import { HumanizedOutputView } from "./humanized-output-view";
 import { humanizerEditorTextClassName } from "./humanizer-editor-styles";
+import { LanguagePicker } from "./language-picker";
 
 const EDITOR_STYLES = [
   { id: "auto", label: "Auto", Icon: Wand2 },
@@ -55,6 +60,11 @@ function HumanizerWorkspaceWithAuth() {
 }
 
 function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
+  const router = useRouter();
+  const { credits } = useCreditBalance(isSignedIn && isClerkEnabled);
+  const paidUnlocked = hasPaidHumanizerAccess(credits?.plan);
+  const { language, setLanguage } = useHumanizeLanguage();
+
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [style, setStyle] = useState<EditorStyleId>("auto");
@@ -71,6 +81,13 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const requestKeyRef = useRef<string | null>(null);
 
   const inputWordCount = countWords(input);
+  const upgradeHref = isSignedIn ? ROUTES.pricing : ROUTES.signIn;
+
+  useEffect(() => {
+    if (paidUnlocked) return;
+    if (style !== "auto") setStyle("auto");
+    if (ultraMode) setUltraMode(false);
+  }, [paidUnlocked, style, ultraMode]);
 
   const notifyStatus = (msg: string) => {
     setStatusMsg(msg);
@@ -108,6 +125,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         body: JSON.stringify({
           text,
           requestId: requestIdRef.current,
+          language,
           tone: style === "auto" ? undefined : style,
           intensity: ultraMode ? 100 : 75,
         }),
@@ -130,6 +148,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         const apiError = (data ?? {}) as ApiErrorResponse;
         if (apiError.code === "NO_WIKIPEDIA_MATCH") {
           setError(null);
+          return;
+        }
+        if (apiError.code === "PAID_FEATURE") {
+          setError(apiError.error || "Upgrade to unlock this feature.");
+          router.push(ROUTES.pricing);
           return;
         }
         setError(apiError.error || "Humanization failed. Please try again.");
@@ -157,7 +180,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
-  }, [input, isSignedIn, style, ultraMode]);
+  }, [input, isSignedIn, language, router, style, ultraMode]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -171,6 +194,24 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleRefine]);
+
+  const handleStyleClick = (id: EditorStyleId) => {
+    if (id === "auto" || paidUnlocked) {
+      setStyle(id);
+      return;
+    }
+    notifyStatus("Upgrade to unlock this writing style.");
+    router.push(upgradeHref);
+  };
+
+  const handleUltraClick = () => {
+    if (paidUnlocked) {
+      setUltraMode((current) => !current);
+      return;
+    }
+    notifyStatus("Upgrade to unlock Ultra Mode.");
+    router.push(upgradeHref);
+  };
 
   const handleCopy = async (source: "input" | "output") => {
     const text = source === "input" ? input : output;
@@ -251,13 +292,16 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           >
             {EDITOR_STYLES.map(({ id, label, Icon }) => {
               const selected = style === id;
+              const locked = id !== "auto" && !paidUnlocked;
               return (
                 <button
                   key={id}
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  onClick={() => setStyle(id)}
+                  aria-label={locked ? `${label} (locked — upgrade to unlock)` : label}
+                  title={locked ? "Upgrade to unlock this style" : label}
+                  onClick={() => handleStyleClick(id)}
                   className={
                     selected
                       ? "inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark px-3.5 py-1.5 text-xs font-medium tracking-tight text-foreground"
@@ -266,36 +310,36 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
                   {label}
+                  {locked ? <Lock className="h-3 w-3 opacity-70" aria-hidden /> : null}
                 </button>
               );
             })}
           </div>
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
-              aria-haspopup="listbox"
-              aria-label="Engine version REFV4.5 beta"
-            >
-              <span>REFV4.5</span>
-              <span className="rounded-md bg-accent-light px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground">
-                Beta
-              </span>
-              <ChevronDown className="h-4 w-4 text-foreground" aria-hidden />
-            </button>
+            <LanguagePicker value={language} onChange={setLanguage} />
 
             <button
               type="button"
-              onClick={() => setUltraMode((current) => !current)}
+              onClick={handleUltraClick}
               aria-pressed={ultraMode}
+              aria-label={
+                paidUnlocked
+                  ? "Ultra Mode"
+                  : "Ultra Mode (locked — upgrade to unlock)"
+              }
+              title={paidUnlocked ? "Ultra Mode" : "Upgrade to unlock Ultra Mode"}
               className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
                 ultraMode
                   ? "text-primary"
                   : "text-foreground hover:text-foreground/80"
               }`}
             >
-              <Zap className="h-4 w-4" aria-hidden />
+              {paidUnlocked ? (
+                <Zap className="h-4 w-4" aria-hidden />
+              ) : (
+                <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />
+              )}
               <span className="hidden sm:inline">Ultra Mode</span>
             </button>
           </div>

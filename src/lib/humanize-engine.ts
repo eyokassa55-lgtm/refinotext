@@ -7,7 +7,10 @@ import {
   isGeminiApiConfigured,
   redactModelName,
 } from "@/lib/gemini";
-import { buildStyleRewriteInstruction } from "@/lib/humanize-prompt";
+import {
+  buildRewriteUserContent,
+  buildStyleRewriteInstruction,
+} from "@/lib/humanize-prompt";
 import { stripModelChrome } from "@/lib/humanize-quality";
 import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -17,6 +20,7 @@ export type HumanizeRequest = {
   tone?: string;
   readability?: string;
   intensity?: number;
+  language?: string;
 };
 
 export type HumanizeSource =
@@ -92,15 +96,18 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     tone: request.tone,
     readability: request.readability,
     intensity: request.intensity,
+    language: request.language,
   });
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
     prompt: "gold-standard-academic",
     intensity: request.intensity ?? 75,
+    language: request.language ?? "en",
+    tone: request.tone ?? "auto",
   });
 
-  return generateText(request.text, {
+  return generateText(buildRewriteUserContent(request), {
     systemInstruction,
     temperature: rewriteTemperature(request.intensity),
     topP: REWRITE_TOP_P,

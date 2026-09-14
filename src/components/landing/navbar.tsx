@@ -5,12 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { LanguagePicker } from "@/components/humanizer/language-picker";
 import {
   DesktopAuthButtons,
   MobileAuthButtons,
 } from "@/components/landing/auth-buttons";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { Container } from "@/components/ui/container";
+import { useHumanizeLanguage } from "@/hooks/use-humanize-language";
 import { ROUTES } from "@/lib/constants";
 import { NAV_LINKS } from "@/lib/landing-data";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,7 @@ function navLinkClass(isActive: boolean) {
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { language, setLanguage } = useHumanizeLanguage();
 
   return (
     <header className="sticky top-0 z-50 overflow-x-clip border-b border-border/50 bg-card">
@@ -57,6 +60,7 @@ export function Navbar() {
                 </Link>
               );
             })}
+            <LanguagePicker value={language} onChange={setLanguage} />
             <DesktopAuthButtons />
           </div>
 
@@ -100,6 +104,9 @@ export function Navbar() {
               );
             })}
             <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+              <div className="px-3 py-1">
+                <LanguagePicker value={language} onChange={setLanguage} />
+              </div>
               <MobileAuthButtons />
             </div>
           </div>

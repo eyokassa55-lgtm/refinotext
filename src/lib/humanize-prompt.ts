@@ -1,3 +1,4 @@
+import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 
 export type HumanizePromptRequest = {
@@ -5,6 +6,7 @@ export type HumanizePromptRequest = {
   tone?: string;
   readability?: string;
   intensity?: number;
+  language?: string;
 };
 
 function rewriteStrength(intensity?: number): string {
@@ -489,6 +491,46 @@ export function resolveEditorStyle(tone?: string): EditorStyle {
   const key = tone?.trim().toLowerCase();
   if (!key) return "AUTO";
   return EDITOR_STYLES[key] ?? "AUTO";
+}
+
+function paidStyleUserNote(style: EditorStyle): string {
+  switch (style) {
+    case "ACADEMIC":
+      return "Style overlay: Academic. Keep the same structure and length, but use a scholarly register suited to essays and papers.";
+    case "PROFESSIONAL":
+      return "Style overlay: Professional. Keep the same structure and length, but use a clear workplace register.";
+    case "FRIENDLY":
+      return "Style overlay: Friendly. Keep the same structure and length, but sound warmer and more approachable. Contractions are allowed.";
+    case "FORMAL":
+      return "Style overlay: Formal. Keep the same structure and length, but use a polished official register.";
+    case "CASUAL":
+      return "Style overlay: Casual. Keep the same structure and length, but use everyday language. Contractions are allowed.";
+    case "CREATIVE":
+      return "Style overlay: Creative. Keep the same structure and length, but allow more vivid wording without adding new facts.";
+    default:
+      return "";
+  }
+}
+
+/**
+ * User-message extras (language / paid style). The gold-standard system prompt stays unchanged.
+ */
+export function buildRewriteUserContent(request: HumanizePromptRequest): string {
+  const language = resolveHumanizeLanguage(request.language);
+  const style = resolveEditorStyle(request.tone);
+  const notes: string[] = [];
+
+  if (language.id !== "en") {
+    notes.push(
+      `Write the rewritten text in ${language.englishName} (${language.nativeName}). Keep the same meaning, structure, and paragraph count.`,
+    );
+  }
+
+  const styleNote = paidStyleUserNote(style);
+  if (styleNote) notes.push(styleNote);
+
+  if (notes.length === 0) return request.text;
+  return `${notes.join("\n")}\n\n${request.text}`;
 }
 
 /**

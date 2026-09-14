@@ -10,7 +10,13 @@ import {
   saveHumanizationAndCharge,
 } from "@/lib/credits";
 import { GeminiError } from "@/lib/gemini";
+import {
+  hasPaidHumanizerAccess,
+  isPaidWritingStyle,
+  isUltraIntensity,
+} from "@/lib/humanize-access";
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
+import { HUMANIZE_LANGUAGE_IDS } from "@/lib/humanize-languages";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureCurrentUser } from "@/lib/users";
@@ -30,6 +36,7 @@ const bodySchema = z.object({
   tone: z.string().max(64).optional(),
   readability: z.string().max(64).optional(),
   intensity: z.number().int().min(0).max(100).optional(),
+  language: z.enum(HUMANIZE_LANGUAGE_IDS).optional(),
   requestId: z.string().min(8).max(128).optional(),
 });
 
@@ -149,6 +156,24 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const paidUnlocked = hasPaidHumanizerAccess(check.plan);
+  if (isPaidWritingStyle(parsed.tone) && !paidUnlocked) {
+    return errorResponse(
+      "Upgrade to unlock this writing style.",
+      "PAID_FEATURE",
+      402,
+      { plan: check.plan },
+    );
+  }
+  if (isUltraIntensity(parsed.intensity) && !paidUnlocked) {
+    return errorResponse(
+      "Upgrade to unlock Ultra Mode.",
+      "PAID_FEATURE",
+      402,
+      { plan: check.plan },
+    );
+  }
+
   const requestId = buildRequestId(
     user.id,
     parsed.requestId ?? crypto.randomUUID(),
@@ -178,6 +203,7 @@ export async function POST(req: NextRequest) {
       tone: parsed.tone,
       readability: parsed.readability,
       intensity: parsed.intensity,
+      language: parsed.language,
     });
     output = result.text;
     source = toApiSource(result.source);

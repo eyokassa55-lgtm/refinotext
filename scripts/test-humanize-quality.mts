@@ -22,10 +22,17 @@ import {
   buildOgRefinoInferenceInstruction,
   buildRepairSystemInstruction,
   buildStyleGuidedRewriteInstruction,
+  buildRewriteUserContent,
   buildStyleRewriteInstruction,
   buildTunedSystemInstruction,
   resolveEditorStyle,
 } from "../src/lib/humanize-prompt";
+import {
+  hasPaidHumanizerAccess,
+  isPaidWritingStyle,
+  isUltraIntensity,
+} from "../src/lib/humanize-access";
+import { resolveHumanizeLanguage } from "../src/lib/humanize-languages";
 import {
   findBannedAiPhrases,
   isTemplateLikeOutput,
@@ -1100,6 +1107,54 @@ Rainforests also illustrate a much broader set of global development debates. It
     "live Gemini prompt does not change with editor style tabs",
     academicStylePrompt === casualStylePrompt,
   );
+  const autoUserContent = buildRewriteUserContent({
+    text: NEW_ESSAY,
+    tone: "auto",
+    language: "en",
+  });
+  const spanishUserContent = buildRewriteUserContent({
+    text: NEW_ESSAY,
+    language: "es",
+  });
+  const casualUserContent = buildRewriteUserContent({
+    text: NEW_ESSAY,
+    tone: "casual",
+    language: "en",
+  });
+  assert(
+    "English Auto sends the draft with no extra user notes",
+    autoUserContent === NEW_ESSAY,
+  );
+  assert(
+    "non-English language is added to the user message, not the system prompt",
+    spanishUserContent.startsWith("Write the rewritten text in Spanish") &&
+      spanishUserContent.includes(NEW_ESSAY) &&
+      !academicStylePrompt.includes("Write the rewritten text in Spanish"),
+  );
+  assert(
+    "paid style overlay is added to the user message, not the system prompt",
+    casualUserContent.includes("Style overlay: Casual") &&
+      casualUserContent.includes(NEW_ESSAY) &&
+      !casualStylePrompt.includes("Style overlay: Casual"),
+  );
+  assert(
+    "Auto is free and other styles are paid",
+    !isPaidWritingStyle(undefined) &&
+      !isPaidWritingStyle("auto") &&
+      isPaidWritingStyle("academic") &&
+      isPaidWritingStyle("creative") &&
+      !hasPaidHumanizerAccess("FREE") &&
+      hasPaidHumanizerAccess("BASIC") &&
+      hasPaidHumanizerAccess("PRO") &&
+      !isUltraIntensity(75) &&
+      isUltraIntensity(100),
+  );
+  assert(
+    "language list includes the editor dropdown options",
+    resolveHumanizeLanguage("en").nativeName === "English" &&
+      resolveHumanizeLanguage("es").nativeName === "Español" &&
+      resolveHumanizeLanguage("zh").nativeName === "中文",
+  );
   assert(
     "live Gemini prompt is not padded with extra engine notes",
     !academicStylePrompt.includes("SELECTED STYLE") &&
@@ -1118,6 +1173,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Humanize engine uses Gemini API plus the style prompt only",
     engineSource.includes("buildStyleRewriteInstruction") &&
+      engineSource.includes("buildRewriteUserContent") &&
       engineSource.includes("geminiApiOnly: true") &&
       engineSource.includes("[GEMINI_API]") &&
       !engineSource.includes("findWikipediaLiveMatch") &&
@@ -1141,6 +1197,12 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize editor does not show a Wikipedia search bar",
     !workspaceSource.includes("WikipediaPicker") &&
       !workspaceSource.includes("Search any English Wikipedia topic"),
+  );
+  assert(
+    "Humanize editor has a language picker and locks paid styles",
+    workspaceSource.includes("LanguagePicker") &&
+      workspaceSource.includes("Upgrade to unlock this writing style") &&
+      workspaceSource.includes('id !== "auto" && !paidUnlocked'),
   );
   assert(
     "Humanize editor does not show a red Wikipedia-match banner",
