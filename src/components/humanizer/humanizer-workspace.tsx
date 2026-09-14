@@ -27,11 +27,19 @@ import { useCreditBalance } from "@/hooks/use-credit-balance";
 import { useHumanizeLanguage } from "@/hooks/use-humanize-language";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { APP_LOGO_SRC, ROUTES } from "@/lib/constants";
+import {
+  createEditorVersion,
+  readEditorVersions,
+  writeEditorVersions,
+  type EditorVersion,
+} from "@/lib/editor-versions";
 import { hasPaidHumanizerAccess } from "@/lib/humanize-access";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
-import { HumanizedOutputView } from "./humanized-output-view";
-import { humanizerEditorTextClassName } from "./humanizer-editor-styles";
+import type { Editor } from "@tiptap/react";
+import { HumanizerEditorToolbar, type EditorDocStatus } from "./humanizer-editor-toolbar";
+import { HumanizerRichEditor, type HumanizerRichEditorHandle } from "./humanizer-rich-editor";
+import { HumanizerVersionHistory } from "./humanizer-version-history";
 import { LanguagePicker } from "./language-picker";
 
 const EDITOR_STYLES = [
@@ -73,8 +81,15 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [copied, setCopied] = useState<"input" | "output" | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [inputEditor, setInputEditor] = useState<Editor | null>(null);
+  const [outputEditor, setOutputEditor] = useState<Editor | null>(null);
+  const [activePane, setActivePane] = useState<"input" | "output">("input");
+  const [docStatus, setDocStatus] = useState<EditorDocStatus>("ready");
+  const [versions, setVersions] = useState<EditorVersion[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputEditorRef = useRef<HumanizerRichEditorHandle>(null);
+  const outputEditorRef = useRef<HumanizerRichEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isProcessingRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
@@ -82,6 +97,18 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const inputWordCount = countWords(input);
   const upgradeHref = isSignedIn ? ROUTES.pricing : ROUTES.signIn;
+  const activeEditor = activePane === "output" ? outputEditor : inputEditor;
+  const skipStatusRef = useRef(false);
+
+  useEffect(() => {
+    setVersions(readEditorVersions());
+  }, []);
+
+  useEffect(() => {
+    if (docStatus !== "saved") return;
+    const timer = window.setTimeout(() => setDocStatus("ready"), 2000);
+    return () => window.clearTimeout(timer);
+  }, [docStatus]);
 
   useEffect(() => {
     if (paidUnlocked) return;
@@ -102,14 +129,18 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       return;
     }
 
-    const text = input.trim();
+    const text = (inputEditorRef.current?.getText() ?? input).trim();
     if (!text) {
       setError(HUMANIZER_ERRORS.empty);
       return;
     }
 
     setError(null);
+    skipStatusRef.current = true;
+    outputEditorRef.current?.clear();
+    skipStatusRef.current = false;
     setOutput("");
+    setDocStatus("humanizing");
     isProcessingRef.current = true;
     setIsProcessing(true);
 
@@ -167,7 +198,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       requestIdRef.current = null;
       requestKeyRef.current = null;
       const result = data as HumanizeResponse;
+      skipStatusRef.current = true;
+      outputEditorRef.current?.setHumanizedText(result.output);
+      skipStatusRef.current = false;
       setOutput(result.output);
+      setActivePane("output");
+      setDocStatus("ready");
       notifyStatus(
         result.creditsCharged > 0
           ? `Humanized ${result.wordCount} words. ${result.creditsCharged} credits used.`
@@ -179,6 +215,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     } finally {
       isProcessingRef.current = false;
       setIsProcessing(false);
+      setDocStatus((current) => (current === "humanizing" ? "ready" : current));
     }
   }, [input, isSignedIn, language, router, style, ultraMode]);
 
@@ -191,9 +228,53 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         handleRefine();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [handleRefine]);
+
+  const handleInputTextChange = (text: string) => {
+    setInput(text);
+    if (!skipStatusRef.current && !isProcessingRef.current) {
+      setDocStatus("unsaved");
+    }
+  };
+
+  const handleOutputTextChange = (text: string) => {
+    setOutput(text);
+    if (!skipStatusRef.current && !isProcessingRef.current) {
+      setDocStatus("unsaved");
+    }
+  };
+
+  const handleSaveVersion = () => {
+    if (!input.trim() && !output.trim()) return;
+    const version = createEditorVersion({
+      inputHtml: inputEditorRef.current?.getHtml() ?? "",
+      outputHtml: outputEditorRef.current?.getHtml() ?? "",
+      previewSource: input || output,
+    });
+    const next = [version, ...versions];
+    writeEditorVersions(next);
+    setVersions(next);
+    setDocStatus("saved");
+    notifyStatus("Version saved");
+  };
+
+  const handleRestoreVersion = (version: EditorVersion) => {
+    skipStatusRef.current = true;
+    inputEditorRef.current?.setHtml(version.inputHtml);
+    outputEditorRef.current?.setHtml(version.outputHtml);
+    skipStatusRef.current = false;
+    setHistoryOpen(false);
+    setDocStatus("ready");
+    notifyStatus("Version restored");
+  };
+
+  const handleDeleteVersion = (id: string) => {
+    const next = versions.filter((version) => version.id !== id);
+    writeEditorVersions(next);
+    setVersions(next);
+  };
 
   const handleStyleClick = (id: EditorStyleId) => {
     if (id === "auto" || paidUnlocked) {
@@ -214,7 +295,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   };
 
   const handleCopy = async (source: "input" | "output") => {
-    const text = source === "input" ? input : output;
+    const text =
+      source === "input"
+        ? (inputEditorRef.current?.getText() ?? input)
+        : (outputEditorRef.current?.getText() ?? output);
     if (!text.trim()) return;
     try {
       await navigator.clipboard.writeText(text);
@@ -230,7 +314,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const handleDownload = (source: "input" | "output") => {
     if (!isSignedIn) return;
-    const text = source === "input" ? input : output;
+    const text =
+      source === "input"
+        ? (inputEditorRef.current?.getText() ?? input)
+        : (outputEditorRef.current?.getText() ?? output);
     if (!text.trim()) return;
     const filename =
       source === "output" ? "refinotext-humanized.txt" : "refinotext-draft.txt";
@@ -253,7 +340,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     reader.onload = (event) => {
       const result = event.target?.result;
       if (typeof result === "string") {
-        setInput(result);
+        skipStatusRef.current = true;
+        inputEditorRef.current?.setText(result);
+        skipStatusRef.current = false;
+        setDocStatus("unsaved");
         notifyStatus(`Uploaded "${file.name}" (${countWords(result)} words)`);
       }
     };
@@ -264,9 +354,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   };
 
   const handleClear = () => {
-    setInput("");
-    setOutput("");
+    skipStatusRef.current = true;
+    inputEditorRef.current?.clear();
+    outputEditorRef.current?.clear();
+    skipStatusRef.current = false;
     setError(null);
+    setDocStatus("ready");
     notifyStatus("Cleared editor");
   };
 
@@ -283,7 +376,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         className="hidden"
       />
 
-      <div className="overflow-hidden rounded-2xl border-2 border-border/75 bg-transparent">
+      <div className="relative overflow-hidden rounded-2xl border-2 border-border/75 bg-transparent">
         <div className="flex items-center justify-between gap-3 border-b-2 border-border/70 px-4 py-3">
           <div
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
@@ -345,16 +438,24 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </div>
         </div>
 
+        <HumanizerEditorToolbar
+          editor={activeEditor}
+          status={isProcessing ? "humanizing" : docStatus}
+          onSaveVersion={handleSaveVersion}
+          onOpenHistory={() => setHistoryOpen(true)}
+          canSave={Boolean(input.trim() || output.trim())}
+        />
+
         <div className="grid h-[min(70vh,640px)] max-h-[min(70vh,640px)] grid-cols-1 grid-rows-2 overflow-hidden gap-3 p-3 sm:grid-cols-2 sm:grid-rows-1">
           <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb]">
             <div className="relative flex min-h-0 flex-1 flex-col">
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                aria-label="Input text"
+              <HumanizerRichEditor
+                ref={inputEditorRef}
+                ariaLabel="Input text"
                 placeholder="For optimal results, we recommend using at least 250 words."
-                className={`min-h-0 flex-1 resize-none px-4 pb-14 pt-4 ${humanizerEditorTextClassName}`}
+                onTextChange={handleInputTextChange}
+                onEditor={setInputEditor}
+                onFocusPane={() => setActivePane("input")}
               />
 
               <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
@@ -502,8 +603,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </section>
 
           <section className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white">
-            {output.trim() ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {output.trim() ? (
                 <div className="flex shrink-0 items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
                   <button
                     type="button"
@@ -550,11 +651,17 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     </button>
                   )}
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7">
-                  <HumanizedOutputView text={output} />
-                </div>
-              </div>
-            ) : null}
+              ) : null}
+
+              <HumanizerRichEditor
+                ref={outputEditorRef}
+                variant="output"
+                ariaLabel="Humanized output"
+                onTextChange={handleOutputTextChange}
+                onEditor={setOutputEditor}
+                onFocusPane={() => setActivePane("output")}
+              />
+            </div>
 
             {isProcessing && (
               <div
@@ -570,7 +677,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             )}
 
             {!output && !isProcessing && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-white px-6 text-center">
                 <Image
                   src={APP_LOGO_SRC}
                   alt=""
@@ -602,6 +709,14 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             {statusMsg}
           </p>
         ) : null}
+
+        <HumanizerVersionHistory
+          open={historyOpen}
+          versions={versions}
+          onClose={() => setHistoryOpen(false)}
+          onRestore={handleRestoreVersion}
+          onDelete={handleDeleteVersion}
+        />
       </div>
     </div>
   );

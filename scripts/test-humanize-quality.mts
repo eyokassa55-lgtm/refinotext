@@ -1205,6 +1205,12 @@ Rainforests also illustrate a much broader set of global development debates. It
       workspaceSource.includes('id !== "auto" && !paidUnlocked'),
   );
   assert(
+    "Humanize editor includes a working rich-text toolbar",
+    workspaceSource.includes("HumanizerEditorToolbar") &&
+      workspaceSource.includes("HumanizerRichEditor") &&
+      workspaceSource.includes("handleSaveVersion"),
+  );
+  assert(
     "Humanize editor does not show a red Wikipedia-match banner",
     !workspaceSource.includes("border-red-200") &&
       workspaceSource.includes('apiError.code === "NO_WIKIPEDIA_MATCH"'),

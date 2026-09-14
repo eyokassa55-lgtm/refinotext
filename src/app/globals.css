@@ -596,3 +596,126 @@ img {
     transform: none !important;
   }
 }
+
+.humanizer-prose {
+  min-height: 100%;
+  outline: none;
+  color: #374151;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.humanizer-prose p {
+  margin: 0 0 0.85em;
+}
+
+.humanizer-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.humanizer-prose h1,
+.humanizer-prose h2,
+.humanizer-prose h3 {
+  color: #111111;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0 0 0.6em;
+}
+
+.humanizer-prose h1 {
+  font-size: 20px;
+}
+
+.humanizer-prose h2 {
+  font-size: 17px;
+}
+
+.humanizer-prose h3 {
+  font-size: 15px;
+}
+
+.humanizer-prose ul {
+  list-style: disc;
+  margin: 0 0 0.85em;
+  padding-left: 1.4em;
+}
+
+.humanizer-prose ol {
+  list-style: decimal;
+  margin: 0 0 0.85em;
+  padding-left: 1.4em;
+}
+
+.humanizer-prose li {
+  margin: 0.15em 0;
+}
+
+.humanizer-prose blockquote {
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  margin: 0 0 0.85em;
+  padding-left: 0.85em;
+}
+
+.humanizer-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.humanizer-prose mark {
+  border-radius: 2px;
+  padding: 0 0.12em;
+}
+
+.humanizer-prose table {
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  width: 100%;
+}
+
+.humanizer-prose th,
+.humanizer-prose td {
+  border: 1px solid var(--border);
+  min-width: 2.5rem;
+  padding: 0.4em 0.6em;
+  position: relative;
+  vertical-align: top;
+}
+
+.humanizer-prose th {
+  background: var(--mint);
+  font-weight: 600;
+}
+
+.humanizer-prose .selectedCell::after {
+  background: color-mix(in srgb, var(--accent-light) 70%, transparent);
+  bottom: 0;
+  content: "";
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.humanizer-prose p.is-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.humanizer-prose-output {
+  color: #202122;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.humanizer-prose-output h1 {
+  font-size: 20px;
+  margin-bottom: 0.75em;
+}
