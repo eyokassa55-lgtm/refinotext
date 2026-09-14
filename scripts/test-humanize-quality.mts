@@ -1104,10 +1104,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "live Gemini prompt is the gold-standard academic rewriter",
-    academicStylePrompt.startsWith("You are a human academic writer.") &&
-      academicStylePrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
-      academicStylePrompt.endsWith("Now rewrite the following text in this exact style:"),
+    "live Gemini prompt is the professional humanizer gold-standard rewriter",
+    academicStylePrompt.startsWith("You are a professional humanizer.") &&
+      academicStylePrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
+      academicStylePrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:"),
   );
   assert(
     "live Gemini prompt does not change with editor style tabs",
@@ -1170,7 +1170,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "live Gemini prompt is not padded with extra engine notes",
-    academicStylePrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
+    academicStylePrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
       !academicStylePrompt.includes("SELECTED STYLE") &&
       !academicStylePrompt.includes("FIRST LINE RULE") &&
       !academicStylePrompt.includes("HARD BANS") &&
@@ -1190,6 +1190,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize engine uses Gemini API plus the style prompt only",
     engineSource.includes("buildStyleRewriteInstruction") &&
       engineSource.includes("buildRewriteUserContent") &&
+      engineSource.includes('prompt: "professional-humanizer"') &&
       engineSource.includes("geminiApiOnly: true") &&
       engineSource.includes("[GEMINI_API]") &&
       !engineSource.includes("findWikipediaLiveMatch") &&
