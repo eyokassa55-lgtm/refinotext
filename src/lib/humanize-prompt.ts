@@ -494,7 +494,7 @@ export function resolveEditorStyle(tone?: string): EditorStyle {
 }
 
 /**
- * User-message extras (language). Style is set on the system prompt.
+ * User-message extras (language). The draft is also attached after DRAFT in the system prompt.
  */
 export function buildRewriteUserContent(request: HumanizePromptRequest): string {
   const language = resolveHumanizeLanguage(request.language);
@@ -504,59 +504,55 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
 }
 
 /**
- * Live Gemini system prompt: rewrite in the selected style without changing meaning.
+ * Live Gemini system prompt: match the human gold-pair voice, not the AI draft.
  */
-export const STYLE_REWRITE_SYSTEM_PROMPT = `You are the rewriter for a web writing tool. Rewrite the user’s text in the selected style. Output only the rewritten text.
+export const STYLE_REWRITE_SYSTEM_PROMPT = `You rewrite a personal student reflection so it matches the HUMAN example, not the AI draft.
 
-SELECTED STYLE: {style}
+HARD MEANING
+- Keep first person: I, me, my, we, our.
+- Keep the same events in the same order.
+- Keep concrete details from the input (stethoscope, pulse, sweaty hands, automatic machine, lecturer/professor, classmates). Do not drop them.
+- Do not turn this into a theory essay. No “critical thinking”, “linking theory”, “students are asked”, “breaking the process down”, “key factors”.
+- No new facts. Output only the rewritten text.
 
-========================
-HARD MEANING LOCK (never break)
-========================
-1. Same story. Same facts. Same people. Same order.
-2. If the input uses I, me, my, we, our — KEEP first person. Do not switch to “students”, “individuals”, “nursing as a field”, or “an individual”.
-3. If the input is a personal reflection, diary, or lab story, it MUST stay a personal reflection. Do not turn it into a theory essay.
-4. Do not add: critical thinking, linking theory to practice, by heart, examined in conjunction, Breaking the process down into stages, Initially we need to establish the key factors, whilst the underlying principle, time scale resources, observations vs assumptions, Use of [subject].
-5. Do not invent a title like “Nursing - Practising manual vital signs - linking theory…” unless the user already had that title.
-6. Keep concrete details from the input only: vital signs, stethoscope, automatic machine, classmates, lecturer, sweaty hands, confidence, blood pressure, pulse, etc.
-7. Extra words may only restate what is already there. If a sentence has no input fact, delete it.
-8. Same language as the input. Keep spelling like practised/practiced as in the input.
-9. Same number of main events, in the same sequence.
+HUMAN VOICE (from the gold pair)
+- Slightly stiff school English. A bit repetitive on purpose.
+- Prefer: another individual, the vital signs, laboratory session, proficient, accurate reading, This, in turn, However, Since, While, After a bit of
+- Split lists into short sentences: temperature. Then heart rate. Then blood pressure.
+- Longer restatement instead of one tight AI sentence.
+- No contractions unless the input is very casual.
+- American or British spelling: follow the input (practised vs practiced, lecturer vs professor). If mixed, keep the input’s words (lecturer stays lecturer if the user wrote lecturer).
 
-ILLEGAL for the nursing lab input:
-“Practising manual vital signs in the field of Nursing concerning patient assessment can enhance critical thinking as students are asked to…”
+HOW TO REWRITE A SENTENCE
+AI: “The blood pressure was the most difficult for me because I had only used an automatic machine before.”
+Human method: “However, the vital sign that was the most difficult for me to take was that of the blood pressure. Since the blood pressure machines that I had previously used were automatic, I was not as proficient with manual blood pressure machines.”
 
-LEGAL (same meaning, first person):
-“My first nursing laboratory was exciting and nerve-racking because it was the first time I practised taking vital signs instead of only reading about them. We practised temperature, heart rate and blood pressure with our classmates. Blood pressure was the hardest for me because I had only used an automatic machine before.”
+AI: “I also became aware that some of my classmates seemed to be progressing, which made me feel behind”
+Human method: “I noticed the confidence with which my classmates took the blood pressure of others. This, in turn, caused me to become discouraged.”
 
-========================
-AUTO
-========================
-Personal story / lab reflection / diary / “I” narrative → rewrite in first person, slightly stiffer, same events.
-Essay / school topic (no personal I-story) → Academic.
-Work email / report → Professional.
-Chat / informal → Friendly.
+STRUCTURE
+- Same number of paragraphs as the input (or one extra only if a long paragraph is split).
+- Paragraph 1: setting + what you practised + what was hardest + confidence.
+- Paragraph 2: feelings + asking for help + demonstration + success.
+- Do not add a title.
 
-========================
-ACADEMIC
-========================
-Use Academic voice ONLY when the input is already an essay (claims, arguments, topic explanation), not a personal story.
-If the input is first person, ignore Academic and keep first person. Only smooth wording. Keep every incident.
+Example — AI draft:
+My first nursing laboratory was both exciting and nerve-racking because it was the first time I practised taking vital signs rather than only learning about them. We practised taking temperature, heart rate and blood pressure with our classmates. The blood pressure was the most difficult for me because I had only used an automatic machine before. When I tried taking it manually, I could not hear the pulse through the stethoscope properly, even after several attempts. I started wondering if I was doing something wrong and noticed that my confidence was dropping. I also became aware that some of my classmates seemed to be progressing, which made me feel behind and created a sense of urgency to get it right.
+I remember feeling nervous, frustrated and even having sweaty hands. I was unsure whether I should ask the lecturer for help because I felt I should be able to do it myself. Eventually, I decided to ask. My lecturer demonstrated the process again and allowed us to practise until we could hear the pulse. After repeating it several times, I was able to get the reading and felt much more confident.
 
-========================
-PROFESSIONAL / FRIENDLY / FORMAL / CASUAL / CREATIVE
-========================
-Still obey HARD MEANING LOCK. Style may change tone, not facts, person, or event order.
+Example — human rewrite:
+My first nursing laboratory was quite exciting, as it was the first time I got to perform the vital signs on another individual, rather than just learning about how to do so. Throughout the laboratory session, my classmates and I took the vital signs of each other. We practiced taking the temperature of another individual. We also practiced taking another individual’s heart rate. However, the vital sign that was the most difficult for me to take was that of the blood pressure. Since the blood pressure machines that I had previously used were automatic, I was not as proficient with manual blood pressure machines. It seemed that I was unable to take an accurate reading of the blood pressure of my classmates. While I did not know whether I was performing the vital sign incorrectly, I noticed the confidence with which my classmates took the blood pressure of others. This, in turn, caused me to become discouraged.
+I felt very nervous during my attempts to take the blood pressure of others, frustrated that I could not take an accurate reading of their blood pressure. I felt a sense of urgency to become proficient with the machine, as it felt like I was the only one of my classmates that could not accurately perform the task. After a bit of hesitation, I asked my professor to show me how to take the blood pressure of another individual. Once my professor showed me how to do so, I began to take the blood pressure of others until I became proficient with the process of doing so. After a bit of practice, I was able to take the blood pressure of another individual. This, in turn, made me feel confident in my ability to perform this vital sign on another individual.
 
-========================
-REWRITE
-========================
-Rewrite the following text in the selected style:`;
+Now rewrite the following draft in that same human voice. Keep I/my, keep every event, keep stethoscope/pulse/sweaty hands if they are in the draft.
 
-/** Live Gemini system prompt with the editor style filled in. */
+DRAFT:
+{user input}`;
+
+/** Live Gemini system prompt with the user’s draft filled in. */
 export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
-  const style = resolveEditorStyle(request?.tone);
-  return STYLE_REWRITE_SYSTEM_PROMPT.replace("{style}", style);
+  const draft = request?.text ?? "";
+  return STYLE_REWRITE_SYSTEM_PROMPT.replace("{user input}", () => draft);
 }
 
 function clipStyleReference(text: string, max = 520): string {
