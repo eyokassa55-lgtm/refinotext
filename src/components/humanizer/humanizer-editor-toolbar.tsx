@@ -126,9 +126,9 @@ export function HumanizerEditorToolbar({
           : "Paragraph";
 
   return (
-    <div className="border-b border-border/70 bg-white/90 px-3 py-2 sm:px-4">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-full border border-border/70 bg-white px-1.5 py-1">
+    <div className="bg-white/90 px-2 py-2 sm:px-3">
+      <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-full border border-border/70 bg-white px-1.5 py-1">
           <MarkButton
             label="Bold"
             active={snapshot?.bold}
@@ -390,7 +390,7 @@ export function HumanizerEditorToolbar({
           </EditorMenu>
         </div>
 
-        <div className="inline-flex overflow-hidden rounded-full border border-[#e7a3ad] bg-white">
+        <div className="inline-flex shrink-0 overflow-hidden rounded-full border border-[#e7a3ad] bg-white">
           <button
             type="button"
             onClick={onSaveVersion}
@@ -412,7 +412,7 @@ export function HumanizerEditorToolbar({
         </div>
       </div>
 
-      <p className="mt-2 inline-flex items-center gap-2 px-1 text-sm text-muted" role="status">
+      <p className="mt-1.5 inline-flex items-center gap-2 px-1 text-xs text-muted" role="status">
         <span
           className={cn(
             "h-2 w-2 rounded-full",

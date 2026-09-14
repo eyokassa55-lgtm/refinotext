@@ -82,8 +82,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputEditor, setInputEditor] = useState<Editor | null>(null);
-  const [outputEditor, setOutputEditor] = useState<Editor | null>(null);
-  const [activePane, setActivePane] = useState<"input" | "output">("input");
   const [docStatus, setDocStatus] = useState<EditorDocStatus>("ready");
   const [versions, setVersions] = useState<EditorVersion[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -97,7 +95,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const inputWordCount = countWords(input);
   const upgradeHref = isSignedIn ? ROUTES.pricing : ROUTES.signIn;
-  const activeEditor = activePane === "output" ? outputEditor : inputEditor;
   const skipStatusRef = useRef(false);
 
   useEffect(() => {
@@ -202,7 +199,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       outputEditorRef.current?.setHumanizedText(result.output);
       skipStatusRef.current = false;
       setOutput(result.output);
-      setActivePane("output");
       setDocStatus("ready");
       notifyStatus(
         result.creditsCharged > 0
@@ -438,14 +434,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </div>
         </div>
 
-        <HumanizerEditorToolbar
-          editor={activeEditor}
-          status={isProcessing ? "humanizing" : docStatus}
-          onSaveVersion={handleSaveVersion}
-          onOpenHistory={() => setHistoryOpen(true)}
-          canSave={Boolean(input.trim() || output.trim())}
-        />
-
         <div className="grid h-[min(70vh,640px)] max-h-[min(70vh,640px)] grid-cols-1 grid-rows-2 overflow-hidden gap-3 p-3 sm:grid-cols-2 sm:grid-rows-1">
           <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb]">
             <div className="relative flex min-h-0 flex-1 flex-col">
@@ -455,7 +443,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 placeholder="For optimal results, we recommend using at least 250 words."
                 onTextChange={handleInputTextChange}
                 onEditor={setInputEditor}
-                onFocusPane={() => setActivePane("input")}
               />
 
               <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
@@ -469,8 +456,15 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               </div>
             </div>
 
-            <div className="border-t-2 border-border/60 shrink-0">
-              <div className="flex items-center gap-2 px-3 py-2">
+            <div className="border-t-2 border-border/60 shrink-0 bg-white/80">
+              <HumanizerEditorToolbar
+                editor={inputEditor}
+                status={isProcessing ? "humanizing" : docStatus}
+                onSaveVersion={handleSaveVersion}
+                onOpenHistory={() => setHistoryOpen(true)}
+                canSave={Boolean(input.trim() || output.trim())}
+              />
+              <div className="flex items-center gap-2 border-t border-border/50 px-3 py-2">
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
@@ -658,8 +652,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 variant="output"
                 ariaLabel="Humanized output"
                 onTextChange={handleOutputTextChange}
-                onEditor={setOutputEditor}
-                onFocusPane={() => setActivePane("output")}
               />
             </div>
 

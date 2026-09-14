@@ -25,7 +25,7 @@ type HumanizerRichEditorProps = {
   variant?: "input" | "output";
   ariaLabel: string;
   onTextChange: (text: string) => void;
-  onEditor: (editor: Editor | null) => void;
+  onEditor?: (editor: Editor | null) => void;
   onFocusPane?: () => void;
 };
 
@@ -72,8 +72,8 @@ export const HumanizerRichEditor = forwardRef<
   });
 
   useEffect(() => {
-    onEditor(editor);
-    return () => onEditor(null);
+    onEditor?.(editor);
+    return () => onEditor?.(null);
   }, [editor, onEditor]);
 
   useImperativeHandle(
