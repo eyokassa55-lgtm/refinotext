@@ -1085,25 +1085,27 @@ Rainforests also illustrate a much broader set of global development debates. It
     tone: "academic",
     intensity: 75,
   });
+  const casualStylePrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    tone: "casual",
+    intensity: 75,
+  });
   assert(
-    "style prompt names the selected style",
-    academicStylePrompt.includes("SELECTED STYLE: ACADEMIC") && !academicStylePrompt.includes("{style}"),
+    "live Gemini prompt is the gold-standard academic rewriter",
+    academicStylePrompt.startsWith("You are a human academic writer.") &&
+      academicStylePrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
+      academicStylePrompt.endsWith("Now rewrite the following text in this exact style:"),
   );
   assert(
-    "style prompt carries the shared paragraph-opening rules",
-    /FIRST LINE RULE/.test(academicStylePrompt) &&
-      /NEVER start a paragraph with/.test(academicStylePrompt),
+    "live Gemini prompt does not change with editor style tabs",
+    academicStylePrompt === casualStylePrompt,
   );
   assert(
-    "style prompt ships every style block",
-    ["ACADEMIC", "PROFESSIONAL", "FRIENDLY", "FORMAL", "CASUAL", "CREATIVE"].every((block) =>
-      academicStylePrompt.includes(`\n${block}\n`),
-    ),
-  );
-  assert("style prompt ends on the rewrite instruction", /Rewrite the following text in the selected style:/.test(academicStylePrompt));
-  assert(
-    "style prompt is not padded with extra engine notes",
-    !/Ultra rewrite/.test(academicStylePrompt) && !/within 15%/.test(academicStylePrompt),
+    "live Gemini prompt is not padded with extra engine notes",
+    !academicStylePrompt.includes("SELECTED STYLE") &&
+      !academicStylePrompt.includes("FIRST LINE RULE") &&
+      !/Ultra rewrite/.test(academicStylePrompt) &&
+      !/within 15%/.test(academicStylePrompt),
   );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));

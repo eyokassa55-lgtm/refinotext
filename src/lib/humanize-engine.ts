@@ -7,7 +7,7 @@ import {
   isGeminiApiConfigured,
   redactModelName,
 } from "@/lib/gemini";
-import { buildStyleRewriteInstruction, resolveEditorStyle } from "@/lib/humanize-prompt";
+import { buildStyleRewriteInstruction } from "@/lib/humanize-prompt";
 import { stripModelChrome } from "@/lib/humanize-quality";
 import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -96,7 +96,7 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
-    style: resolveEditorStyle(request.tone),
+    prompt: "gold-standard-academic",
     intensity: request.intensity ?? 75,
   });
 
