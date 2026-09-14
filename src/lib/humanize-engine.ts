@@ -88,22 +88,20 @@ const COPY_RETRY_RATIO = 0.16;
 const COPY_REJECT_RATIO = 0.28;
 
 /**
- * Prefer live English Wikipedia (full encyclopedia API). The ~20k training pairs
- * were for fine-tuning only and are not searched at Humanize time.
+ * Gemini Developer API is the primary Humanize engine when GEMINI_API_KEY is set.
+ * Tuned Vertex is only used when no Gemini API key is available.
  */
 function isHumanTextTunedReady(): boolean {
   return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
 }
 
 function canRewriteWithModel(): boolean {
-  return hasVertexEndpointEnv() || isVertexConfigured() || isGeminiApiConfigured();
+  return isGeminiApiConfigured() || hasVertexEndpointEnv() || isVertexConfigured();
 }
 
 function unmatchedRewriteBackend(): GenerateBackend {
-  // Prefer the bound TOPN1 tuned endpoint. Gemini API / Vertex publisher models
-  // are currently failing on this project (400/404/403), so base is last resort.
-  if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
   if (isGeminiApiConfigured()) return "base";
+  if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
   return "base";
 }
 
@@ -235,12 +233,14 @@ async function runModelHumanizationInner(request: HumanizeRequest): Promise<Huma
   let backend = unmatchedRewriteBackend();
   let temperature = unmatchedRewriteTemperature(backend, request.intensity);
   const vertex = getVertexConfig();
+  const geminiModel = process.env.GEMINI_MODEL?.replace(/-+$/, "").trim() || "gemini-flash-latest";
   console.info("[humanize] [MODEL]", {
     backend,
     model:
       backend === "tuned" && vertex
         ? redactModelName(vertex.model)
-        : redactModelName("gemini-2.5-flash"),
+        : redactModelName(geminiModel),
+    provider: isGeminiApiConfigured() && backend === "base" ? "gemini-api" : backend,
     styleExamples: styleExamples.length,
     intensity: request.intensity ?? 75,
   });
@@ -462,8 +462,32 @@ function wikipediaOutputMatchesDraftBody(
 }
 
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // 1) Full English Wikipedia via live API (millions of articles — NOT the ~20k training file).
-  // The 20,722 pairs were only for Vertex fine-tuning; Humanize does not search that file.
+  // 1) Exact / near-exact paste of a stored training draft (paired human_text).
+  const exactHit = findDatabaseMatch(request.text);
+  if (
+    exactHit &&
+    (exactHit.kind === "exact" || exactHit.kind === "near_exact") &&
+    storedMatchAlignsWithDraft(request.text, exactHit)
+  ) {
+    return resolveStoredHit({
+      ...exactHit,
+      output: formatEssayParagraphs(applyInputTitle(exactHit.output, request.text)),
+    });
+  }
+
+  // 2) Primary: Gemini API rewrite of the user's own draft (same topic, humanized wording).
+  if (canRewriteWithModel()) {
+    try {
+      return await runModelHumanization(request);
+    } catch (error) {
+      console.error("[humanize] Gemini/model rewrite failed; trying Wikipedia then local", {
+        code: error instanceof HumanizationFailedError ? error.code : error instanceof GeminiError ? error.code : "UNKNOWN",
+        status: error instanceof HumanizationFailedError ? error.status : error instanceof GeminiError ? error.status : undefined,
+      });
+    }
+  }
+
+  // 3) Same-topic live Wikipedia prose when the model path is down.
   const wikipediaHit = await findWikipediaLiveMatch(request.text);
   if (wikipediaHit && wikipediaOutputMatchesDraftBody(request.text, wikipediaHit)) {
     const inputWords = countWords(request.text);
@@ -502,28 +526,15 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
     });
   }
 
-  // 2) Exact / near-exact paste of a stored training draft only (not topic guess from 722 rows).
-  const exactHit = findDatabaseMatch(request.text);
-  if (
-    exactHit &&
-    (exactHit.kind === "exact" || exactHit.kind === "near_exact") &&
-    storedMatchAlignsWithDraft(request.text, exactHit)
-  ) {
-    return resolveStoredHit({
-      ...exactHit,
-      output: formatEssayParagraphs(applyInputTitle(exactHit.output, request.text)),
-    });
-  }
-
-  // 3) Offline local rewrite when Wikipedia has no same-topic page.
+  // 4) Offline local rewrite last resort.
   console.info("[humanize] [LOCAL_DATA]", {
     words: countWords(request.text),
-    reason: "no-wikipedia-live-match",
+    reason: "no-gemini-no-wikipedia",
   });
   const local = humanizeLocally(request.text);
   if (!local) {
     throw new HumanizationFailedError(
-      "Could not humanize this text from local data. Please try again.",
+      "Could not humanize this text. Please try again.",
       "EMPTY_RESPONSE",
       502,
     );

@@ -4,18 +4,24 @@ import { ApiError, GoogleGenAI } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 const GEMINI_API_FALLBACK_MODELS = [
+  "gemini-flash-latest",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b",
 ];
 const GEMINI_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 3;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
 /** Models that currently fail on Gemini API for this project — skip to fallbacks. */
-const BROKEN_GEMINI_API_MODELS = new Set(["gemini-3.6-flash", "gemini-3-flash", "gemini-3.0-flash"]);
+const BROKEN_GEMINI_API_MODELS = new Set([
+  // New Gemini API keys are redirected away from these IDs (404 for new users).
+  "gemini-2.5-flash-lite",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+]);
 
 export class GeminiError extends Error {
   code: string;
