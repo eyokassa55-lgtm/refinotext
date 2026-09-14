@@ -21,7 +21,7 @@ export default function AuthLayout({
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
-          <BrandLogo href={ROUTES.home} />
+          <BrandLogo href={ROUTES.home} className="-ml-3 sm:-ml-4" />
         </div>
       </header>
       <main className="flex flex-1 items-center justify-center px-4 py-12">
