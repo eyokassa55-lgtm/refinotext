@@ -457,14 +457,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
 
             <div className="border-t-2 border-border/60 shrink-0 bg-white/80">
-              <HumanizerEditorToolbar
-                editor={inputEditor}
-                status={isProcessing ? "humanizing" : docStatus}
-                onSaveVersion={handleSaveVersion}
-                onOpenHistory={() => setHistoryOpen(true)}
-                canSave={Boolean(input.trim() || output.trim())}
-              />
-              <div className="flex items-center gap-2 border-t border-border/50 px-3 py-2">
+              <div className="flex items-center gap-2 px-3 py-2">
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
@@ -593,6 +586,14 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                   </button>
                 )}
               </div>
+
+              <HumanizerEditorToolbar
+                editor={inputEditor}
+                status={isProcessing ? "humanizing" : docStatus}
+                onSaveVersion={handleSaveVersion}
+                onOpenHistory={() => setHistoryOpen(true)}
+                canSave={Boolean(input.trim() || output.trim())}
+              />
             </div>
           </section>
 

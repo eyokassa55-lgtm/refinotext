@@ -126,16 +126,16 @@ export function HumanizerEditorToolbar({
           : "Paragraph";
 
   return (
-    <div className="bg-white/90 px-2 py-2 sm:px-3">
-      <div className="flex items-center gap-1.5">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-full border border-border/70 bg-white px-1.5 py-1">
+    <div className="border-t border-border/50 bg-white/90 px-2 py-1">
+      <div className="flex items-center gap-1">
+        <div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto rounded-full border border-border/70 bg-white px-1 py-0.5">
           <MarkButton
             label="Bold"
             active={snapshot?.bold}
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleBold().run()}
           >
-            <Bold className="h-3.5 w-3.5" />
+            <Bold className="h-3 w-3" />
           </MarkButton>
           <MarkButton
             label="Italic"
@@ -143,7 +143,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleItalic().run()}
           >
-            <Italic className="h-3.5 w-3.5" />
+            <Italic className="h-3 w-3" />
           </MarkButton>
           <MarkButton
             label="Underline"
@@ -151,7 +151,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleUnderline().run()}
           >
-            <Underline className="h-3.5 w-3.5" />
+            <Underline className="h-3 w-3" />
           </MarkButton>
           <MarkButton
             label="Strikethrough"
@@ -159,7 +159,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleStrike().run()}
           >
-            <Strikethrough className="h-3.5 w-3.5" />
+            <Strikethrough className="h-3 w-3" />
           </MarkButton>
 
           <EditorMenu
@@ -167,7 +167,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             trigger={
               <span className="inline-flex items-center gap-0.5">
-                <Palette className="h-3.5 w-3.5" />
+                <Palette className="h-3 w-3" />
                 <span
                   className="h-1.5 w-3.5 rounded-full"
                   style={{ backgroundColor: snapshot?.color || "#111111" }}
@@ -201,7 +201,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             trigger={
               <span className="inline-flex items-center gap-0.5">
-                <Highlighter className="h-3.5 w-3.5" />
+                <Highlighter className="h-3 w-3" />
                 <span
                   className="h-1.5 w-3.5 rounded-full"
                   style={{ backgroundColor: snapshot?.highlight || "#e5e7eb" }}
@@ -240,7 +240,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleSuperscript().run()}
           >
-            <span className="text-[11px] font-bold leading-none">
+            <span className="text-[10px] font-bold leading-none">
               x<sup>2</sup>
             </span>
           </MarkButton>
@@ -250,7 +250,7 @@ export function HumanizerEditorToolbar({
             disabled={!editor}
             onClick={() => editor?.chain().focus().toggleSubscript().run()}
           >
-            <span className="text-[11px] font-bold leading-none">
+            <span className="text-[10px] font-bold leading-none">
               x<sub>2</sub>
             </span>
           </MarkButton>
@@ -258,7 +258,7 @@ export function HumanizerEditorToolbar({
           <EditorMenu
             label="Lists"
             disabled={!editor}
-            trigger={<List className="h-3.5 w-3.5" />}
+            trigger={<List className="h-3 w-3" />}
           >
             <MenuRow
               label="Bullet list"
@@ -283,7 +283,7 @@ export function HumanizerEditorToolbar({
           <EditorMenu
             label="Table"
             disabled={!editor}
-            trigger={<Table className="h-3.5 w-3.5" />}
+            trigger={<Table className="h-3 w-3" />}
           >
             <MenuRow
               label="Insert 3×3 table"
@@ -322,7 +322,7 @@ export function HumanizerEditorToolbar({
             label="Paragraph style"
             disabled={!editor}
             trigger={
-              <span className="inline-flex items-center gap-1 px-0.5 text-xs font-semibold">
+              <span className="inline-flex items-center gap-0.5 px-0.5 text-[10px] font-semibold">
                 T {paragraphLabel}
               </span>
             }
@@ -357,7 +357,7 @@ export function HumanizerEditorToolbar({
           <EditorMenu
             label="Alignment"
             disabled={!editor}
-            trigger={<AlignLeft className="h-3.5 w-3.5" />}
+            trigger={<AlignLeft className="h-3 w-3" />}
           >
             <MenuRow
               label="Align left"
@@ -395,37 +395,37 @@ export function HumanizerEditorToolbar({
             type="button"
             onClick={onSaveVersion}
             disabled={!canSave}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#b44a5a] transition-colors hover:bg-[#fdf2f4] disabled:opacity-40"
+            className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[#b44a5a] transition-colors hover:bg-[#fdf2f4] disabled:opacity-40"
           >
-            <Save className="h-3.5 w-3.5" aria-hidden />
-            Save Version
+            <Save className="h-3 w-3" aria-hidden />
+            Save
           </button>
           <button
             type="button"
             onClick={onOpenHistory}
             title="Version history"
             aria-label="Version history"
-            className="border-l border-[#e7a3ad] px-2.5 text-[#b44a5a] transition-colors hover:bg-[#fdf2f4]"
+            className="border-l border-[#e7a3ad] px-1.5 text-[#b44a5a] transition-colors hover:bg-[#fdf2f4]"
           >
-            <Clock className="h-4 w-4" aria-hidden />
+            <Clock className="h-3 w-3" aria-hidden />
           </button>
         </div>
-      </div>
 
-      <p className="mt-1.5 inline-flex items-center gap-2 px-1 text-xs text-muted" role="status">
-        <span
-          className={cn(
-            "h-2 w-2 rounded-full",
-            status === "ready" || status === "saved"
-              ? "bg-emerald-500"
-              : status === "humanizing" || status === "restoring"
-                ? "bg-amber-400"
-                : "bg-slate-400",
-          )}
-          aria-hidden
-        />
-        Status: {STATUS_LABEL[status]}
-      </p>
+        <p className="hidden shrink-0 items-center gap-1 pr-1 text-[10px] text-muted sm:inline-flex" role="status">
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              status === "ready" || status === "saved"
+                ? "bg-emerald-500"
+                : status === "humanizing" || status === "restoring"
+                  ? "bg-amber-400"
+                  : "bg-slate-400",
+            )}
+            aria-hidden
+          />
+          {STATUS_LABEL[status]}
+        </p>
+      </div>
     </div>
   );
 }
@@ -452,7 +452,7 @@ function MarkButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
+        "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
         active && "bg-slate-100 text-primary",
       )}
     >
@@ -462,7 +462,7 @@ function MarkButton({
 }
 
 function ToolbarDivider() {
-  return <span className="mx-1 hidden h-5 w-px bg-border sm:inline-block" aria-hidden />;
+  return <span className="mx-0.5 hidden h-3.5 w-px bg-border sm:inline-block" aria-hidden />;
 }
 
 function EditorMenu({
@@ -488,9 +488,12 @@ function EditorMenu({
     if (!rect) return;
     const width = 220;
     const left = Math.min(rect.left, window.innerWidth - width - 8);
+    const openAbove = window.innerHeight - rect.bottom < 240;
     setMenuStyle({
       position: "fixed",
-      top: rect.bottom + 8,
+      ...(openAbove
+        ? { bottom: window.innerHeight - rect.top + 6 }
+        : { top: rect.bottom + 6 }),
       left: Math.max(8, left),
       width,
     });
@@ -529,7 +532,7 @@ function EditorMenu({
         aria-label={label}
         title={label}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-lg px-2 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40"
+        className="inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40"
       >
         {trigger}
       </button>
@@ -601,9 +604,12 @@ function LinkMenu({
     if (!open) return;
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const openAbove = window.innerHeight - rect.bottom < 220;
     setMenuStyle({
       position: "fixed",
-      top: rect.bottom + 8,
+      ...(openAbove
+        ? { bottom: window.innerHeight - rect.top + 6 }
+        : { top: rect.bottom + 6 }),
       left: Math.max(8, Math.min(rect.left, window.innerWidth - 268)),
       width: 260,
     });
@@ -652,11 +658,11 @@ function LinkMenu({
         disabled={!editor}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
+          "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
           active && "bg-slate-100 text-primary",
         )}
       >
-        <LinkIcon className="h-3.5 w-3.5" />
+        <LinkIcon className="h-3 w-3" />
       </button>
       {open ? (
         <div
