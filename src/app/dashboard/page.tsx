@@ -49,7 +49,9 @@ export default async function DashboardPage({
   const params = await searchParams;
   const checkoutNotice = await syncPolarCheckoutOnReturn({
     user,
-    checkoutId: firstSearchParam(params.checkout_id),
+    checkoutId:
+      firstSearchParam(params.checkout_id) ??
+      firstSearchParam(params.checkoutId),
     checkoutFlag: firstSearchParam(params.checkout),
   });
 

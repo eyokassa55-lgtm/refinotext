@@ -41,7 +41,7 @@ export default function SignUpPage() {
       routing="path"
       path="/sign-up"
       signInUrl={ROUTES.signIn}
-      forceRedirectUrl={ROUTES.home}
+      fallbackRedirectUrl={ROUTES.home}
     />
   );
 }

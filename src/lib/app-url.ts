@@ -122,8 +122,18 @@ export function getAlternateRefinoOrigin(origin: string): string | null {
   }
 }
 
-export function polarCheckoutSuccessUrl(origin: string): string {
-  return `${origin.replace(/\/$/, "")}/dashboard?checkout=success&checkout_id={CHECKOUT_ID}`;
+export function polarCheckoutSuccessUrl(
+  origin: string,
+  includeCheckoutPlaceholder = true,
+): string {
+  const success = new URL("/dashboard", `${origin.replace(/\/$/, "")}/`);
+  success.searchParams.set("checkout", "success");
+  if (!includeCheckoutPlaceholder) return success.toString();
+
+  // Polar replaces the literal {CHECKOUT_ID}. URLSearchParams encodes braces,
+  // so decode them the same way @polar-sh/nextjs does.
+  success.searchParams.set("checkout_id", "{CHECKOUT_ID}");
+  return decodeURI(success.toString());
 }
 
 export function polarCheckoutReturnUrl(origin: string): string {

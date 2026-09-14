@@ -2,7 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
@@ -63,37 +63,42 @@ function PricingSectionInner({
     [],
   );
 
-  const startCheckout = async (productKey: string) => {
+  const startCheckout = useCallback((productKey: string) => {
     setCheckoutError(null);
     setLoadingProductKey(productKey);
+    window.location.assign(
+      `/api/checkout/polar?productKey=${encodeURIComponent(productKey)}`,
+    );
+  }, []);
 
-    try {
-      const res = await fetch("/api/checkout/polar", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productKey }),
-      });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("checkout_error");
+    if (!error) return;
+    setCheckoutError(error);
+    params.delete("checkout_error");
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  }, []);
 
-      const data = (await res.json()) as { url?: string; error?: string };
-
-      if (res.status === 401) {
-        window.location.href = "/sign-in";
-        return;
-      }
-
-      if (!res.ok || !data.url) {
-        setCheckoutError(data.error ?? "Could not open checkout.");
-        return;
-      }
-
-      window.location.href = data.url;
-    } catch {
-      setCheckoutError("Could not open checkout. Please try again.");
-    } finally {
-      setLoadingProductKey(null);
-    }
-  };
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const params = new URLSearchParams(window.location.search);
+    const productKey = params.get("checkout");
+    if (!productKey) return;
+    params.delete("checkout");
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+    startCheckout(productKey);
+  }, [isSignedIn, startCheckout]);
 
   const TitleTag = headingLevel;
 
@@ -183,9 +188,14 @@ function PricingSectionInner({
               ? "Annual prices include 50% off every paid plan — billed once per year until cancelled."
               : "Monthly prices below are billed every month and renew each month until cancelled."}
           </p>
-          {checkoutError && (
-            <p className="text-sm font-medium text-red-700">{checkoutError}</p>
-          )}
+          {checkoutError ? (
+            <p
+              role="alert"
+              className="max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"
+            >
+              {checkoutError}
+            </p>
+          ) : null}
         </div>
 
         <div className="mx-auto grid max-w-5xl items-stretch gap-4 md:grid-cols-3 md:gap-5">

@@ -15,7 +15,6 @@ import {
   isPolarValidationError,
   isWrongPolarEnvironmentError,
   PolarConfigError,
-  polarErrorBody,
 } from "@/lib/polar-error";
 
 export type { PolarServer };
@@ -76,6 +75,13 @@ function polarServersToTry(options?: {
   return [configured];
 }
 
+function withoutCheckoutPlaceholder(url: string): string {
+  return url
+    .replace(/&?checkout_id=\{CHECKOUT_ID\}/i, "")
+    .replace(/&?checkoutId=\{CHECKOUT_ID\}/i, "")
+    .replace(/\?$/, "");
+}
+
 function stringifyMeta(
   meta: Record<string, string | number | boolean>,
 ): Record<string, string> {
@@ -84,19 +90,85 @@ function stringifyMeta(
   );
 }
 
-function withoutCheckoutPlaceholder(url: string): string {
-  return url.replace(/&?checkout_id=\{CHECKOUT_ID\}/i, "").replace(/\?$/, "");
-}
-
 type CheckoutCreateAttempt = {
   customerId?: string;
   customerEmail?: string;
   externalCustomerId?: string;
   successUrl: string;
-  returnUrl: string;
+  returnUrl?: string;
   metadata: Record<string, string | number | boolean>;
   customerMetadata: Record<string, string | number | boolean>;
 };
+
+function buildCheckoutAttempts(input: {
+  customerId?: string | null;
+  customerEmail: string;
+  externalCustomerId: string;
+  successUrl: string;
+  returnUrl: string;
+  alternateSuccessUrl?: string | null;
+  alternateReturnUrl?: string | null;
+  metadata: Record<string, string | number | boolean>;
+  customerMetadata: Record<string, string | number | boolean>;
+}): CheckoutCreateAttempt[] {
+  const metadata = stringifyMeta(input.metadata);
+  const customerMetadata = stringifyMeta(input.customerMetadata);
+  const attempts: CheckoutCreateAttempt[] = [];
+  const seen = new Set<string>();
+
+  const push = (attempt: CheckoutCreateAttempt) => {
+    const key = JSON.stringify(attempt);
+    if (seen.has(key)) return;
+    seen.add(key);
+    attempts.push(attempt);
+  };
+
+  const urlPairs = [
+    { successUrl: input.successUrl, returnUrl: input.returnUrl },
+    {
+      successUrl: withoutCheckoutPlaceholder(input.successUrl),
+      returnUrl: input.returnUrl,
+    },
+    { successUrl: withoutCheckoutPlaceholder(input.successUrl), returnUrl: undefined },
+  ];
+
+  if (input.alternateSuccessUrl) {
+    urlPairs.push({
+      successUrl: withoutCheckoutPlaceholder(input.alternateSuccessUrl),
+      returnUrl: input.alternateReturnUrl ?? undefined,
+    });
+  }
+
+  const identities: Array<Pick<
+    CheckoutCreateAttempt,
+    "customerId" | "customerEmail" | "externalCustomerId"
+  >> = [
+    {
+      customerId: input.customerId ?? undefined,
+      customerEmail: input.customerEmail || undefined,
+      externalCustomerId: input.externalCustomerId,
+    },
+    {
+      customerEmail: input.customerEmail || undefined,
+      externalCustomerId: input.externalCustomerId,
+    },
+    { externalCustomerId: input.externalCustomerId },
+  ];
+
+  for (const urls of urlPairs) {
+    for (const identity of identities) {
+      push({
+        ...identity,
+        successUrl: urls.successUrl,
+        returnUrl: urls.returnUrl,
+        metadata,
+        customerMetadata,
+      });
+    }
+  }
+
+  return attempts;
+}
 
 export async function createPolarCheckout(input: {
   productId: string;
@@ -120,36 +192,7 @@ export async function createPolarCheckout(input: {
     );
   }
 
-  const attempts: CheckoutCreateAttempt[] = [];
-  const successUrls = [input.successUrl, input.alternateSuccessUrl].filter(
-    (value, index, list): value is string =>
-      Boolean(value) && list.indexOf(value) === index,
-  );
-  const returnUrls = [input.returnUrl, input.alternateReturnUrl].filter(
-    (value, index, list): value is string =>
-      Boolean(value) && list.indexOf(value) === index,
-  );
-
-  const pushAttempt = (attempt: CheckoutCreateAttempt) => {
-    const key = JSON.stringify(attempt);
-    if (attempts.some((existing) => JSON.stringify(existing) === key)) return;
-    attempts.push(attempt);
-  };
-
-  for (const successUrl of successUrls) {
-    for (const returnUrl of returnUrls) {
-      pushAttempt({
-        customerId: input.customerId ?? undefined,
-        customerEmail: input.customerEmail,
-        externalCustomerId: input.externalCustomerId,
-        successUrl,
-        returnUrl,
-        metadata: input.metadata,
-        customerMetadata: input.customerMetadata,
-      });
-    }
-  }
-
+  const attempts = buildCheckoutAttempts(input);
   let lastError: unknown;
 
   for (const server of polarServersToTry({
@@ -182,79 +225,28 @@ export async function createPolarCheckout(input: {
           break;
         }
 
-        if (info.statusCode === 404 && attempt.customerId) {
-          pushAttempt({ ...attempt, customerId: undefined });
-          continue;
-        }
-
-        if (info.statusCode === 404) {
+        if (
+          info.statusCode === 404 &&
+          !attempt.customerId &&
+          !attempt.customerEmail
+        ) {
           break;
         }
 
-        if (!isPolarValidationError(error)) {
-          throw error;
+        if (
+          info.statusCode === 422 ||
+          info.statusCode === 404 ||
+          isPolarValidationError(error)
+        ) {
+          continue;
         }
 
-        const body = (polarErrorBody(error) ?? "").toLowerCase();
-        const next = nextCheckoutAttempt(attempt, body, input);
-        if (next) pushAttempt(next);
+        throw error;
       }
     }
   }
 
   throw lastError;
-}
-
-function nextCheckoutAttempt(
-  attempt: CheckoutCreateAttempt,
-  body: string,
-  input: {
-    externalCustomerId: string;
-    metadata: Record<string, string | number | boolean>;
-    customerMetadata: Record<string, string | number | boolean>;
-  },
-): CheckoutCreateAttempt | null {
-  if (body.includes("success_url") && attempt.successUrl.includes("{CHECKOUT_ID}")) {
-    return {
-      ...attempt,
-      successUrl: withoutCheckoutPlaceholder(attempt.successUrl),
-    };
-  }
-
-  if (
-    (body.includes("customer") || body.includes("email") || body.includes("external")) &&
-    (attempt.customerEmail || attempt.customerId)
-  ) {
-    if (attempt.customerId) {
-      return {
-        ...attempt,
-        customerId: undefined,
-        customerEmail: undefined,
-        externalCustomerId: input.externalCustomerId,
-      };
-    }
-    if (attempt.customerEmail) {
-      return {
-        ...attempt,
-        customerEmail: undefined,
-        externalCustomerId: input.externalCustomerId,
-      };
-    }
-  }
-
-  if (body.includes("metadata")) {
-    const stringMeta = stringifyMeta(input.metadata);
-    const stringCustomerMeta = stringifyMeta(input.customerMetadata);
-    if (JSON.stringify(attempt.metadata) !== JSON.stringify(stringMeta)) {
-      return {
-        ...attempt,
-        metadata: stringMeta,
-        customerMetadata: stringCustomerMeta,
-      };
-    }
-  }
-
-  return null;
 }
 
 async function createCheckoutOnce(
@@ -274,7 +266,7 @@ async function createCheckoutOnce(
     ...(attempt.customerEmail ? { customerEmail: attempt.customerEmail } : {}),
     ...(input.customerName ? { customerName: input.customerName } : {}),
     successUrl: attempt.successUrl,
-    returnUrl: attempt.returnUrl,
+    ...(attempt.returnUrl ? { returnUrl: attempt.returnUrl } : {}),
     allowDiscountCodes: true,
     metadata: attempt.metadata,
     customerMetadata: attempt.customerMetadata,
