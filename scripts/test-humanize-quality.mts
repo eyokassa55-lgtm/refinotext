@@ -1159,12 +1159,13 @@ Rainforests also illustrate a much broader set of global development debates. It
     "utf8",
   );
   assert(
-    "Humanized output pane shows plain text like the input, with no heading",
-    outputViewSource.includes("textarea") &&
-      outputViewSource.includes("readOnly") &&
-      !outputViewSource.includes("<h2") &&
-      !outputViewSource.includes("font-bold") &&
-      !outputViewSource.includes("font-semibold"),
+    "Humanized output pane uses a document heading and dark article text",
+    outputViewSource.includes("<h1") &&
+      outputViewSource.includes("font-bold") &&
+      outputViewSource.includes("text-[#202122]") &&
+      outputViewSource.includes("splitHumanizeOutput") &&
+      !outputViewSource.includes("textarea") &&
+      !outputViewSource.includes("font-mono"),
   );
   const engineHashTech = await runEngineHumanization({ text: HASH_TECHNOLOGY_ESSAY, intensity: 75 });
   assert(

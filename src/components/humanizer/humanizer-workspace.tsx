@@ -457,7 +457,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
           </section>
 
-          <section className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] sm:min-h-0 sm:h-full">
+          <section className="relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white sm:min-h-0 sm:h-full">
             {output.trim() ? (
               <>
                 <div className="flex items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
@@ -506,7 +506,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     </button>
                   )}
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto p-4">
+                <div className="min-h-0 flex-1 overflow-auto px-6 py-6 sm:px-8 sm:py-7">
                   <HumanizedOutputView text={output} />
                 </div>
               </>
