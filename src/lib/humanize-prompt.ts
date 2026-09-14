@@ -1,3 +1,4 @@
+import { CORPUS_VOICE_SYSTEM_PROMPT } from "@/lib/corpus-voice-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 
@@ -494,7 +495,7 @@ export function resolveEditorStyle(tone?: string): EditorStyle {
 }
 
 /**
- * User-message extras (language). The draft is also attached after DRAFT in the system prompt.
+ * User-message extras (language). The corpus-voice system prompt stays unchanged.
  */
 export function buildRewriteUserContent(request: HumanizePromptRequest): string {
   const language = resolveHumanizeLanguage(request.language);
@@ -504,55 +505,13 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
 }
 
 /**
- * Live Gemini system prompt: match the human gold-pair voice, not the AI draft.
+ * Live Gemini system prompt: write only in the measured corpus voice.
  */
-export const STYLE_REWRITE_SYSTEM_PROMPT = `You rewrite a personal student reflection so it matches the HUMAN example, not the AI draft.
+export const STYLE_REWRITE_SYSTEM_PROMPT = CORPUS_VOICE_SYSTEM_PROMPT;
 
-HARD MEANING
-- Keep first person: I, me, my, we, our.
-- Keep the same events in the same order.
-- Keep concrete details from the input (stethoscope, pulse, sweaty hands, automatic machine, lecturer/professor, classmates). Do not drop them.
-- Do not turn this into a theory essay. No “critical thinking”, “linking theory”, “students are asked”, “breaking the process down”, “key factors”.
-- No new facts. Output only the rewritten text.
-
-HUMAN VOICE (from the gold pair)
-- Slightly stiff school English. A bit repetitive on purpose.
-- Prefer: another individual, the vital signs, laboratory session, proficient, accurate reading, This, in turn, However, Since, While, After a bit of
-- Split lists into short sentences: temperature. Then heart rate. Then blood pressure.
-- Longer restatement instead of one tight AI sentence.
-- No contractions unless the input is very casual.
-- American or British spelling: follow the input (practised vs practiced, lecturer vs professor). If mixed, keep the input’s words (lecturer stays lecturer if the user wrote lecturer).
-
-HOW TO REWRITE A SENTENCE
-AI: “The blood pressure was the most difficult for me because I had only used an automatic machine before.”
-Human method: “However, the vital sign that was the most difficult for me to take was that of the blood pressure. Since the blood pressure machines that I had previously used were automatic, I was not as proficient with manual blood pressure machines.”
-
-AI: “I also became aware that some of my classmates seemed to be progressing, which made me feel behind”
-Human method: “I noticed the confidence with which my classmates took the blood pressure of others. This, in turn, caused me to become discouraged.”
-
-STRUCTURE
-- Same number of paragraphs as the input (or one extra only if a long paragraph is split).
-- Paragraph 1: setting + what you practised + what was hardest + confidence.
-- Paragraph 2: feelings + asking for help + demonstration + success.
-- Do not add a title.
-
-Example — AI draft:
-My first nursing laboratory was both exciting and nerve-racking because it was the first time I practised taking vital signs rather than only learning about them. We practised taking temperature, heart rate and blood pressure with our classmates. The blood pressure was the most difficult for me because I had only used an automatic machine before. When I tried taking it manually, I could not hear the pulse through the stethoscope properly, even after several attempts. I started wondering if I was doing something wrong and noticed that my confidence was dropping. I also became aware that some of my classmates seemed to be progressing, which made me feel behind and created a sense of urgency to get it right.
-I remember feeling nervous, frustrated and even having sweaty hands. I was unsure whether I should ask the lecturer for help because I felt I should be able to do it myself. Eventually, I decided to ask. My lecturer demonstrated the process again and allowed us to practise until we could hear the pulse. After repeating it several times, I was able to get the reading and felt much more confident.
-
-Example — human rewrite:
-My first nursing laboratory was quite exciting, as it was the first time I got to perform the vital signs on another individual, rather than just learning about how to do so. Throughout the laboratory session, my classmates and I took the vital signs of each other. We practiced taking the temperature of another individual. We also practiced taking another individual’s heart rate. However, the vital sign that was the most difficult for me to take was that of the blood pressure. Since the blood pressure machines that I had previously used were automatic, I was not as proficient with manual blood pressure machines. It seemed that I was unable to take an accurate reading of the blood pressure of my classmates. While I did not know whether I was performing the vital sign incorrectly, I noticed the confidence with which my classmates took the blood pressure of others. This, in turn, caused me to become discouraged.
-I felt very nervous during my attempts to take the blood pressure of others, frustrated that I could not take an accurate reading of their blood pressure. I felt a sense of urgency to become proficient with the machine, as it felt like I was the only one of my classmates that could not accurately perform the task. After a bit of hesitation, I asked my professor to show me how to take the blood pressure of another individual. Once my professor showed me how to do so, I began to take the blood pressure of others until I became proficient with the process of doing so. After a bit of practice, I was able to take the blood pressure of another individual. This, in turn, made me feel confident in my ability to perform this vital sign on another individual.
-
-Now rewrite the following draft in that same human voice. Keep I/my, keep every event, keep stethoscope/pulse/sweaty hands if they are in the draft.
-
-DRAFT:
-{user input}`;
-
-/** Live Gemini system prompt with the user’s draft filled in. */
-export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
-  const draft = request?.text ?? "";
-  return STYLE_REWRITE_SYSTEM_PROMPT.replace("{user input}", () => draft);
+/** Live Gemini system prompt. Editor style tabs do not change this corpus voice. */
+export function buildStyleRewriteInstruction(_request?: HumanizePromptRequest): string {
+  return STYLE_REWRITE_SYSTEM_PROMPT;
 }
 
 function clipStyleReference(text: string, max = 520): string {

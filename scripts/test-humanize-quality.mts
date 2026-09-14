@@ -1104,14 +1104,12 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "live Gemini prompt matches the human gold-pair voice",
-    academicStylePrompt.startsWith(
-      "You rewrite a personal student reflection so it matches the HUMAN example, not the AI draft.",
-    ) &&
-      academicStylePrompt.includes("HARD MEANING") &&
-      academicStylePrompt.includes("Example — human rewrite:") &&
-      academicStylePrompt.includes("DRAFT:") &&
-      academicStylePrompt.includes(NEW_ESSAY),
+    "live Gemini prompt is the 1,238-text corpus voice",
+    academicStylePrompt.startsWith("SYSTEM PROMPT — WRITE ONLY IN THIS CORPUS VOICE") &&
+      academicStylePrompt.includes("You are not a generic assistant.") &&
+      academicStylePrompt.includes("1,238 human texts") &&
+      academicStylePrompt.includes("FORM A — Argumentative school essay") &&
+      academicStylePrompt.endsWith("Write as the corpus writes."),
   );
   assert(
     "live Gemini prompt does not change with editor style tabs",
@@ -1174,7 +1172,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "live Gemini prompt is not padded with extra engine notes",
-    academicStylePrompt.includes("HUMAN VOICE (from the gold pair)") &&
+    academicStylePrompt.includes("HARD BANS") &&
       !academicStylePrompt.includes("SELECTED STYLE") &&
       !academicStylePrompt.includes("FIRST LINE RULE") &&
       !/Ultra rewrite/.test(academicStylePrompt) &&

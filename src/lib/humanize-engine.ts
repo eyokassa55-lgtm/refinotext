@@ -101,7 +101,7 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
-    prompt: "student-reflection-human",
+    prompt: "corpus-voice-1238",
     intensity: request.intensity ?? 75,
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
