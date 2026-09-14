@@ -16,7 +16,6 @@ import {
   Lock,
   UploadCloud,
   Wand2,
-  Zap,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,6 +36,7 @@ import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-a
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import type { Editor } from "@tiptap/react";
+import { HumanizerDetectorTargets } from "./humanizer-detector-targets";
 import { HumanizerEditorToolbar, type EditorDocStatus } from "./humanizer-editor-toolbar";
 import { HumanizerRichEditor, type HumanizerRichEditorHandle } from "./humanizer-rich-editor";
 import { HumanizerVersionHistory } from "./humanizer-version-history";
@@ -76,7 +76,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [style, setStyle] = useState<EditorStyleId>("auto");
-  const [ultraMode, setUltraMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState<"input" | "output" | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -110,9 +109,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   useEffect(() => {
     if (paidUnlocked) return;
     if (style !== "auto") setStyle("auto");
-    if (ultraMode) setUltraMode(false);
     if (isPaidHumanizeLanguage(language)) setLanguage("en");
-  }, [language, paidUnlocked, setLanguage, style, ultraMode]);
+  }, [language, paidUnlocked, setLanguage, style]);
 
   const notifyStatus = (msg: string) => {
     setStatusMsg(msg);
@@ -162,7 +160,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           requestId: requestIdRef.current,
           language,
           tone: style === "auto" ? undefined : style,
-          intensity: ultraMode ? 100 : 75,
         }),
       });
 
@@ -220,7 +217,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       setIsProcessing(false);
       setDocStatus((current) => (current === "humanizing" ? "ready" : current));
     }
-  }, [input, isSignedIn, language, paidUnlocked, router, style, ultraMode, upgradeHref]);
+  }, [input, isSignedIn, language, paidUnlocked, router, style, upgradeHref]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -285,15 +282,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       return;
     }
     notifyStatus("Upgrade to unlock this writing style.");
-    router.push(upgradeHref);
-  };
-
-  const handleUltraClick = () => {
-    if (paidUnlocked) {
-      setUltraMode((current) => !current);
-      return;
-    }
-    notifyStatus("Upgrade to unlock Ultra Mode.");
     router.push(upgradeHref);
   };
 
@@ -414,30 +402,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
             <LanguagePicker value={language} onChange={setLanguage} />
-
-            <button
-              type="button"
-              onClick={handleUltraClick}
-              aria-pressed={ultraMode}
-              aria-label={
-                paidUnlocked
-                  ? "Ultra Mode"
-                  : "Ultra Mode (locked — upgrade to unlock)"
-              }
-              title={paidUnlocked ? "Ultra Mode" : "Upgrade to unlock Ultra Mode"}
-              className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                ultraMode
-                  ? "text-primary"
-                  : "text-foreground hover:text-foreground/80"
-              }`}
-            >
-              {paidUnlocked ? (
-                <Zap className="h-4 w-4" aria-hidden />
-              ) : (
-                <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />
-              )}
-              <span className="hidden sm:inline">Ultra Mode</span>
-            </button>
           </div>
         </div>
 
@@ -554,13 +518,14 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-border/50 bg-white/70 px-4 py-3">
+              <div className="flex items-center gap-2 border-t border-border/50 bg-white/70 px-3 py-2.5 sm:gap-3 sm:px-4">
+                <HumanizerDetectorTargets />
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
                       <Link
                         href={ROUTES.signIn}
-                        className="inline-flex items-center rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground"
+                        className="inline-flex shrink-0 items-center rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground"
                       >
                         Humanize
                       </Link>
@@ -570,7 +535,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                         type="button"
                         onClick={handleRefine}
                         disabled={!input.trim() || isProcessing}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
                       >
                         {isProcessing ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -584,7 +549,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     type="button"
                     onClick={handleRefine}
                     disabled={!input.trim() || isProcessing}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
                   >
                     {isProcessing ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

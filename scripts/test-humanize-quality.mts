@@ -31,7 +31,6 @@ import {
   hasPaidHumanizerAccess,
   isPaidHumanizeLanguage,
   isPaidWritingStyle,
-  isUltraIntensity,
 } from "../src/lib/humanize-access";
 import { resolveHumanizeLanguage } from "../src/lib/humanize-languages";
 import {
@@ -1149,9 +1148,7 @@ Rainforests also illustrate a much broader set of global development debates. It
       isPaidWritingStyle("creative") &&
       !hasPaidHumanizerAccess("FREE") &&
       hasPaidHumanizerAccess("BASIC") &&
-      hasPaidHumanizerAccess("PRO") &&
-      !isUltraIntensity(75) &&
-      isUltraIntensity(100),
+      hasPaidHumanizerAccess("PRO"),
   );
   assert(
     "English and Spanish are free and other languages are paid",
@@ -1220,6 +1217,27 @@ Rainforests also illustrate a much broader set of global development debates. It
     workspaceSource.includes("LanguagePicker") &&
       workspaceSource.includes("Upgrade to unlock this writing style") &&
       workspaceSource.includes('id !== "auto" && !paidUnlocked'),
+  );
+  assert(
+    "Humanize editor does not include Ultra Mode",
+    !workspaceSource.includes("Ultra Mode") &&
+      !workspaceSource.includes("ultraMode") &&
+      !workspaceSource.includes("handleUltraClick"),
+  );
+  assert(
+    "Humanize editor shows Best for detector targets beside Humanize",
+    workspaceSource.includes("HumanizerDetectorTargets"),
+  );
+  const detectorTargetsSource = readFileSync(
+    join(process.cwd(), "src", "components", "humanizer", "humanizer-detector-targets.tsx"),
+    "utf8",
+  );
+  assert(
+    "Best for targets include Academic Turnitin, GPTZero, and ZeroGPT",
+    detectorTargetsSource.includes("Academic (Turnitin)") &&
+      detectorTargetsSource.includes("GPTZero") &&
+      detectorTargetsSource.includes("ZeroGPT") &&
+      detectorTargetsSource.includes("Best for detector"),
   );
   assert(
     "Humanize editor includes a working rich-text toolbar",

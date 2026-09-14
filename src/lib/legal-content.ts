@@ -150,7 +150,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "3. What the service is not",
         content:
-          "RefinoText does not guarantee AI-detector results, undetectable writing, search rankings, academic grades, or publication. It does not currently offer a public API, a detector, Ultra Mode as a separate product, or a dedicated writing-history browser in the dashboard. Dashboard users can see recent credit activity.",
+          "RefinoText does not guarantee AI-detector results, undetectable writing, search rankings, academic grades, or publication. It does not currently offer a public API, a detector, or a dedicated writing-history browser in the dashboard. Dashboard users can see recent credit activity.",
       },
       {
         title: "4. Accounts",

@@ -22,8 +22,3 @@ export function isPaidHumanizeLanguage(language?: string | null): boolean {
   const resolved = resolveHumanizeLanguage(key);
   return !FREE_HUMANIZE_LANGUAGES.has(resolved.id);
 }
-
-/** Ultra Mode sends intensity 100. */
-export function isUltraIntensity(intensity?: number | null): boolean {
-  return (intensity ?? 0) >= 100;
-}

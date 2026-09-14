@@ -58,10 +58,7 @@ export class HumanizationFailedError extends Error {
 }
 
 const REWRITE_TOP_P = 0.95;
-
-function rewriteTemperature(intensity?: number): number {
-  return (intensity ?? 75) >= 85 ? 0.9 : 0.78;
-}
+const REWRITE_TEMPERATURE = 0.78;
 
 function toHumanizationError(error: unknown): never {
   if (error instanceof HumanizationFailedError) throw error;
@@ -109,7 +106,7 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
 
   return generateText(buildRewriteUserContent(request), {
     systemInstruction,
-    temperature: rewriteTemperature(request.intensity),
+    temperature: REWRITE_TEMPERATURE,
     topP: REWRITE_TOP_P,
     backend: "base",
     geminiApiOnly: true,

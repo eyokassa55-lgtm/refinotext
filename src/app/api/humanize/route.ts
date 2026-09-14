@@ -14,7 +14,6 @@ import {
   hasPaidHumanizerAccess,
   isPaidHumanizeLanguage,
   isPaidWritingStyle,
-  isUltraIntensity,
 } from "@/lib/humanize-access";
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { HUMANIZE_LANGUAGE_IDS } from "@/lib/humanize-languages";
@@ -169,14 +168,6 @@ export async function POST(req: NextRequest) {
   if (isPaidWritingStyle(parsed.tone) && !paidUnlocked) {
     return errorResponse(
       "Upgrade to unlock this writing style.",
-      "PAID_FEATURE",
-      402,
-      { plan: check.plan },
-    );
-  }
-  if (isUltraIntensity(parsed.intensity) && !paidUnlocked) {
-    return errorResponse(
-      "Upgrade to unlock Ultra Mode.",
       "PAID_FEATURE",
       402,
       { plan: check.plan },
