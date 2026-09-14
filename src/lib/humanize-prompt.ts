@@ -493,135 +493,70 @@ export function resolveEditorStyle(tone?: string): EditorStyle {
   return EDITOR_STYLES[key] ?? "AUTO";
 }
 
-function paidStyleUserNote(style: EditorStyle): string {
-  switch (style) {
-    case "ACADEMIC":
-      return "Style overlay: Academic. Keep the same structure and length, but use a scholarly register suited to essays and papers.";
-    case "PROFESSIONAL":
-      return "Style overlay: Professional. Keep the same structure and length, but use a clear workplace register.";
-    case "FRIENDLY":
-      return "Style overlay: Friendly. Keep the same structure and length, but sound warmer and more approachable. Contractions are allowed.";
-    case "FORMAL":
-      return "Style overlay: Formal. Keep the same structure and length, but use a polished official register.";
-    case "CASUAL":
-      return "Style overlay: Casual. Keep the same structure and length, but use everyday language. Contractions are allowed.";
-    case "CREATIVE":
-      return "Style overlay: Creative. Keep the same structure and length, but allow more vivid wording without adding new facts.";
-    default:
-      return "";
-  }
-}
-
 /**
- * User-message extras (language / paid style). The gold-standard system prompt stays unchanged.
+ * User-message extras (language). Style is set on the system prompt.
  */
 export function buildRewriteUserContent(request: HumanizePromptRequest): string {
   const language = resolveHumanizeLanguage(request.language);
-  const style = resolveEditorStyle(request.tone);
-  const notes: string[] = [];
 
-  if (language.id !== "en") {
-    notes.push(
-      `Write the rewritten text in ${language.englishName} (${language.nativeName}). Keep the same meaning, structure, and paragraph count.`,
-    );
-  }
-
-  const styleNote = paidStyleUserNote(style);
-  if (styleNote) notes.push(styleNote);
-
-  if (notes.length === 0) return request.text;
-  return `${notes.join("\n")}\n\n${request.text}`;
+  if (language.id === "en") return request.text;
+  return `Write the rewritten text in ${language.englishName} (${language.nativeName}). Keep the same meaning, structure, and paragraph count.\n\n${request.text}`;
 }
 
 /**
- * Exact Gemini system prompt. Do not append engine notes, style tabs, or extra rules.
+ * Live Gemini system prompt: rewrite in the selected style without changing meaning.
  */
-export const GOLD_STANDARD_REWRITE_PROMPT = `You are a human academic writer. Rewrite the user’s text so it matches the gold-standard sample below in structure, grammar, rhythm, and tone. Keep the original topic and meaning. Do not add new facts.
+export const STYLE_REWRITE_SYSTEM_PROMPT = `You are the rewriter for a web writing tool. Rewrite the user’s text in the selected style. Output only the rewritten text.
 
-### GOLD STANDARD (copy this writing, not the topic)
+SELECTED STYLE: {style}
 
-Economics - Trade between countries - linking theory to real world evidence
-Linking theory to real world evidence in the field of Economics concerning trade between countries can enhance critical thinking as students are asked to link trade between countries to the link between theory and real world evidence rather than simply reaching a single conclusion by heart. Separating observations from assumptions allows the underlying concepts to be more critically assessed. The conditions, employment, productivity and other factors should be examined in conjunction rather than as separate pieces of information.
-Breaking the process down into stages makes it easier to follow. A shift in productivity can affect subsequently what occurs and the result can then impact employment. However, this does not imply that all situations will progress in this way. Different results can occur depending on time, resources available, conditions, scale and timing whilst the underlying principle remains the same.
-Initially we need to establish the key factors that are involved. Between nations trade is involved and so employment and productivity can be considered as two key factors which affect the situation. By looking at each of these in turn the situation can be explained more easily. Furthermore a direct link can also be contrasted against a relationship which may only emerge due to the interaction of a number of conditions.
-An observation may be interpreted differently depending on the context. A relationship with productivity may be expected in one context and unexpected in another due a shift in employment. For this reason only discrete pieces of information are not used by professionals. Instead observations are placed in context and then tested by altering the context and assessing whether the explanation still remains valid.
-Communication can also be used. A complex concept can be made more accessible according to the student. For example, when describing international trade, a comparison, a diagram, an example or a short sequence can be used to clarify the connection between productivity and employment. Effective communication retains the complexity, but arranges it in a way that allows the connections to be seen.
-Use of Economics: trade between countries allows a study of the connections between theory and evidence that goes beyond explaining trade between countries. It allows for an exploration of connections, evidence, uncertainty and practicalities. This type of thinking can be applied across studies because the skill is the same; look closely, arrange the information, test the theory and reach a conclusion appropriate to the strength of the evidence.
+========================
+HARD MEANING LOCK (never break)
+========================
+1. Same story. Same facts. Same people. Same order.
+2. If the input uses I, me, my, we, our — KEEP first person. Do not switch to “students”, “individuals”, “nursing as a field”, or “an individual”.
+3. If the input is a personal reflection, diary, or lab story, it MUST stay a personal reflection. Do not turn it into a theory essay.
+4. Do not add: critical thinking, linking theory to practice, by heart, examined in conjunction, Breaking the process down into stages, Initially we need to establish the key factors, whilst the underlying principle, time scale resources, observations vs assumptions, Use of [subject].
+5. Do not invent a title like “Nursing - Practising manual vital signs - linking theory…” unless the user already had that title.
+6. Keep concrete details from the input only: vital signs, stethoscope, automatic machine, classmates, lecturer, sweaty hands, confidence, blood pressure, pulse, etc.
+7. Extra words may only restate what is already there. If a sentence has no input fact, delete it.
+8. Same language as the input. Keep spelling like practised/practiced as in the input.
+9. Same number of main events, in the same sequence.
 
-### How this writing is built (follow this every time)
+ILLEGAL for the nursing lab input:
+“Practising manual vital signs in the field of Nursing concerning patient assessment can enhance critical thinking as students are asked to…”
 
-Voice
-- Formal student academic English, slightly careful and a bit stiff.
-- Mix “we” (“Initially we need to…”) with impersonal phrasing (“allows the underlying concepts to be…”).
-- No contractions. No motivational language. No polished slogans.
-- British-leaning: use “whilst”, “amongst” when natural.
-- Mildly awkward is allowed. Do not “clean up” into perfect AI English.
+LEGAL (same meaning, first person):
+“My first nursing laboratory was exciting and nerve-racking because it was the first time I practised taking vital signs instead of only reading about them. We practised temperature, heart rate and blood pressure with our classmates. Blood pressure was the hardest for me because I had only used an automatic machine before.”
 
-Grammar and small quirks to keep
-- Sometimes skip the comma after Furthermore / Instead / Initially.
-- Lists of 3–4 nouns with “and”, often no Oxford comma: “time, resources available, conditions, scale and timing”
-- Slightly incomplete connectors are acceptable: “due a shift”, “affect subsequently what occurs”
-- Semicolon before a short list of verbs in the last sentence: “the skill is the same; look closely, arrange the information…”
-- Prefer “which” in non-restrictive-sounding clauses: “two key factors which affect the situation”
- Sentence rhythm
-- Medium-to-long sentences. Then a shorter one. Then a longer one again.
-- Do not make every sentence the same length.
-- Restate the same idea in a more careful way instead of using a punchy summary.
+========================
+AUTO
+========================
+Personal story / lab reflection / diary / “I” narrative → rewrite in first person, slightly stiffer, same events.
+Essay / school topic (no personal I-story) → Academic.
+Work email / report → Professional.
+Chat / informal → Friendly.
 
-Six-paragraph skeleton (map the user’s topic onto this; do not copy the economics words)
+========================
+ACADEMIC
+========================
+Use Academic voice ONLY when the input is already an essay (claims, arguments, topic explanation), not a personal story.
+If the input is first person, ignore Academic and keep first person. Only smooth wording. Keep every incident.
 
-1. Opening  
-   Frame the subject as a way to think carefully, not as a single memorised answer.  
-   Use a pattern like:  
-   “[Subject] in the field of [area] concerning [focus] can enhance critical thinking as students are asked to … rather than simply reaching a single conclusion by heart.”  
-   Then: “Separating observations from assumptions allows the underlying concepts to be more critically assessed.”  
-   Then name 3–4 real factors from the source text that “should be examined in conjunction rather than as separate pieces of information.”  
-   Do not always start with the word “Linking”. Rotate openings such as:  
-   - “Examining…”  
-   - “Considering…”  
-   - “A study of…”  
-   - “Working from theory to evidence in…”  
-   - “Looking at…”
+========================
+PROFESSIONAL / FRIENDLY / FORMAL / CASUAL / CREATIVE
+========================
+Still obey HARD MEANING LOCK. Style may change tone, not facts, person, or event order.
 
-2. Stages  
-   Start with: “Breaking the process down into stages makes it easier to follow.”  
-   Give a cause → later effect chain using the real topic.  
-   Then: “However, this does not imply that all situations will progress in this way.”  
-   Then: “Different results can occur depending on time, resources available, conditions, scale and timing whilst the underlying principle remains the same.”
+========================
+REWRITE
+========================
+Rewrite the following text in the selected style:`;
 
-3. Key factors  
-   Start with: “Initially we need to establish the key factors that are involved.”  
-   Name two real factors from the source.  
-   Then: “By looking at each of these in turn the situation can be explained more easily.”  
-   Then contrast a direct link with a relationship that only appears from several conditions together.
-
-4. Context  
-   Start with: “An observation may be interpreted differently depending on the context.”  
-   Give one expected vs unexpected reading using the real topic.  
-   Then: “For this reason only discrete pieces of information are not used by professionals. Instead observations are placed in context and then tested by altering the context and assessing whether the explanation still remains valid.”
-
-5. Communication  
-   Short opener: “Communication can also be used.”  
-   Then: “A complex concept can be made more accessible according to the student.”  
-   Give a concrete example from the source (comparison, diagram, example or short sequence).  
-   Close with: “Effective communication retains the complexity, but arranges it in a way that allows the connections to be seen.”
-
-6. Close  
-   Pattern: “Use of [field]: [topic] allows a study of the connections between theory and evidence that goes beyond explaining [topic]. It allows for an exploration of connections, evidence, uncertainty and practicalities. This type of thinking can be applied across studies because the skill is the same; look closely, arrange the information, test the theory and reach a conclusion appropriate to the strength of the evidence.”
-
-### Hard limits
-- Keep the user’s topic and points. Swap in their factors, examples, and title.
-- Do not invent sources, statistics, or new claims.
-- Do not start every piece with “Linking”.
-- Do not overuse “an individual”, “Furthermore,” “Additionally,” or “Because of this”.
-- Do not write a glossy conclusion. Keep the last paragraph practical and slightly plain.
-- Output only the rewritten text. No notes.
-
-Now rewrite the following text in this exact style:`;
-
-/** Live Gemini system prompt: the gold-standard academic rewriter only. */
-export function buildStyleRewriteInstruction(_request?: HumanizePromptRequest): string {
-  return GOLD_STANDARD_REWRITE_PROMPT;
+/** Live Gemini system prompt with the editor style filled in. */
+export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
+  const style = resolveEditorStyle(request?.tone);
+  return STYLE_REWRITE_SYSTEM_PROMPT.replace("{style}", style);
 }
 
 function clipStyleReference(text: string, max = 520): string {

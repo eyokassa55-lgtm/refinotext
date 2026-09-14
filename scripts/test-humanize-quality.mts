@@ -1098,15 +1098,24 @@ Rainforests also illustrate a much broader set of global development debates. It
     tone: "casual",
     intensity: 75,
   });
+  const autoStylePrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    tone: "auto",
+    intensity: 75,
+  });
   assert(
-    "live Gemini prompt is the gold-standard academic rewriter",
-    academicStylePrompt.startsWith("You are a human academic writer.") &&
-      academicStylePrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
-      academicStylePrompt.endsWith("Now rewrite the following text in this exact style:"),
+    "live Gemini prompt is the meaning-lock rewriter",
+    academicStylePrompt.startsWith("You are the rewriter for a web writing tool.") &&
+      academicStylePrompt.includes("HARD MEANING LOCK") &&
+      academicStylePrompt.includes("SELECTED STYLE: ACADEMIC") &&
+      academicStylePrompt.endsWith("Rewrite the following text in the selected style:"),
   );
   assert(
-    "live Gemini prompt does not change with editor style tabs",
-    academicStylePrompt === casualStylePrompt,
+    "live Gemini prompt fills the selected editor style",
+    autoStylePrompt.includes("SELECTED STYLE: AUTO") &&
+      casualStylePrompt.includes("SELECTED STYLE: CASUAL") &&
+      academicStylePrompt.includes("HARD MEANING LOCK") &&
+      casualStylePrompt.includes("HARD MEANING LOCK"),
   );
   const autoUserContent = buildRewriteUserContent({
     text: NEW_ESSAY,
@@ -1133,10 +1142,10 @@ Rainforests also illustrate a much broader set of global development debates. It
       !academicStylePrompt.includes("Write the rewritten text in Spanish"),
   );
   assert(
-    "paid style overlay is added to the user message, not the system prompt",
-    casualUserContent.includes("Style overlay: Casual") &&
-      casualUserContent.includes(NEW_ESSAY) &&
-      !casualStylePrompt.includes("Style overlay: Casual"),
+    "editor style is set on the system prompt, not the user message",
+    casualUserContent === NEW_ESSAY &&
+      casualStylePrompt.includes("SELECTED STYLE: CASUAL") &&
+      !casualUserContent.includes("Style overlay:"),
   );
   assert(
     "Auto is free and other styles are paid",
@@ -1167,10 +1176,11 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "live Gemini prompt is not padded with extra engine notes",
-    !academicStylePrompt.includes("SELECTED STYLE") &&
+    academicStylePrompt.includes("SELECTED STYLE: ACADEMIC") &&
       !academicStylePrompt.includes("FIRST LINE RULE") &&
       !/Ultra rewrite/.test(academicStylePrompt) &&
-      !/within 15%/.test(academicStylePrompt),
+      !/within 15%/.test(academicStylePrompt) &&
+      !academicStylePrompt.includes("GOLD STANDARD"),
   );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
