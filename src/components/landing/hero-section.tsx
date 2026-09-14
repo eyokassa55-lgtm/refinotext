@@ -17,13 +17,16 @@ const heroHeadingGradient =
 
 export function HeroSection() {
   return (
-    <section aria-labelledby="hero-heading" className="relative overflow-x-clip">
+    <section
+      aria-labelledby="hero-heading"
+      className="relative -mt-16 overflow-x-clip"
+    >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--color-accent-light)_0%,_transparent_50%)]"
         aria-hidden
       />
 
-      <Container className="relative pt-16 pb-10 sm:pt-24 sm:pb-12 lg:pt-28 lg:pb-14">
+      <Container className="relative pt-32 pb-10 sm:pt-40 sm:pb-12 lg:pt-44 lg:pb-14">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           <div className="min-w-0">
             <div className="mb-6 flex flex-wrap items-center gap-3">
