@@ -1100,12 +1100,10 @@ Rainforests also illustrate a much broader set of global development debates. It
       academicStylePrompt.includes(`\n${block}\n`),
     ),
   );
-  assert("style prompt states the source word count", /\d+ words/.test(academicStylePrompt));
+  assert("style prompt ends on the rewrite instruction", /Rewrite the following text in the selected style:/.test(academicStylePrompt));
   assert(
-    "ultra mode asks for a stronger rewrite",
-    /Ultra rewrite/.test(
-      buildStyleRewriteInstruction({ text: NEW_ESSAY, tone: "academic", intensity: 100 }),
-    ),
+    "style prompt is not padded with extra engine notes",
+    !/Ultra rewrite/.test(academicStylePrompt) && !/within 15%/.test(academicStylePrompt),
   );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
@@ -1116,14 +1114,13 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert("OG REFINO inference forbids summarizing", /do not summarize/i.test(ogCue));
   assert(
-    "Humanize engine drives the model with the style prompt and keeps live Wikipedia as fallback",
-    engineSource.includes("findWikipediaLiveMatch") &&
-      engineSource.includes("buildStyleRewriteInstruction") &&
-      engineSource.includes("runModelHumanization"),
-  );
-  assert(
-    "Humanize engine still reports NO_WIKIPEDIA_MATCH when rewrite model is unavailable",
-    engineSource.includes("NO_WIKIPEDIA_MATCH"),
+    "Humanize engine uses Gemini API plus the style prompt only",
+    engineSource.includes("buildStyleRewriteInstruction") &&
+      engineSource.includes("geminiApiOnly: true") &&
+      engineSource.includes("[GEMINI_API]") &&
+      !engineSource.includes("findWikipediaLiveMatch") &&
+      !engineSource.includes("humanizeLocally") &&
+      !engineSource.includes("findDatabaseMatch"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(

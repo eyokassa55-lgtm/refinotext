@@ -46,6 +46,8 @@ export type GenerateTextOptions = {
   backend?: GenerateBackend;
   /** 0 disables thinking so the full rewrite is not eaten by thought tokens. */
   thinkingBudget?: number;
+  /** Humanize path: GEMINI_API_KEY only — never Vertex. */
+  geminiApiOnly?: boolean;
 };
 
 const BASE_VERTEX_MODEL = "gemini-2.5-flash";
@@ -296,9 +298,37 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function geminiApiTargets(): { provider: GenerateProvider; model: string }[] {
+  const targets: { provider: GenerateProvider; model: string }[] = [];
+  if (!isGeminiApiConfigured()) return targets;
+  const primary = getGeminiApiModel();
+  if (primary.startsWith("gemini-") && !BROKEN_GEMINI_API_MODELS.has(primary.toLowerCase())) {
+    targets.push({ provider: "gemini-api", model: primary });
+  }
+  for (const model of GEMINI_API_FALLBACK_MODELS) {
+    if (!targets.some((target) => target.provider === "gemini-api" && target.model === model)) {
+      targets.push({ provider: "gemini-api", model });
+    }
+  }
+  return targets;
+}
+
 function modelsToTry(
   backend: GenerateBackend = "tuned",
+  geminiApiOnly = false,
 ): { provider: GenerateProvider; model: string }[] {
+  if (geminiApiOnly) {
+    const targets = geminiApiTargets();
+    if (targets.length === 0) {
+      throw new GeminiError(
+        "The writing service is not configured. Please try again later.",
+        "MISSING_API_KEY",
+        503,
+      );
+    }
+    return targets;
+  }
+
   const targets: { provider: GenerateProvider; model: string }[] = [];
 
   if (backend === "tuned" && hasVertexEndpointEnv()) {
@@ -313,18 +343,7 @@ function modelsToTry(
     targets.push({ provider: "vertex", model: vertex.model });
   }
 
-  // Gemini API publisher models (skip known-broken IDs).
-  if (isGeminiApiConfigured()) {
-    const primary = getGeminiApiModel();
-    if (primary.startsWith("gemini-") && !BROKEN_GEMINI_API_MODELS.has(primary.toLowerCase())) {
-      targets.push({ provider: "gemini-api", model: primary });
-    }
-    for (const model of GEMINI_API_FALLBACK_MODELS) {
-      if (!targets.some((target) => target.provider === "gemini-api" && target.model === model)) {
-        targets.push({ provider: "gemini-api", model });
-      }
-    }
-  }
+  targets.push(...geminiApiTargets());
 
   // Vertex publisher model last — this project often returns 403 here.
   if (isVertexConfigured()) {
@@ -542,7 +561,7 @@ export async function generateText(
   let lastError: GeminiError | null = null;
   const backend = options.backend ?? "tuned";
 
-  for (const target of modelsToTry(backend)) {
+  for (const target of modelsToTry(backend, options.geminiApiOnly === true)) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
       try {
         console.info("[gemini] generateContent", {

@@ -3,38 +3,13 @@ import "server-only";
 import {
   GeminiError,
   generateText,
-  getVertexConfig,
-  hasVertexEndpointEnv,
   isGeminiApiConfigured,
-  isVertexConfigured,
   redactModelName,
-  type GenerateBackend,
 } from "@/lib/gemini";
 import { buildStyleRewriteInstruction, resolveEditorStyle } from "@/lib/humanize-prompt";
-import {
-  assessRewriteQuality,
-  missingFactsForRetry,
-  phraseCopyRatio,
-  stripModelChrome,
-} from "@/lib/humanize-quality";
-import {
-  applyInputTitle,
-  formatEssayParagraphs,
-  extractUserTitle,
-  fitWikipediaOutputToInput,
-  formatWikipediaEditorText,
-} from "@/lib/humanize-output";
-import type { DatabaseTrainingMatch } from "@/lib/training-retrieval";
-import { findDatabaseMatch, storedMatchAlignsWithDraft } from "@/lib/training-retrieval";
-import {
-  findWikipediaLiveMatch,
-  WIKIPEDIA_EDITOR_MAX_CHARS,
-  WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
-} from "@/lib/wikipedia-corpus";
-import { scrubAiEssayMarks } from "@/lib/humanize-voice";
-import { humanizeLocally } from "@/lib/humanize-local";
+import { stripModelChrome } from "@/lib/humanize-quality";
+import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
-import { countWords } from "@/lib/words";
 
 export type HumanizeRequest = {
   text: string;
@@ -78,30 +53,9 @@ export class HumanizationFailedError extends Error {
 }
 
 const REWRITE_TOP_P = 0.95;
-const RETRY_SHORT_RATIO = 0.85;
-const REJECT_SHORT_RATIO = 0.8;
-const MAX_REWRITE_REPAIRS = 3;
-/** Soft threshold: retry rewrite when phrase overlap is this high. */
-const COPY_RETRY_RATIO = 0.16;
-/** Hard reject when still this similar after repairs. */
-const COPY_REJECT_RATIO = 0.28;
 
-/**
- * Gemini Developer API is the primary Humanize engine when GEMINI_API_KEY is set.
- * Tuned Vertex is only used when no Gemini API key is available.
- */
-function isHumanTextTunedReady(): boolean {
-  return process.env.VERTEX_HUMAN_TEXT_MODEL?.trim() === "1";
-}
-
-function canRewriteWithModel(): boolean {
-  return isGeminiApiConfigured() || hasVertexEndpointEnv() || isVertexConfigured();
-}
-
-function unmatchedRewriteBackend(): GenerateBackend {
-  if (isGeminiApiConfigured()) return "base";
-  if (hasVertexEndpointEnv() || isHumanTextTunedReady()) return "tuned";
-  return "base";
+function rewriteTemperature(intensity?: number): number {
+  return (intensity ?? 75) >= 85 ? 0.9 : 0.78;
 }
 
 function toHumanizationError(error: unknown): never {
@@ -116,431 +70,73 @@ function toHumanizationError(error: unknown): never {
   throw error;
 }
 
-function unmatchedRewriteTemperature(backend: GenerateBackend, intensity?: number): number {
-  const boost = (intensity ?? 75) >= 85 ? 0.12 : 0;
-  return (backend === "tuned" ? 0.72 : 0.78) + boost;
-}
-
-function rewriteGenerationOptions(temperature: number) {
-  return {
-    temperature,
-    topP: REWRITE_TOP_P,
-    maxOutputTokens: 8192,
-  };
-}
-
-async function rewriteWithModel(
-  request: HumanizeRequest,
-  options: {
-    systemInstruction: string;
-    backend: GenerateBackend;
-    temperature: number;
-  },
-): Promise<string> {
-  return generateText(request.text, {
-    systemInstruction: options.systemInstruction,
-    ...rewriteGenerationOptions(options.temperature),
-    backend: options.backend,
-    thinkingBudget: 0,
-  });
-}
-
 export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-function databaseRetrieval(hit: DatabaseTrainingMatch): HumanizeRetrievalSummary {
-  return {
-    band: "high",
-    matches: [{ index: hit.index, score: hit.score }],
-  };
-}
-
-function resolveStoredHit(hit: DatabaseTrainingMatch): HumanizeResult {
-  console.info("[humanize] [TOPIC_MATCH]", {
-    row: hit.index,
-    kind: hit.kind,
-    score: hit.score,
-    source: hit.index >= 90_000 ? "wikipedia-live-full" : "training-exact",
-  });
-  return {
-    text: formatEssayParagraphs(hit.output),
-    source: "TOPIC_TRAINING_MATCH",
-    retrieval: databaseRetrieval(hit),
-  };
-}
-
-function rewritePenalty(input: string, output: string): number {
-  const inWords = countWords(input);
-  const outWords = countWords(output);
-  const tooShort = inWords >= 40 && outWords < inWords * RETRY_SHORT_RATIO;
-  const tooLong = inWords >= 40 && outWords > inWords * 1.55;
-  const copy = phraseCopyRatio(input, output);
-  const quality = assessRewriteQuality(input, output);
-  const blocking = quality.issues.some((issue) =>
-    [
-      "REFUSAL",
-      "LEAK",
-      "UNRELATED",
-      "COPIED_RETRIEVED",
-      "GENERIC",
-      "MISSING_FACTS",
-      "MISSING_NAMES",
-    ].includes(issue.code),
-  );
-  const collapsed = quality.issues.some(
-    (issue) => issue.code === "TOO_SHORT" || issue.code === "PARAGRAPH_DRIFT",
-  );
-  return (
-    (tooShort ? 4 : 0) +
-    (tooLong ? 2 : 0) +
-    (copy >= COPY_REJECT_RATIO ? 8 : copy >= COPY_RETRY_RATIO ? 5 : copy >= 0.1 ? 2 : 0) +
-    (blocking ? 6 : 0) +
-    (collapsed ? 3 : 0) +
-    quality.issues.length
-  );
-}
-
-async function runModelHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  try {
-    return await runModelHumanizationInner(request);
-  } catch (error) {
-    toHumanizationError(error);
+function attachInputTitle(output: string, input: string): string {
+  const titled = extractUserTitle(input);
+  if (!titled) return output;
+  let body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
+  const firstLine = body.split(/\n/)[0]?.trim() ?? "";
+  if (firstLine.toLowerCase() === titled.toLowerCase()) {
+    body = body.slice(firstLine.length).replace(/^\n+/, "").trim();
   }
+  return `${titled}\n\n${body}`;
 }
 
-async function runModelHumanizationInner(request: HumanizeRequest): Promise<HumanizeResult> {
-  if (!canRewriteWithModel()) {
-    throw new HumanizationFailedError(
-      "The rewrite model is not configured.",
-      "MISSING_VERTEX_CONFIG",
-      503,
-    );
-  }
-
+async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
   const systemInstruction = buildStyleRewriteInstruction({
     text: request.text,
     tone: request.tone,
     readability: request.readability,
     intensity: request.intensity,
   });
-
-  let backend = unmatchedRewriteBackend();
-  let temperature = unmatchedRewriteTemperature(backend, request.intensity);
-  const vertex = getVertexConfig();
-  const geminiModel = process.env.GEMINI_MODEL?.replace(/-+$/, "").trim() || "gemini-flash-latest";
-  console.info("[humanize] [MODEL]", {
-    backend,
-    model:
-      backend === "tuned" && vertex
-        ? redactModelName(vertex.model)
-        : redactModelName(geminiModel),
-    provider: isGeminiApiConfigured() && backend === "base" ? "gemini-api" : backend,
+  const model = process.env.GEMINI_MODEL?.replace(/-+$/, "").trim() || "gemini-flash-latest";
+  console.info("[humanize] [GEMINI_API]", {
+    model: redactModelName(model),
     style: resolveEditorStyle(request.tone),
     intensity: request.intensity ?? 75,
   });
 
-  let output = stripModelChrome(
-    await rewriteWithModel(request, { backend, temperature, systemInstruction }),
-  );
-  if (!output) {
-    throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
-  }
-
-  const inputWords = countWords(request.text);
-  const isShort = (text: string) => inputWords >= 40 && countWords(text) < inputWords * RETRY_SHORT_RATIO;
-  let tooShort = isShort(output);
-  let copyRatio = phraseCopyRatio(request.text, output);
-  let copiedTooClosely = copyRatio >= COPY_RETRY_RATIO;
-  let droppedFacts = missingFactsForRetry(request.text, output);
-
-  for (let attempt = 0; attempt < MAX_REWRITE_REPAIRS; attempt += 1) {
-    if (!tooShort && !copiedTooClosely && droppedFacts.length === 0) break;
-
-    // Tuned models sometimes echo the draft; escalate to base Gemini for anti-copy repairs.
-    if (copiedTooClosely && backend === "tuned" && isGeminiApiConfigured()) {
-      backend = "base";
-      temperature = unmatchedRewriteTemperature(backend, request.intensity);
-    }
-
-    const repairTemperature = copiedTooClosely
-      ? Math.min(1.05, temperature + 0.12 * (attempt + 1))
-      : Math.max(0.4, temperature - 0.04 * (attempt + 1));
-
-    console.info("[humanize] retrying because the rewrite is truncated, copied, or missing facts", {
-      attempt: attempt + 1,
-      tooShort,
-      copiedTooClosely,
-      copyRatio,
-      droppedFacts,
-      backend,
-      repairTemperature,
-      inWords: inputWords,
-      outWords: countWords(output),
-    });
-
-    const repairInstruction = tooShort
-      ? `${systemInstruction}
-The last version was ${countWords(output)} words for a ${inputWords}-word draft. That is a summary and is not allowed.
-Write the full rewrite, about ${inputWords} words, with the same paragraph breaks.
-Keep every name, date, number, and claim. Do not switch topics. Do not add a title.`
-      : droppedFacts.length > 0
-        ? `${systemInstruction}
-The last version dropped these details from the draft: ${droppedFacts.join("; ")}.
-Put every one of them back. Rewrite the sentences around them. Do not delete informal opening lines.
-Keep about ${inputWords} words.`
-        : `${systemInstruction}
-The last version was too close to the draft (phrase overlap ${(copyRatio * 100).toFixed(0)}%). That is not a rewrite.
-Give every paragraph a new opening built on a noun from the draft, and change the wording while keeping the same facts.
-Do not reuse long phrases from the draft. Keep every fact, name, number, paragraph break, and about ${inputWords} words.`;
-
-    const repaired = stripModelChrome(
-      await rewriteWithModel(request, {
-        backend,
-        temperature: repairTemperature,
-        systemInstruction: repairInstruction,
-      }),
-    );
-    if (!repaired) break;
-
-    const preferRepair =
-      (tooShort && countWords(repaired) > countWords(output)) ||
-      (copiedTooClosely &&
-        phraseCopyRatio(request.text, repaired) < copyRatio - 0.02) ||
-      rewritePenalty(request.text, repaired) < rewritePenalty(request.text, output);
-    if (!preferRepair) break;
-
-    output = repaired;
-    tooShort = isShort(output);
-    copyRatio = phraseCopyRatio(request.text, output);
-    copiedTooClosely = copyRatio >= COPY_RETRY_RATIO;
-    droppedFacts = missingFactsForRetry(request.text, output);
-  }
-
-  const quality = assessRewriteQuality(request.text, output);
-  if (
-    quality.issues.some(
-      (issue) =>
-        issue.code === "REFUSAL" ||
-        issue.code === "LEAK" ||
-        issue.code === "UNRELATED" ||
-        issue.code === "TOO_SIMILAR",
-    )
-  ) {
-    console.error("[humanize] model returned an unusable response", {
-      codes: quality.issues.map((issue) => issue.code),
-      copyRatio: phraseCopyRatio(request.text, output),
-    });
-    throw new HumanizationFailedError(
-      "Humanization failed. Please try again.",
-      "QUALITY_CHECK_FAILED",
-      502,
-    );
-  }
-
-  output = quality.output || output;
-  copyRatio = phraseCopyRatio(request.text, output);
-  if (inputWords >= 80 && copyRatio >= COPY_REJECT_RATIO) {
-    throw new HumanizationFailedError(
-      "The rewrite copied the draft too closely. Please try again.",
-      "QUALITY_CHECK_FAILED",
-      502,
-    );
-  }
-
-  if (inputWords >= 40 && countWords(output) < inputWords * REJECT_SHORT_RATIO) {
-    throw new HumanizationFailedError(
-      "The rewrite was too short. Please try again.",
-      "TEXT_TOO_SHORT",
-      502,
-    );
-  }
-
-  // Peel any echoed title before scrubbing. The scrubber joins lines that do not
-  // end in punctuation, so a title left in place folds into the first paragraph.
-  const titled = extractUserTitle(request.text);
-  if (titled) {
-    let body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
-    const firstLine = body.split(/\n/)[0]?.trim() ?? "";
-    if (firstLine.toLowerCase() === titled.toLowerCase()) {
-      body = body.slice(firstLine.length).replace(/^\n+/, "").trim();
-    }
-    output = `${titled}\n\n${scrubAiEssayMarks(body)}`;
-  } else {
-    output = scrubAiEssayMarks(output);
-  }
-
-  output = formatEssayParagraphs(output);
-
-  return {
-    text: output.trim(),
-    source: "FINE_TUNED_MODEL",
-    retrieval: null,
-  };
+  return generateText(request.text, {
+    systemInstruction,
+    temperature: rewriteTemperature(request.intensity),
+    topP: REWRITE_TOP_P,
+    maxOutputTokens: 8192,
+    backend: "base",
+    geminiApiOnly: true,
+    thinkingBudget: 0,
+  });
 }
 
 /**
- * Final safety gate: never ship a Wikipedia body that only shares a title keyword
- * (Decision Fatigue title + Pilot decision-making body).
- * Same-topic encyclopedia pages (Cristiano Ronaldo → Cristiano Ronaldo) must pass.
+ * Humanize is Gemini API + the style system prompt only.
+ * No Wikipedia, no training lookup, no Vertex, no local rewrite.
  */
-function wikipediaOutputMatchesDraftBody(
-  userText: string,
-  hit: Pick<DatabaseTrainingMatch, "topic" | "output" | "rawExtract">,
-): boolean {
-  const wikiBody = (hit.rawExtract || hit.output || "").replace(/^#\s+[^\n]+\n*/, "");
-  const draftBody = userText.replace(/^#\s+[^\n]+\n*/, "");
-  const draftLower = `${userText}\n${draftBody}`.toLowerCase();
-  const wikiLower = `${hit.topic || ""}\n${wikiBody}`.toLowerCase();
-  const topic = (hit.topic || "").trim().toLowerCase();
-
-  const wikiLead = `${hit.topic || ""}\n${wikiBody}`.slice(0, 700).toLowerCase();
-  const domainMarkers = [
-    /\b(?:pilot decision|aeronautical decision|aviation accident|flight deck|airspace)\b/i,
-    /\b(?:pilot|aviation|aeronautical|aircraft|cockpit)\b/i,
-  ];
-  // Only reject when the PAGE LEAD is about that domain (not a bio that mentions a private jet).
-  for (const pattern of domainMarkers) {
-    if (pattern.test(wikiLead) && !pattern.test(draftLower)) return false;
-  }
-
-  // Draft is clearly about this exact Wikipedia article (person, place, concept).
-  if (topic.length >= 4 && draftLower.includes(topic)) {
-    return true;
-  }
-
-  const subject = draftLower.match(
-    /\b(decision fatigue|ego depletion|freedom of assembly|peaceful assembly|cultural memory|natural environment|water pollution)\b/,
-  );
-  if (subject?.[1] && !wikiLower.includes(subject[1])) return false;
-
-  const draftTokens = draftLower
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 5);
-  const counts = new Map<string, number>();
-  for (const token of draftTokens) {
-    counts.set(token, (counts.get(token) ?? 0) + 1);
-  }
-  const top = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([token]) => token)
-    .filter(
-      (token) =>
-        ![
-          "about",
-          "after",
-          "before",
-          "their",
-          "there",
-          "these",
-          "those",
-          "which",
-          "where",
-          "while",
-          "would",
-          "could",
-          "should",
-          "known",
-          "played",
-          "helped",
-          "often",
-          "called",
-        ].includes(token),
-    )
-    .slice(0, 12);
-  if (top.length < 4) return true;
-  const wikiTokens = new Set(
-    wikiLower
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .split(/\s+/)
-      .filter(Boolean),
-  );
-  const hits = top.filter((token) => wikiTokens.has(token)).length;
-  return hits / top.length >= 0.28;
-}
-
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
-  // 1) Exact / near-exact paste of a stored training draft (paired human_text).
-  const exactHit = findDatabaseMatch(request.text);
-  if (
-    exactHit &&
-    (exactHit.kind === "exact" || exactHit.kind === "near_exact") &&
-    storedMatchAlignsWithDraft(request.text, exactHit)
-  ) {
-    return resolveStoredHit({
-      ...exactHit,
-      output: formatEssayParagraphs(applyInputTitle(exactHit.output, request.text)),
-    });
-  }
-
-  // 2) Primary: Gemini API rewrite of the user's own draft (same topic, humanized wording).
-  if (canRewriteWithModel()) {
-    try {
-      return await runModelHumanization(request);
-    } catch (error) {
-      console.error("[humanize] Gemini/model rewrite failed; trying Wikipedia then local", {
-        code: error instanceof HumanizationFailedError ? error.code : error instanceof GeminiError ? error.code : "UNKNOWN",
-        status: error instanceof HumanizationFailedError ? error.status : error instanceof GeminiError ? error.status : undefined,
-      });
-    }
-  }
-
-  // 3) Same-topic live Wikipedia prose when the model path is down.
-  const wikipediaHit = await findWikipediaLiveMatch(request.text);
-  if (wikipediaHit && wikipediaOutputMatchesDraftBody(request.text, wikipediaHit)) {
-    const inputWords = countWords(request.text);
-    const topic = wikipediaHit.topic?.trim() || extractUserTitle(request.text) || "Article";
-    const sizedFromRaw = wikipediaHit.rawExtract
-      ? formatWikipediaEditorText(
-          topic,
-          wikipediaHit.rawExtract,
-          WIKIPEDIA_EDITOR_MAX_CHARS,
-          WIKIPEDIA_EDITOR_MAX_PARAGRAPHS,
-          inputWords,
-        )
-      : wikipediaHit.output;
-
-    let output = fitWikipediaOutputToInput(
-      applyInputTitle(sizedFromRaw, request.text),
-      request.text,
-    );
-    output = formatEssayParagraphs(output);
-
-    console.info("[humanize] [WIKIPEDIA_LIVE]", {
-      topic: wikipediaHit.topic,
-      score: wikipediaHit.score,
-      source: "en.wikipedia.org API (full encyclopedia)",
-    });
-
-    return resolveStoredHit({
-      ...wikipediaHit,
-      output,
-    });
-  }
-  if (wikipediaHit) {
-    console.info("[humanize] skipped Wikipedia hit — body topic did not match draft", {
-      topic: wikipediaHit.topic,
-      score: wikipediaHit.score,
-    });
-  }
-
-  // 4) Offline local rewrite last resort.
-  console.info("[humanize] [LOCAL_DATA]", {
-    words: countWords(request.text),
-    reason: "no-gemini-no-wikipedia",
-  });
-  const local = humanizeLocally(request.text);
-  if (!local) {
+  if (!isGeminiApiConfigured()) {
     throw new HumanizationFailedError(
-      "Could not humanize this text. Please try again.",
-      "EMPTY_RESPONSE",
-      502,
+      "The writing service is not configured.",
+      "MISSING_API_KEY",
+      503,
     );
   }
-  return {
-    text: local,
-    source: "FINE_TUNED_MODEL",
-    retrieval: null,
-  };
+
+  try {
+    let output = stripModelChrome(await rewriteWithGemini(request));
+    if (!output) {
+      throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
+    }
+
+    output = formatEssayParagraphs(attachInputTitle(output, request.text));
+
+    return {
+      text: output.trim(),
+      source: "FINE_TUNED_MODEL",
+      retrieval: null,
+    };
+  } catch (error) {
+    toHumanizationError(error);
+  }
 }
