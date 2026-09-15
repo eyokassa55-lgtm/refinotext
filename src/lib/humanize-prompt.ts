@@ -1,10 +1,7 @@
 import { ACADEMIC_TURNITIN_SYSTEM_PROMPT } from "@/lib/academic-turnitin-system-prompt";
-import {
-  isAcademicTurnitinDetector,
-  isGptZeroDetector,
-  isZeroGptDetector,
-} from "@/lib/humanize-detectors";
+import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
 import { HUMANIZER_SYSTEM_PROMPT } from "@/lib/humanizer-system-prompt";
+import { ZEROGPT_SYSTEM_PROMPT } from "@/lib/zerogpt-system-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 
@@ -521,8 +518,8 @@ export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): s
   if (isGptZeroDetector(request?.detector)) {
     return HUMANIZER_SYSTEM_PROMPT;
   }
-  if (isZeroGptDetector(request?.detector) || isAcademicTurnitinDetector(request?.detector)) {
-    return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
+  if (isZeroGptDetector(request?.detector)) {
+    return ZEROGPT_SYSTEM_PROMPT;
   }
   return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
 }

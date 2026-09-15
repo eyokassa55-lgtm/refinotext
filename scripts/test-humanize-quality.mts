@@ -1119,10 +1119,13 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "Academic Turnitin uses the exact academic gold-standard prompt",
+    "Academic Turnitin uses the exact lock-pass academic gold-standard prompt",
     turnitinPrompt.startsWith("You are a human academic writer.") &&
-      turnitinPrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
-      turnitinPrompt.endsWith("Now rewrite the following text in this exact style:"),
+      turnitinPrompt.includes("STYLE may change. CONTENT may not.") &&
+      turnitinPrompt.includes("Every paragraph must carry locked details from the source.") &&
+      turnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)") &&
+      turnitinPrompt.endsWith("Now rewrite the following text in this exact style:") &&
+      !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );
   assert(
     "GPTZero uses the exact professional humanizer prompt",
@@ -1132,14 +1135,15 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "ZeroGPT uses the exact academic gold-standard prompt",
-    zeroGptPrompt === turnitinPrompt &&
-      zeroGptPrompt.startsWith("You are a human academic writer.") &&
+    zeroGptPrompt.startsWith("You are a human academic writer.") &&
       zeroGptPrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
+      !zeroGptPrompt.includes("STYLE may change. CONTENT may not.") &&
       zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:"),
   );
   assert(
     "GPTZero prompt is not used unless GPTZero is selected",
     academicStylePrompt === turnitinPrompt &&
+      zeroGptPrompt !== turnitinPrompt &&
       gptZeroPrompt !== turnitinPrompt,
   );
   const autoUserContent = buildRewriteUserContent({
