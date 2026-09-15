@@ -1451,15 +1451,29 @@ Rainforests also illustrate a much broader set of global development debates. It
     join(process.cwd(), "src", "app", "layout.tsx"),
     "utf8",
   );
-  const usersSource = readFileSync(join(process.cwd(), "src", "lib", "users.ts"), "utf8");
+  const persistBillingSource = readFileSync(
+    join(process.cwd(), "src", "lib", "persist-billing-user.ts"),
+    "utf8",
+  );
+  const middlewareSource = readFileSync(
+    join(process.cwd(), "src", "middleware.ts"),
+    "utf8",
+  );
+  const syncDbUserSource = readFileSync(
+    join(process.cwd(), "src", "components", "auth", "sync-db-user.tsx"),
+    "utf8",
+  );
   assert(
     "signed-in Clerk accounts are synced into Neon on signup",
     clerkWebhookSource.includes("USER_SYNC_FAILED") &&
       clerkWebhookSource.includes("session.created") &&
       clerkWebhookSource.includes("ensureBillingUser") &&
       layoutSource.includes("SyncDbUser") &&
-      usersSource.includes("persistBillingUser") &&
-      usersSource.includes("clerkClient"),
+      persistBillingSource.includes("prisma.user.upsert") &&
+      usersSource.includes("getClerkBackend") &&
+      middlewareSource.includes("shouldRunClerk") &&
+      syncDbUserSource.includes("getToken") &&
+      syncDbUserSource.includes("Authorization"),
   );
   assert(
     "Humanize editor includes a working rich-text toolbar",

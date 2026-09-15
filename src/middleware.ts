@@ -23,26 +23,6 @@ const isIndexableRoute = createRouteMatcher([
   "/acceptable-use(.*)",
   "/refunds(.*)",
 ]);
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/pricing(.*)",
-  "/faq(.*)",
-  "/contact(.*)",
-  "/privacy(.*)",
-  "/terms(.*)",
-  "/acceptable-use(.*)",
-  "/refunds(.*)",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/api/health(.*)",
-  "/api/webhooks(.*)",
-  "/sitemap.xml",
-  "/robots.txt",
-  "/opengraph-image(.*)",
-  "/icon(.*)",
-  "/apple-icon(.*)",
-  "/favicon.ico",
-]);
 
 function isKnownCrawler(req: NextRequest): boolean {
   const ua = req.headers.get("user-agent") ?? "";
@@ -51,9 +31,16 @@ function isKnownCrawler(req: NextRequest): boolean {
   );
 }
 
+function withRobotsTag(req: NextRequest, response: NextResponse) {
+  if (isIndexableRoute(req)) {
+    response.headers.set("X-Robots-Tag", "index, follow");
+  }
+  return response;
+}
+
 const clerkHandler = clerkMiddleware(
   async (auth, req) => {
-    if (isWebhookRoute(req) || isPublicRoute(req)) return;
+    if (isWebhookRoute(req)) return;
 
     if (isProtectedRoute(req)) {
       const { userId } = await auth();
@@ -71,6 +58,13 @@ const clerkHandler = clerkMiddleware(
   },
 );
 
+function shouldRunClerk(req: NextRequest): boolean {
+  if (!isClerkEnabled || !clerkPublishableKey.startsWith("pk_")) return false;
+  if (process.env.VERCEL_ENV === "production" && isClerkDevelopmentKey) return false;
+  if (isKnownCrawler(req) && !isProtectedRoute(req)) return false;
+  return true;
+}
+
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
   // Polar/Clerk webhooks must never hit Clerk auth or host redirects.
   if (isWebhookRoute(req)) {
@@ -85,32 +79,12 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(destination, 308);
   }
 
-  // Public marketing/SEO pages must render as normal HTML. clerkMiddleware
-  // still performs a handshake before the callback, and a Development instance
-  // redirects that handshake to *.clerk.accounts.dev?__clerk_hs_reason=dev-browser-missing.
-  if (isIndexableRoute(req)) {
-    const response = NextResponse.next();
-    response.headers.set("X-Robots-Tag", "index, follow");
-    return response;
+  if (!shouldRunClerk(req)) {
+    return withRobotsTag(req, NextResponse.next());
   }
 
-  if (isPublicRoute(req)) {
-    return NextResponse.next();
-  }
-
-  // Never send Googlebot (or other crawlers) through a Clerk handshake.
-  if (isKnownCrawler(req) && !isProtectedRoute(req)) {
-    return NextResponse.next();
-  }
-
-  if (process.env.VERCEL_ENV === "production" && isClerkDevelopmentKey) {
-    return NextResponse.next();
-  }
-
-  if (!isClerkEnabled || !clerkPublishableKey.startsWith("pk_")) {
-    return NextResponse.next();
-  }
-
+  // Browsers need clerkMiddleware on /, /sign-up, and /sign-in so the session
+  // cookie is written and Neon can store the Clerk user after signup.
   return clerkHandler(req, event);
 }
 

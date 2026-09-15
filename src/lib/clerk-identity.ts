@@ -129,9 +129,14 @@ export function clerkIdentityFromUser(user: {
   emailAddresses?: Array<{ emailAddress?: string | null }>;
   externalAccounts?: Array<{ emailAddress?: string | null }>;
 }): ClerkIdentity {
+  const email =
+    user.primaryEmailAddress?.emailAddress?.trim().toLowerCase() ||
+    user.emailAddresses?.find((entry) => entry.emailAddress)?.emailAddress?.trim().toLowerCase() ||
+    clerkEmailFromPayload(user);
+
   return {
     clerkUserId: user.id,
-    email: clerkEmailFromPayload(user),
+    email,
     name: clerkNameFromPayload(user),
   };
 }

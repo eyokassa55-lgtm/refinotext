@@ -1,7 +1,7 @@
-import { clerkClient } from "@clerk/nextjs/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getClerkBackend } from "@/lib/clerk-backend";
 import {
   clerkIdentityFromUser,
   clerkIdentityFromWebhookData,
@@ -28,9 +28,9 @@ function webhookSecret(): string | undefined {
 }
 
 async function emailFromClerkBackend(clerkUserId: string) {
-  if (typeof clerkClient !== "function") return null;
-  const client = await clerkClient();
-  const user = await client.users.getUser(clerkUserId);
+  const clerk = getClerkBackend();
+  if (!clerk) return null;
+  const user = await clerk.users.getUser(clerkUserId);
   return clerkIdentityFromUser(user);
 }
 

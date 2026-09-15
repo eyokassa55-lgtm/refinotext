@@ -24,7 +24,8 @@
     "train:vertex": "tsx scripts/start-vertex-tuning.mts",
     "upload:training": "tsx scripts/upload-training-to-gcs.mts",
     "test:fireworks": "tsx --conditions=react-server scripts/test-fireworks.mts",
-    "test:polar": "tsx scripts/verify-polar.mts"
+    "test:polar": "tsx scripts/verify-polar.mts",
+    "sync:clerk-users": "tsx --conditions=react-server scripts/sync-clerk-users.mts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.7.4",
