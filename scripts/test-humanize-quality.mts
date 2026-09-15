@@ -1443,6 +1443,24 @@ Rainforests also illustrate a much broader set of global development debates. It
       }) &&
       stripWelcomeParamFromUrl("/?welcome=1#humanizer") === "/#humanizer",
   );
+  const clerkWebhookSource = readFileSync(
+    join(process.cwd(), "src", "app", "api", "webhooks", "clerk", "route.ts"),
+    "utf8",
+  );
+  const layoutSource = readFileSync(
+    join(process.cwd(), "src", "app", "layout.tsx"),
+    "utf8",
+  );
+  const usersSource = readFileSync(join(process.cwd(), "src", "lib", "users.ts"), "utf8");
+  assert(
+    "signed-in Clerk accounts are synced into Neon on signup",
+    clerkWebhookSource.includes("USER_SYNC_FAILED") &&
+      clerkWebhookSource.includes("session.created") &&
+      clerkWebhookSource.includes("ensureBillingUser") &&
+      layoutSource.includes("SyncDbUser") &&
+      usersSource.includes("persistBillingUser") &&
+      usersSource.includes("clerkClient"),
+  );
   assert(
     "Humanize editor includes a working rich-text toolbar",
     workspaceSource.includes("HumanizerEditorToolbar") &&

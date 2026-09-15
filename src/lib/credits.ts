@@ -141,27 +141,22 @@ export async function getCreditBalance(
  * Give a brand-new account its FREE plan and starting credits.
  * Safe to call repeatedly — existing records are left untouched.
  */
-export async function provisionFreeTier(
+async function provisionFreeTierRecords(
   userId: string,
-  tx?: Prisma.TransactionClient,
+  db: Prisma.TransactionClient,
 ): Promise<void> {
-  if (!tx) {
-    await prisma.$transaction((inner) => provisionFreeTier(userId, inner));
-    return;
-  }
-
   const plan = getPlanConfig("FREE");
 
-  const existingBalance = await tx.creditBalance.findUnique({ where: { userId } });
+  const existingBalance = await db.creditBalance.findUnique({ where: { userId } });
 
-  await tx.creditBalance.upsert({
+  await db.creditBalance.upsert({
     where: { userId },
     update: {},
     create: { userId, balance: plan.monthlyCredits },
   });
 
   if (!existingBalance) {
-    await tx.creditTransaction.createMany({
+    await db.creditTransaction.createMany({
       data: [
         {
           userId,
@@ -176,12 +171,12 @@ export async function provisionFreeTier(
     });
   }
 
-  const existingSubscription = await tx.subscription.findUnique({
+  const existingSubscription = await db.subscription.findUnique({
     where: { userId },
   });
 
   if (!existingSubscription) {
-    await tx.subscription.create({
+    await db.subscription.create({
       data: {
         userId,
         plan: plan.tier,
@@ -191,12 +186,39 @@ export async function provisionFreeTier(
       },
     });
   } else if (existingSubscription.plan === "FREE") {
-    await tx.subscription.update({
+    await db.subscription.update({
       where: { userId },
       data: {
         maxWordsPerRequest: plan.maxWordsPerRequest,
       },
     });
+  }
+}
+
+/**
+ * Give a brand-new account its FREE plan and starting credits.
+ * Safe to call repeatedly — existing records are left untouched.
+ */
+export async function provisionFreeTier(
+  userId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  if (tx) {
+    await provisionFreeTierRecords(userId, tx);
+    return;
+  }
+
+  try {
+    await prisma.$transaction((inner) => provisionFreeTierRecords(userId, inner));
+  } catch (error) {
+    console.error(
+      "[credits] interactive transaction failed; provisioning without a transaction",
+      error,
+    );
+    await provisionFreeTierRecords(
+      userId,
+      prisma as unknown as Prisma.TransactionClient,
+    );
   }
 }
 

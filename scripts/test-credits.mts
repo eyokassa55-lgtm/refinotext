@@ -9,6 +9,11 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 
+import {
+  clerkIdentityFromUser,
+  clerkIdentityFromWebhookData,
+} from "../src/lib/clerk-identity";
+
 const { prisma } = await import("../src/lib/prisma");
 const {
   checkCredits,
@@ -43,6 +48,59 @@ function words(n: number) {
 const clerkUserId = `test_credits_${Date.now()}`;
 
 async function main() {
+  console.log("\n0. Clerk identity parsing for Neon user sync");
+  const created = clerkIdentityFromWebhookData("user.created", {
+    id: "user_abc",
+    first_name: "New",
+    last_name: "Era",
+    email_addresses: [
+      { id: "idn_1", email_address: "newerahoho@gmail.com" },
+    ],
+    primary_email_address_id: "idn_1",
+  });
+  assert(
+    "user.created webhook payload yields email and name",
+    created?.clerkUserId === "user_abc" &&
+      created.email === "newerahoho@gmail.com" &&
+      created.name === "New Era",
+  );
+  const camel = clerkIdentityFromWebhookData("user.created", {
+    id: "user_camel",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    emailAddresses: [{ id: "idn_2", emailAddress: "Ada@Example.com" }],
+    primaryEmailAddressId: "idn_2",
+  });
+  assert(
+    "camelCase Clerk user objects still yield a lowercase email",
+    camel?.email === "ada@example.com" && camel.name === "Ada Lovelace",
+  );
+  const session = clerkIdentityFromWebhookData("session.created", {
+    id: "sess_1",
+    user_id: "user_session",
+    user: {
+      id: "user_session",
+      email_addresses: [{ id: "idn_3", email_address: "session-user@example.com" }],
+      primary_email_address_id: "idn_3",
+    },
+  });
+  assert(
+    "session.created nested user is stored under the Clerk user id",
+    session?.clerkUserId === "user_session" &&
+      session.email === "session-user@example.com",
+  );
+  const fromUser = clerkIdentityFromUser({
+    id: "user_sdk",
+    firstName: "Lin",
+    lastName: "us",
+    primaryEmailAddress: { emailAddress: "linus@example.com" },
+    emailAddresses: [{ emailAddress: "linus@example.com" }],
+  });
+  assert(
+    "currentUser() profile maps into a Neon row",
+    fromUser.email === "linus@example.com" && fromUser.name === "Lin us",
+  );
+
   const user = await prisma.user.create({
     data: {
       clerkUserId,

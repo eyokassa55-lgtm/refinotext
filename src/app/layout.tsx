@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import localFont from "next/font/local";
 
+import { SyncDbUser } from "@/components/auth/sync-db-user";
 import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
 import {
   clerkAfterSignInUrl,
@@ -122,6 +123,7 @@ export default function RootLayout({
             allowedRedirectOrigins={clerkAllowedRedirectOrigins}
             isSatellite={false}
           >
+            <SyncDbUser />
             {children}
           </ClerkProvider>
         ) : (
