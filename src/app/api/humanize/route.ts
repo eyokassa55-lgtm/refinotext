@@ -16,6 +16,7 @@ import {
   isPaidWritingStyle,
 } from "@/lib/humanize-access";
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
+import { HUMANIZE_DETECTOR_IDS } from "@/lib/humanize-detectors";
 import { HUMANIZE_LANGUAGE_IDS } from "@/lib/humanize-languages";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
@@ -37,6 +38,7 @@ const bodySchema = z.object({
   readability: z.string().max(64).optional(),
   intensity: z.number().int().min(0).max(100).optional(),
   language: z.enum(HUMANIZE_LANGUAGE_IDS).optional(),
+  detector: z.enum(HUMANIZE_DETECTOR_IDS).optional(),
   requestId: z.string().min(8).max(128).optional(),
 });
 
@@ -204,6 +206,7 @@ export async function POST(req: NextRequest) {
       readability: parsed.readability,
       intensity: parsed.intensity,
       language: parsed.language,
+      detector: parsed.detector,
     });
     output = result.text;
     source = toApiSource(result.source);

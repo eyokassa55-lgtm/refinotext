@@ -32,6 +32,7 @@ import {
   writeEditorVersions,
   type EditorVersion,
 } from "@/lib/editor-versions";
+import { DEFAULT_HUMANIZE_DETECTOR, type HumanizeDetectorId } from "@/lib/humanize-detectors";
 import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-access";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
@@ -76,6 +77,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [style, setStyle] = useState<EditorStyleId>("auto");
+  const [detector, setDetector] = useState<HumanizeDetectorId>(DEFAULT_HUMANIZE_DETECTOR);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState<"input" | "output" | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -160,6 +162,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           requestId: requestIdRef.current,
           language,
           tone: style === "auto" ? undefined : style,
+          detector,
         }),
       });
 
@@ -217,7 +220,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       setIsProcessing(false);
       setDocStatus((current) => (current === "humanizing" ? "ready" : current));
     }
-  }, [input, isSignedIn, language, paidUnlocked, router, style, upgradeHref]);
+  }, [detector, input, isSignedIn, language, paidUnlocked, router, style, upgradeHref]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -519,7 +522,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               </div>
 
               <div className="flex items-center gap-2 border-t border-border/50 bg-white/70 px-3 py-2.5 sm:gap-3 sm:px-4">
-                <HumanizerDetectorTargets />
+                <HumanizerDetectorTargets value={detector} onChange={setDetector} />
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">

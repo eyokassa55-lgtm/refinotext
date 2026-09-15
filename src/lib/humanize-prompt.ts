@@ -1,3 +1,9 @@
+import { ACADEMIC_TURNITIN_SYSTEM_PROMPT } from "@/lib/academic-turnitin-system-prompt";
+import {
+  isAcademicTurnitinDetector,
+  isGptZeroDetector,
+  isZeroGptDetector,
+} from "@/lib/humanize-detectors";
 import { HUMANIZER_SYSTEM_PROMPT } from "@/lib/humanizer-system-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
@@ -8,6 +14,7 @@ export type HumanizePromptRequest = {
   readability?: string;
   intensity?: number;
   language?: string;
+  detector?: string;
 };
 
 function rewriteStrength(intensity?: number): string {
@@ -505,13 +512,19 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
 }
 
 /**
- * Live Gemini system prompt. This text is the only system instruction.
+ * GPTZero system prompt. Used only when the GPTZero chip is selected.
  */
 export const STYLE_REWRITE_SYSTEM_PROMPT = HUMANIZER_SYSTEM_PROMPT;
 
-/** Live Gemini system prompt. This is the only system instruction. */
-export function buildStyleRewriteInstruction(_request?: HumanizePromptRequest): string {
-  return STYLE_REWRITE_SYSTEM_PROMPT;
+/** Live Gemini system prompt. Detector chips pick the exact prompt. */
+export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
+  if (isGptZeroDetector(request?.detector)) {
+    return HUMANIZER_SYSTEM_PROMPT;
+  }
+  if (isZeroGptDetector(request?.detector) || isAcademicTurnitinDetector(request?.detector)) {
+    return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
+  }
+  return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
 }
 
 function clipStyleReference(text: string, max = 520): string {

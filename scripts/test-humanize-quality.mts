@@ -1103,14 +1103,44 @@ Rainforests also illustrate a much broader set of global development debates. It
     intensity: 75,
   });
   assert(
-    "live Gemini prompt is the professional humanizer gold-standard rewriter",
-    academicStylePrompt.startsWith("You are a professional humanizer.") &&
-      academicStylePrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
-      academicStylePrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:"),
+    "editor style tabs do not change the detector system prompt",
+    academicStylePrompt === casualStylePrompt && academicStylePrompt === autoStylePrompt,
+  );
+  const turnitinPrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    detector: "academic-turnitin",
+  });
+  const gptZeroPrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    detector: "gptzero",
+  });
+  const zeroGptPrompt = buildStyleRewriteInstruction({
+    text: NEW_ESSAY,
+    detector: "zerogpt",
+  });
+  assert(
+    "Academic Turnitin uses the exact academic gold-standard prompt",
+    turnitinPrompt.startsWith("You are a human academic writer.") &&
+      turnitinPrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
+      turnitinPrompt.endsWith("Now rewrite the following text in this exact style:"),
   );
   assert(
-    "live Gemini prompt does not change with editor style tabs",
-    academicStylePrompt === casualStylePrompt && academicStylePrompt === autoStylePrompt,
+    "GPTZero uses the exact professional humanizer prompt",
+    gptZeroPrompt.startsWith("You are a professional humanizer.") &&
+      gptZeroPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
+      gptZeroPrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:"),
+  );
+  assert(
+    "ZeroGPT uses the exact academic gold-standard prompt",
+    zeroGptPrompt === turnitinPrompt &&
+      zeroGptPrompt.startsWith("You are a human academic writer.") &&
+      zeroGptPrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
+      zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:"),
+  );
+  assert(
+    "GPTZero prompt is not used unless GPTZero is selected",
+    academicStylePrompt === turnitinPrompt &&
+      gptZeroPrompt !== turnitinPrompt,
   );
   const autoUserContent = buildRewriteUserContent({
     text: NEW_ESSAY,
@@ -1167,13 +1197,13 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "live Gemini prompt is not padded with extra engine notes",
-    academicStylePrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
-      !academicStylePrompt.includes("SELECTED STYLE") &&
-      !academicStylePrompt.includes("FIRST LINE RULE") &&
-      !academicStylePrompt.includes("HARD BANS") &&
-      !academicStylePrompt.includes("1,238 human texts") &&
-      !/Ultra rewrite/.test(academicStylePrompt) &&
-      !/within 15%/.test(academicStylePrompt),
+    gptZeroPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
+      !gptZeroPrompt.includes("SELECTED STYLE") &&
+      !gptZeroPrompt.includes("FIRST LINE RULE") &&
+      !gptZeroPrompt.includes("HARD BANS") &&
+      !gptZeroPrompt.includes("1,238 human texts") &&
+      !/Ultra rewrite/.test(gptZeroPrompt) &&
+      !/within 15%/.test(gptZeroPrompt),
   );
   const engineSource = readFileSync(join(process.cwd(), "src", "lib", "humanize-engine.ts"), "utf8");
   assert("Humanize engine does not call Grubby", !engineSource.includes("humanizeWithGrubby"));
@@ -1187,7 +1217,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize engine uses Gemini API plus the style prompt only",
     engineSource.includes("buildStyleRewriteInstruction") &&
       engineSource.includes("buildRewriteUserContent") &&
-      engineSource.includes('prompt: "professional-humanizer"') &&
+      engineSource.includes('prompt: "gptzero"') &&
+      engineSource.includes('prompt: "zerogpt"') &&
+      engineSource.includes('prompt: "academic-turnitin"') &&
       engineSource.includes("geminiApiOnly: true") &&
       engineSource.includes("[GEMINI_API]") &&
       !engineSource.includes("findWikipediaLiveMatch") &&
@@ -1227,6 +1259,12 @@ Rainforests also illustrate a much broader set of global development debates. It
   assert(
     "Humanize editor shows Best for detector targets beside Humanize",
     workspaceSource.includes("HumanizerDetectorTargets"),
+  );
+  assert(
+    "Humanize request sends the selected detector target",
+    workspaceSource.includes("detector") &&
+      workspaceSource.includes("value={detector}") &&
+      workspaceSource.includes("onChange={setDetector}"),
   );
   const detectorTargetsSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-detector-targets.tsx"),

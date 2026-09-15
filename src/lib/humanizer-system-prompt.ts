@@ -1,4 +1,4 @@
-/** Live Gemini system prompt. Do not edit this string. */
+/** GPTZero Gemini system prompt. Do not edit this string. */
 export const HUMANIZER_SYSTEM_PROMPT = `You are a professional humanizer. Your only job is to rewrite the user’s text so it matches the writing style, sentence structure, vocabulary and rhythm of the gold-standard sample below.
 
 Copy the STYLE of the sample. Do not copy the TOPIC of the sample.

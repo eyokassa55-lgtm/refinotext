@@ -1,8 +1,11 @@
 "use client";
 
 import { Info, Star } from "lucide-react";
-import { useState } from "react";
 
+import {
+  DEFAULT_HUMANIZE_DETECTOR,
+  type HumanizeDetectorId,
+} from "@/lib/humanize-detectors";
 import { cn } from "@/lib/utils";
 
 const DETECTOR_TARGETS = [
@@ -10,27 +13,36 @@ const DETECTOR_TARGETS = [
     id: "academic-turnitin",
     label: "Academic (Turnitin)",
     shortLabel: "Academic (Turnitin)",
-    hint: "Best for academic drafts checked with Turnitin",
+    hint: "Rewrite in the academic gold-standard style for Turnitin",
   },
   {
     id: "gptzero",
     label: "GPTZero",
     shortLabel: "GPTZero",
-    hint: "Best for drafts checked with GPTZero",
+    hint: "Rewrite in the gold-standard style for GPTZero",
   },
   {
     id: "zerogpt",
     label: "ZeroGPT",
     shortLabel: "ZeroGPT",
-    hint: "Best for drafts checked with ZeroGPT",
+    hint: "Rewrite in the academic gold-standard style for ZeroGPT",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: HumanizeDetectorId;
+  label: string;
+  shortLabel: string;
+  hint: string;
+}>;
 
-type DetectorTargetId = (typeof DETECTOR_TARGETS)[number]["id"];
+type HumanizerDetectorTargetsProps = {
+  value?: HumanizeDetectorId;
+  onChange: (id: HumanizeDetectorId) => void;
+};
 
-export function HumanizerDetectorTargets() {
-  const [selected, setSelected] = useState<DetectorTargetId>("academic-turnitin");
-
+export function HumanizerDetectorTargets({
+  value = DEFAULT_HUMANIZE_DETECTOR,
+  onChange,
+}: HumanizerDetectorTargetsProps) {
   return (
     <div
       className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-1"
@@ -45,7 +57,7 @@ export function HumanizerDetectorTargets() {
       </p>
 
       {DETECTOR_TARGETS.map((target) => {
-        const isSelected = selected === target.id;
+        const isSelected = value === target.id;
         return (
           <button
             key={target.id}
@@ -54,7 +66,7 @@ export function HumanizerDetectorTargets() {
             aria-checked={isSelected}
             aria-label={`Best for ${target.label}`}
             title={target.hint}
-            onClick={() => setSelected(target.id)}
+            onClick={() => onChange(target.id)}
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold tracking-tight transition-colors sm:px-3 sm:text-xs",
               isSelected

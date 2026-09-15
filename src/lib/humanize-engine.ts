@@ -11,6 +11,10 @@ import {
   buildRewriteUserContent,
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
+import {
+  isGptZeroDetector,
+  isZeroGptDetector,
+} from "@/lib/humanize-detectors";
 import { stripModelChrome } from "@/lib/humanize-quality";
 import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -21,6 +25,7 @@ export type HumanizeRequest = {
   readability?: string;
   intensity?: number;
   language?: string;
+  detector?: string;
 };
 
 export type HumanizeSource =
@@ -94,14 +99,20 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     readability: request.readability,
     intensity: request.intensity,
     language: request.language,
+    detector: request.detector,
   });
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
-    prompt: "professional-humanizer",
+    prompt: isGptZeroDetector(request.detector)
+      ? "gptzero"
+      : isZeroGptDetector(request.detector)
+        ? "zerogpt"
+        : "academic-turnitin",
     intensity: request.intensity ?? 75,
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
+    detector: request.detector ?? "none",
   });
 
   return generateText(buildRewriteUserContent(request), {
