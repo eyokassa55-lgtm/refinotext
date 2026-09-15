@@ -12,6 +12,7 @@ export type HealthResponse = {
 export type CreditBalanceResponse = {
   balance: number;
   monthlyCredits: number;
+  interval: string | null;
   plan: "FREE" | "BASIC" | "PRO" | "ULTRA";
   maxWordsPerRequest: number;
 };

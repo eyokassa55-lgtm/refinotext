@@ -10,6 +10,7 @@ import { isClerkEnabled } from "@/lib/auth-config";
 import {
   CREDIT_TOPUPS,
   PRICING_PLANS,
+  pricingPlanFeatures,
   type PricingPlan,
 } from "@/lib/landing-data";
 import { cn } from "@/lib/utils";
@@ -185,7 +186,7 @@ function PricingSectionInner({
           </div>
           <p className="max-w-xl text-center text-sm text-muted">
             {yearly
-              ? "Annual prices include 50% off every paid plan — billed once per year until cancelled."
+              ? "Annual prices include 50% off every paid plan — billed once per year until cancelled. A full year of words is added up front."
               : "Monthly prices below are billed every month and renew each month until cancelled."}
           </p>
           {checkoutError ? (
@@ -289,7 +290,7 @@ function PricingSectionInner({
                     featured ? "border-white/15" : "border-border/40",
                   )}
                 >
-                  {plan.features.map((feature) => (
+                  {pricingPlanFeatures(plan, yearly).map((feature) => (
                     <li
                       key={feature}
                       className={cn(

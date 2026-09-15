@@ -1336,6 +1336,48 @@ Rainforests also illustrate a much broader set of global development debates. It
       workspaceSource.includes("value={detector}") &&
       workspaceSource.includes("onChange={setDetector}"),
   );
+  const landingData = await import("../src/lib/landing-data");
+  const basicPlan = landingData.PRICING_PLANS.find((plan) => plan.name === "Basic");
+  const proPlan = landingData.PRICING_PLANS.find((plan) => plan.name === "Pro");
+  const ultraPlan = landingData.PRICING_PLANS.find((plan) => plan.name === "Ultra");
+  assert(
+    "annual pricing shows a full year of words for every paid plan",
+    Boolean(basicPlan && proPlan && ultraPlan) &&
+      landingData.yearlyCreditsForPlan(8_000) === 96_000 &&
+      landingData.pricingPlanFeatures(basicPlan!, true)[0] === "96,000 words / year" &&
+      landingData.pricingPlanFeatures(proPlan!, true)[0] === "480,000 words / year" &&
+      landingData.pricingPlanFeatures(ultraPlan!, true)[0] === "1,080,000 words / year" &&
+      landingData.pricingPlanFeatures(basicPlan!, false)[0] === "8,000 words / mo",
+  );
+
+  const dashboardLayoutSource = readFileSync(
+    join(process.cwd(), "src", "app", "dashboard", "layout.tsx"),
+    "utf8",
+  );
+  const dashboardPageSource = readFileSync(
+    join(process.cwd(), "src", "app", "dashboard", "page.tsx"),
+    "utf8",
+  );
+  assert(
+    "credits dashboard can return home and to Humanize",
+    dashboardLayoutSource.includes("href={ROUTES.home}") &&
+      dashboardLayoutSource.includes("Humanize") &&
+      dashboardPageSource.includes("Back to Humanize") &&
+      dashboardPageSource.includes("ROUTES.humanizer"),
+  );
+  const polarFulfillmentSource = readFileSync(
+    join(process.cwd(), "src", "lib", "polar-fulfillment.ts"),
+    "utf8",
+  );
+  const creditsSource = readFileSync(join(process.cwd(), "src", "lib", "credits.ts"), "utf8");
+  assert(
+    "paid Polar checkouts grant each plan allotment once per billing period",
+    polarFulfillmentSource.includes("grantSubscriptionPeriodCredits") &&
+      creditsSource.includes("grantSubscriptionPeriodCredits") &&
+      creditsSource.includes("reconcilePaidPlanCredits") &&
+      !polarFulfillmentSource.includes("polar:checkout:${params.checkoutId}:grant"),
+  );
+
   const detectorTargetsSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanizer-detector-targets.tsx"),
     "utf8",

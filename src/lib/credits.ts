@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { PlanTier, Prisma } from "@prisma/client";
+import type { PlanTier, Prisma, Subscription } from "@prisma/client";
 
+import { getBillingProductByProductId } from "@/lib/billing";
 import { getPlanConfig, resolveMaxWordsPerRequest } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { countWords } from "@/lib/words";
@@ -35,8 +36,65 @@ export type CreditAccount = {
   plan: PlanTier;
   balance: number;
   monthlyCredits: number;
+  interval: string | null;
   maxWordsPerRequest: number;
 };
+
+/** Monthly or yearly word allotment for the live Polar product. */
+export function subscriptionPeriodAllotment(account: {
+  plan: PlanTier;
+  monthlyCredits: number;
+  interval?: string | null;
+  polarProductId?: string | null;
+}): number {
+  const product = getBillingProductByProductId(account.polarProductId);
+  if (product?.kind === "subscription") return product.credits;
+  if (account.interval === "year") {
+    return getPlanConfig(account.plan).monthlyCredits * 12;
+  }
+  return account.monthlyCredits;
+}
+
+async function syncPaidAllotment(account: Subscription): Promise<Subscription> {
+  if (account.plan === "FREE") return account;
+  const product = getBillingProductByProductId(account.polarProductId);
+  const allotment = subscriptionPeriodAllotment(account);
+  const interval = product?.interval ?? account.interval;
+  const maxWords = product?.maxWordsPerRequest ?? account.maxWordsPerRequest;
+  if (
+    account.monthlyCredits === allotment &&
+    account.interval === interval &&
+    account.maxWordsPerRequest === maxWords
+  ) {
+    return account;
+  }
+  return prisma.subscription.update({
+    where: { id: account.id },
+    data: {
+      monthlyCredits: allotment,
+      interval,
+      maxWordsPerRequest: maxWords,
+    },
+  });
+}
+
+function toCreditAccount(
+  userId: string,
+  subscription: Subscription,
+  balance: number,
+): CreditAccount {
+  return {
+    userId,
+    plan: subscription.plan,
+    balance,
+    monthlyCredits: subscription.monthlyCredits,
+    interval: subscription.interval,
+    maxWordsPerRequest: resolveMaxWordsPerRequest(
+      subscription.plan,
+      subscription.maxWordsPerRequest,
+    ),
+  };
+}
 
 /** Idempotency keys are namespaced per user so one account cannot touch another's. */
 export function buildRequestId(userId: string, clientKey: string): string {
@@ -62,16 +120,21 @@ export async function getCreditBalance(
     return getCreditBalance(userId);
   }
 
-  return {
-    userId,
-    plan: user.subscription.plan,
-    balance: user.creditBalance.balance,
-    monthlyCredits: user.subscription.monthlyCredits,
-    maxWordsPerRequest: resolveMaxWordsPerRequest(
-      user.subscription.plan,
-      user.subscription.maxWordsPerRequest,
-    ),
-  };
+  const subscription = await syncPaidAllotment(user.subscription);
+
+  if (subscription.plan !== "FREE" && subscription.status === "ACTIVE") {
+    const repaired = await reconcilePaidPlanCredits(userId);
+    if (repaired) {
+      const fresh = await prisma.creditBalance.findUnique({ where: { userId } });
+      return toCreditAccount(
+        userId,
+        subscription,
+        fresh?.balance ?? user.creditBalance.balance,
+      );
+    }
+  }
+
+  return toCreditAccount(userId, subscription, user.creditBalance.balance);
 }
 
 /**
@@ -351,6 +414,193 @@ export async function grantCredits(params: {
       duplicate: false,
     };
   });
+}
+
+const DUPLICATE_PLAN_GRANT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export function subscriptionPeriodGrantRequestId(
+  subscriptionId: string,
+  currentPeriodStart: Date | null,
+): string {
+  const day = currentPeriodStart
+    ? currentPeriodStart.toISOString().slice(0, 10)
+    : "initial";
+  return `polar:subscription:${subscriptionId}:period:${day}`;
+}
+
+function isTopUpGrant(description: string | null | undefined): boolean {
+  return /top-up/i.test(description ?? "");
+}
+
+/**
+ * Grant a paid plan's monthly/yearly allotment once per billing period.
+ * Polar sends several events for one purchase; those must not stack.
+ * Leftover Free credits are replaced by the paid allotment, not added to it.
+ */
+export async function grantSubscriptionPeriodCredits(params: {
+  userId: string;
+  amount: number;
+  requestId: string;
+  description: string;
+  periodStart?: Date | null;
+}): Promise<CreditGrantResult> {
+  const { userId, amount, requestId, description, periodStart } = params;
+
+  if (amount <= 0) {
+    throw new CreditError("EMPTY_TEXT", "Credit grant amount must be positive.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.creditTransaction.findUnique({
+      where: { requestId_type: { requestId, type: "GRANT" } },
+    });
+    if (existing) {
+      return {
+        granted: existing.amount,
+        balanceAfter: existing.balanceAfter,
+        transactionId: existing.id,
+        duplicate: true,
+      };
+    }
+
+    const duplicateSince = new Date(Date.now() - DUPLICATE_PLAN_GRANT_WINDOW_MS);
+    const recentSamePlanGrant = await tx.creditTransaction.findFirst({
+      where: {
+        userId,
+        type: "GRANT",
+        amount,
+        description,
+        createdAt: { gte: duplicateSince },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (recentSamePlanGrant) {
+      return {
+        granted: recentSamePlanGrant.amount,
+        balanceAfter: recentSamePlanGrant.balanceAfter,
+        transactionId: recentSamePlanGrant.id,
+        duplicate: true,
+      };
+    }
+
+    const since = periodStart ?? duplicateSince;
+    const periodGrants = await tx.creditTransaction.findMany({
+      where: {
+        userId,
+        type: "GRANT",
+        createdAt: { gte: since },
+      },
+    });
+    const topupTotal = periodGrants
+      .filter((row) => isTopUpGrant(row.description))
+      .reduce((sum, row) => sum + row.amount, 0);
+    const targetBalance = amount + topupTotal;
+
+    await tx.creditBalance.upsert({
+      where: { userId },
+      update: { balance: targetBalance },
+      create: { userId, balance: targetBalance },
+    });
+
+    const balance = await tx.creditBalance.findUniqueOrThrow({
+      where: { userId },
+    });
+
+    const transaction = await tx.creditTransaction.create({
+      data: {
+        userId,
+        type: "GRANT",
+        amount,
+        balanceAfter: balance.balance,
+        requestId,
+        description,
+      },
+    });
+
+    return {
+      granted: amount,
+      balanceAfter: balance.balance,
+      transactionId: transaction.id,
+      duplicate: false,
+    };
+  });
+}
+
+/**
+ * Undo stacked Polar grants so remaining credits match the paid allotment
+ * plus top-ups, minus usage in the current period.
+ */
+export async function reconcilePaidPlanCredits(userId: string): Promise<boolean> {
+  const [rawAccount, balanceRow] = await Promise.all([
+    prisma.subscription.findUnique({ where: { userId } }),
+    prisma.creditBalance.findUnique({ where: { userId } }),
+  ]);
+  if (!rawAccount || rawAccount.plan === "FREE" || rawAccount.status !== "ACTIVE" || !balanceRow) {
+    return false;
+  }
+
+  const account = await syncPaidAllotment(rawAccount);
+  const allotment = subscriptionPeriodAllotment(account);
+
+  const periodStart = account.currentPeriodStart;
+  const txs = await prisma.creditTransaction.findMany({
+    where: {
+      userId,
+      createdAt: { gte: periodStart },
+    },
+  });
+
+  const topups = txs
+    .filter((row) => row.type === "GRANT" && isTopUpGrant(row.description))
+    .reduce((sum, row) => sum + row.amount, 0);
+  const deductions = txs
+    .filter((row) => row.type === "DEDUCTION")
+    .reduce((sum, row) => sum + row.amount, 0);
+  const refunds = txs
+    .filter(
+      (row) =>
+        row.type === "REFUND" &&
+        !String(row.requestId).includes(":reconcile:"),
+    )
+    .reduce((sum, row) => sum + row.amount, 0);
+
+  const expected = Math.max(0, allotment + topups - deductions + refunds);
+  const extra = balanceRow.balance - expected;
+  if (extra <= 0) return false;
+
+  const requestId = `polar:reconcile:${userId}:${subscriptionPeriodGrantRequestId(
+    account.polarSubscriptionId ?? account.id,
+    periodStart,
+  )}`;
+
+  let changed = false;
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.creditTransaction.findUnique({
+      where: { requestId_type: { requestId, type: "REFUND" } },
+    });
+    if (existing) return;
+
+    const updated = await tx.creditBalance.updateMany({
+      where: { userId, balance: { gte: extra } },
+      data: { balance: { decrement: extra } },
+    });
+    if (updated.count === 0) return;
+
+    const balance = await tx.creditBalance.findUniqueOrThrow({ where: { userId } });
+    await tx.creditTransaction.create({
+      data: {
+        userId,
+        type: "REFUND",
+        amount: extra,
+        balanceAfter: balance.balance,
+        requestId,
+        description: "Removed duplicate subscription credits",
+      },
+    });
+    changed = true;
+  });
+
+  return changed;
 }
 
 /**

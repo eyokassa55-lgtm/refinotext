@@ -35,6 +35,7 @@ export async function GET() {
   const response: CreditBalanceResponse = {
     balance: account.balance,
     monthlyCredits: account.monthlyCredits,
+    interval: account.interval,
     plan: account.plan,
     maxWordsPerRequest: account.maxWordsPerRequest,
   };

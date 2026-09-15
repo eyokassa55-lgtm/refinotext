@@ -5,7 +5,11 @@ import type { PlanTier } from "@prisma/client";
 import type { SubscriptionStatus as AppSubscriptionStatus } from "@prisma/client";
 
 import { getBillingProductByProductId, type BillingProduct } from "@/lib/billing";
-import { grantCredits } from "@/lib/credits";
+import {
+  grantCredits,
+  grantSubscriptionPeriodCredits,
+  subscriptionPeriodGrantRequestId,
+} from "@/lib/credits";
 import {
   getPolarCheckout,
   getPolarSubscription,
@@ -207,29 +211,14 @@ function periodEndFor(product: BillingProduct, start: Date): Date {
   return end;
 }
 
-function getPeriodGrantRequestId(
-  subscriptionId: string,
-  currentPeriodStart: Date | null,
-): string {
-  if (currentPeriodStart) {
-    return `polar:subscription:${subscriptionId}:period:${currentPeriodStart.toISOString()}`;
-  }
-  return `polar:subscription:${subscriptionId}:period:initial`;
-}
-
 function subscriptionGrantRequestId(params: {
-  checkoutId?: string | null;
-  billingReason?: string | null;
   subscriptionId: string;
   currentPeriodStart: Date | null;
 }): string {
-  const renewal =
-    params.billingReason === "subscription_cycle" ||
-    params.billingReason === "subscription_update";
-  if (!renewal && params.checkoutId) {
-    return `polar:checkout:${params.checkoutId}:grant`;
-  }
-  return getPeriodGrantRequestId(params.subscriptionId, params.currentPeriodStart);
+  return subscriptionPeriodGrantRequestId(
+    params.subscriptionId,
+    params.currentPeriodStart,
+  );
 }
 
 async function resolveBillingUser(params: {
@@ -293,7 +282,7 @@ async function resolveBillingUser(params: {
 async function handleSubscription(
   subscription: PolarSubscriptionInfo,
   customer?: PolarCustomerInfo | null,
-  options?: {
+  _options?: {
     checkoutId?: string | null;
     billingReason?: string | null;
   },
@@ -354,16 +343,15 @@ async function handleSubscription(
 
   if (status !== "ACTIVE") return;
 
-  await grantCredits({
+  await grantSubscriptionPeriodCredits({
     userId: user.id,
     amount: product.credits,
     requestId: subscriptionGrantRequestId({
-      checkoutId: options?.checkoutId,
-      billingReason: options?.billingReason,
       subscriptionId: subscription.id,
       currentPeriodStart,
     }),
     description: `${product.name} subscription credits`,
+    periodStart: currentPeriodStart,
   });
 }
 
@@ -392,8 +380,18 @@ async function applySubscriptionFromProduct(params: {
   subscriptionId: string;
   checkoutId?: string | null;
 }) {
-  const currentPeriodStart = new Date();
-  const currentPeriodEnd = periodEndFor(params.product, currentPeriodStart);
+  const existing = await prisma.subscription.findUnique({
+    where: { userId: params.user.id },
+  });
+  const keepPeriod =
+    existing?.polarSubscriptionId === params.subscriptionId &&
+    Boolean(existing.currentPeriodStart);
+  const currentPeriodStart = keepPeriod
+    ? existing!.currentPeriodStart
+    : new Date();
+  const currentPeriodEnd = keepPeriod
+    ? existing!.currentPeriodEnd ?? periodEndFor(params.product, currentPeriodStart)
+    : periodEndFor(params.product, currentPeriodStart);
 
   await prisma.subscription.upsert({
     where: { userId: params.user.id },
@@ -426,16 +424,15 @@ async function applySubscriptionFromProduct(params: {
     },
   });
 
-  await grantCredits({
+  await grantSubscriptionPeriodCredits({
     userId: params.user.id,
     amount: params.product.credits,
     requestId: subscriptionGrantRequestId({
-      checkoutId: params.checkoutId,
-      billingReason: "purchase",
       subscriptionId: params.subscriptionId,
       currentPeriodStart,
     }),
     description: `${params.product.name} subscription credits`,
+    periodStart: currentPeriodStart,
   });
 }
 

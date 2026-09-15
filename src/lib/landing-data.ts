@@ -156,6 +156,17 @@ export type PricingPlan = {
   href: string;
 };
 
+export function yearlyCreditsForPlan(creditsPerMonth: number): number {
+  return creditsPerMonth * 12;
+}
+
+export function pricingPlanFeatures(plan: PricingPlan, yearly: boolean): string[] {
+  if (plan.isFree || !yearly) return plan.features;
+  const yearlyCredits = yearlyCreditsForPlan(plan.creditsPerMonth);
+  const rest = plan.features.filter((feature) => !/words \/ mo$/i.test(feature));
+  return [`${yearlyCredits.toLocaleString("en-US")} words / year`, ...rest];
+}
+
 const SHARED_REWRITE = "Natural rewrite that keeps your meaning";
 
 export const PRICING_PLANS: PricingPlan[] = [

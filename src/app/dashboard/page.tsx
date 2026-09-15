@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { isClerkEnabled } from "@/lib/auth-config";
 import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { getCreditBalance } from "@/lib/credits";
@@ -88,27 +89,33 @@ export default async function DashboardPage({
         </p>
       ) : null}
 
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-          Your credits
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          1 word = 1 credit. Credits are charged on the text you paste in, never
-          on the output.
-        </p>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Paid subscriptions are billed by Polar, the merchant of record. They
-          renew automatically until cancelled. To cancel, use Polar’s Customer
-          Portal from Polar’s billing emails, or email{" "}
-          <a
-            className="font-medium text-primary underline-offset-2 hover:underline"
-            href={`mailto:${SUPPORT_EMAIL}`}
-          >
-            {SUPPORT_EMAIL}
-          </a>
-          . Recurring charges continue until you cancel.
-        </p>
-      </header>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Your credits
+          </h1>
+          <p className="mt-2 text-sm text-muted">
+            1 word = 1 credit. Credits are charged on the text you paste in, never
+            on the output.
+          </p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            Paid subscriptions are billed by Polar, the merchant of record. They
+            renew automatically until cancelled. To cancel, use Polar’s Customer
+            Portal from Polar’s billing emails, or email{" "}
+            <a
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              href={`mailto:${SUPPORT_EMAIL}`}
+            >
+              {SUPPORT_EMAIL}
+            </a>
+            . Recurring charges continue until you cancel.
+          </p>
+        </header>
+        <Button href={ROUTES.humanizer} variant="secondary" className="shrink-0">
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to Humanize
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_12px_28px_rgba(13,92,69,0.06)]">
@@ -120,7 +127,8 @@ export default async function DashboardPage({
             {account.balance.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-muted">
-            of {account.monthlyCredits.toLocaleString()} included
+            of {account.monthlyCredits.toLocaleString()} included{" "}
+            {account.interval === "year" ? "this year" : "this month"}
           </p>
           <div
             className="mt-4 h-2 w-full overflow-hidden rounded-full bg-mint-dark/50"
@@ -144,6 +152,13 @@ export default async function DashboardPage({
           </div>
           <p className="mt-3 text-3xl font-bold tracking-[-0.03em] text-foreground">
             {planLabel(account.plan)}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {account.interval === "year"
+              ? "Billed annually"
+              : account.plan === "FREE"
+                ? "Free allotment"
+                : "Billed monthly"}
           </p>
           <Link
             href={ROUTES.pricing}

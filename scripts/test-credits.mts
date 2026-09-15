@@ -16,7 +16,10 @@ const {
   countWords,
   CreditError,
   getCreditBalance,
+  grantCredits,
+  grantSubscriptionPeriodCredits,
   provisionFreeTier,
+  reconcilePaidPlanCredits,
   refundCredits,
 } = await import("../src/lib/credits");
 
@@ -162,6 +165,143 @@ async function main() {
   assert("no negative amounts stored", ledger.every((t) => t.amount > 0));
   assert("no negative balances stored", ledger.every((t) => t.balanceAfter >= 0));
 
+  console.log("\n9. Paid plan grants are not stacked");
+  const paidUser = await prisma.user.create({
+    data: {
+      clerkUserId: `${clerkUserId}_paid`,
+      email: `${clerkUserId}_paid@refinotext.test`,
+      name: "Paid Credit Test User",
+    },
+  });
+  await provisionFreeTier(paidUser.id);
+  await prisma.subscription.update({
+    where: { userId: paidUser.id },
+    data: {
+      plan: "BASIC",
+      monthlyCredits: 8000,
+      maxWordsPerRequest: 600,
+      status: "ACTIVE",
+      currentPeriodStart: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  });
+  const firstPlanGrant = await grantSubscriptionPeriodCredits({
+    userId: paidUser.id,
+    amount: 8000,
+    requestId: `${paidUser.id}:polar:sub:period:day`,
+    description: "Basic subscription credits",
+    periodStart: new Date(Date.now() - 60 * 60 * 1000),
+  });
+  assert(
+    "first Basic grant replaces leftover Free credits with 8000",
+    !firstPlanGrant.duplicate && firstPlanGrant.balanceAfter === 8000,
+    `balance=${firstPlanGrant.balanceAfter}`,
+  );
+  const secondPlanGrant = await grantSubscriptionPeriodCredits({
+    userId: paidUser.id,
+    amount: 8000,
+    requestId: `${paidUser.id}:polar:checkout:other`,
+    description: "Basic subscription credits",
+    periodStart: new Date(Date.now() - 60 * 60 * 1000),
+  });
+  assert("checkout return does not grant Basic credits a second time", secondPlanGrant.duplicate);
+  const afterIdempotent = await prisma.creditBalance.findUnique({ where: { userId: paidUser.id } });
+  assert("Basic balance stays 8000 after duplicate Polar events", afterIdempotent?.balance === 8000, `balance=${afterIdempotent?.balance}`);
+
+  await grantCredits({
+    userId: paidUser.id,
+    amount: 8000,
+    requestId: `${paidUser.id}:polar-stacked-a`,
+    description: "Basic subscription credits",
+  });
+  await grantCredits({
+    userId: paidUser.id,
+    amount: 8000,
+    requestId: `${paidUser.id}:polar-stacked-b`,
+    description: "Basic subscription credits",
+  });
+  const stacked = await prisma.creditBalance.findUnique({ where: { userId: paidUser.id } });
+  assert("legacy stacked grants can exceed the monthly allotment", (stacked?.balance ?? 0) > 8000, `balance=${stacked?.balance}`);
+  const repaired = await reconcilePaidPlanCredits(paidUser.id);
+  const afterRepair = await getCreditBalance(paidUser.id);
+  assert("duplicate subscription grants are removed", repaired);
+  assert(
+    "reconciled Basic balance matches 8000 words / month",
+    afterRepair?.plan === "BASIC" && afterRepair.balance === 8000 && afterRepair.monthlyCredits === 8000,
+    `plan=${afterRepair?.plan} balance=${afterRepair?.balance} included=${afterRepair?.monthlyCredits}`,
+  );
+  await prisma.user.delete({ where: { id: paidUser.id } });
+
+  console.log("\n10. Yearly plans grant a full year of words once");
+  const yearlyUser = await prisma.user.create({
+    data: {
+      clerkUserId: `${clerkUserId}_yearly`,
+      email: `${clerkUserId}_yearly@refinotext.test`,
+      name: "Yearly Credit Test User",
+    },
+  });
+  await provisionFreeTier(yearlyUser.id);
+  await prisma.subscription.update({
+    where: { userId: yearlyUser.id },
+    data: {
+      plan: "BASIC",
+      monthlyCredits: 8000,
+      maxWordsPerRequest: 600,
+      status: "ACTIVE",
+      interval: "year",
+      polarProductId: "34f95e97-e208-47b2-9c07-1df713fcebc1",
+      currentPeriodStart: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  });
+  const yearlyGrant = await grantSubscriptionPeriodCredits({
+    userId: yearlyUser.id,
+    amount: 96_000,
+    requestId: `${yearlyUser.id}:polar:sub:period:year`,
+    description: "Basic Yearly subscription credits",
+    periodStart: new Date(Date.now() - 60 * 60 * 1000),
+  });
+  assert(
+    "yearly Basic grant is 96,000 words, not 8,000",
+    !yearlyGrant.duplicate && yearlyGrant.balanceAfter === 96_000,
+    `balance=${yearlyGrant.balanceAfter}`,
+  );
+  const yearlyDup = await grantSubscriptionPeriodCredits({
+    userId: yearlyUser.id,
+    amount: 96_000,
+    requestId: `${yearlyUser.id}:polar:checkout:year`,
+    description: "Basic Yearly subscription credits",
+    periodStart: new Date(Date.now() - 60 * 60 * 1000),
+  });
+  assert("yearly checkout return does not grant 96,000 twice", yearlyDup.duplicate);
+  const yearlyAccount = await getCreditBalance(yearlyUser.id);
+  assert(
+    "dashboard yearly allotment stays 96,000 words / year",
+    yearlyAccount?.interval === "year" &&
+      yearlyAccount.monthlyCredits === 96_000 &&
+      yearlyAccount.balance === 96_000,
+    `interval=${yearlyAccount?.interval} included=${yearlyAccount?.monthlyCredits} balance=${yearlyAccount?.balance}`,
+  );
+  await grantCredits({
+    userId: yearlyUser.id,
+    amount: 96_000,
+    requestId: `${yearlyUser.id}:polar-year-stack-a`,
+    description: "Basic Yearly subscription credits",
+  });
+  await grantCredits({
+    userId: yearlyUser.id,
+    amount: 96_000,
+    requestId: `${yearlyUser.id}:polar-year-stack-b`,
+    description: "Basic Yearly subscription credits",
+  });
+  const yearlyRepaired = await reconcilePaidPlanCredits(yearlyUser.id);
+  const yearlyAfter = await getCreditBalance(yearlyUser.id);
+  assert("duplicate yearly grants are removed", yearlyRepaired);
+  assert(
+    "reconcile does not clip a yearly plan down to the monthly 8,000",
+    yearlyAfter?.balance === 96_000 && yearlyAfter.monthlyCredits === 96_000,
+    `balance=${yearlyAfter?.balance} included=${yearlyAfter?.monthlyCredits}`,
+  );
+  await prisma.user.delete({ where: { id: yearlyUser.id } });
+
   await prisma.user.delete({ where: { id: user.id } });
   const gone = await prisma.user.findUnique({ where: { id: user.id } });
   assert("test user cleaned up", gone === null);
@@ -175,6 +315,8 @@ main()
     console.error(error);
     process.exitCode = 1;
     await prisma.user.deleteMany({ where: { clerkUserId } });
+    await prisma.user.deleteMany({ where: { clerkUserId: `${clerkUserId}_paid` } });
+    await prisma.user.deleteMany({ where: { clerkUserId: `${clerkUserId}_yearly` } });
   })
   .finally(async () => {
     await prisma.$disconnect();
