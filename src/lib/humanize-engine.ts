@@ -12,6 +12,7 @@ import {
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
 import {
+  isAcademicTurnitinDetector,
   isGptZeroDetector,
   isZeroGptDetector,
 } from "@/lib/humanize-detectors";
@@ -64,6 +65,11 @@ export class HumanizationFailedError extends Error {
 
 const REWRITE_TOP_P = 0.95;
 const REWRITE_TEMPERATURE = 0.78;
+const ACADEMIC_TURNITIN_TEMPERATURE = 0.5;
+
+function usesAcademicTurnitinPrompt(detector?: string): boolean {
+  return isAcademicTurnitinDetector(detector) || (!isGptZeroDetector(detector) && !isZeroGptDetector(detector));
+}
 
 function toHumanizationError(error: unknown): never {
   if (error instanceof HumanizationFailedError) throw error;
@@ -101,6 +107,7 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     language: request.language,
     detector: request.detector,
   });
+  const academicTurnitin = usesAcademicTurnitinPrompt(request.detector);
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
@@ -112,12 +119,12 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     intensity: request.intensity ?? 75,
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
-    detector: request.detector ?? "none",
+    detector: request.detector ?? "academic-turnitin",
   });
 
   return generateText(buildRewriteUserContent(request), {
     systemInstruction,
-    temperature: REWRITE_TEMPERATURE,
+    temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
     topP: REWRITE_TOP_P,
     backend: "base",
     geminiApiOnly: true,
@@ -143,7 +150,10 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }
 
-    output = formatEssayParagraphs(attachInputTitle(output, request.text));
+    // Keep the six-paragraph academic mould. Do not reflow or add a title.
+    if (!usesAcademicTurnitinPrompt(request.detector)) {
+      output = formatEssayParagraphs(attachInputTitle(output, request.text));
+    }
 
     return {
       text: output.trim(),

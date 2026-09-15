@@ -1230,6 +1230,12 @@ Rainforests also illustrate a much broader set of global development debates. It
       !engineSource.includes("humanizeLocally") &&
       !engineSource.includes("findDatabaseMatch"),
   );
+  assert(
+    "Academic Turnitin keeps the six-paragraph Gemini output",
+    engineSource.includes("usesAcademicTurnitinPrompt") &&
+      engineSource.includes("ACADEMIC_TURNITIN_TEMPERATURE = 0.5") &&
+      engineSource.includes("if (!usesAcademicTurnitinPrompt(request.detector))"),
+  );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
     "Humanize uses live English Wikipedia API, not the local 3000-row file",
