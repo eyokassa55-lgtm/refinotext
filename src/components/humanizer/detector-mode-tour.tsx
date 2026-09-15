@@ -21,7 +21,10 @@ import {
   stripWelcomeParamFromUrl,
   type DetectorTourStep,
 } from "@/lib/detector-tour";
-import type { HumanizeDetectorId } from "@/lib/humanize-detectors";
+import {
+  DEFAULT_HUMANIZE_DETECTOR,
+  type HumanizeDetectorId,
+} from "@/lib/humanize-detectors";
 import { cn } from "@/lib/utils";
 
 const STEP_ICONS = {
@@ -51,7 +54,8 @@ export function DetectorModeTour({
     markDetectorTourComplete(window.localStorage);
     setStepIndex(null);
     onActiveDetectorChange(null);
-  }, [onActiveDetectorChange]);
+    onSelect(DEFAULT_HUMANIZE_DETECTOR);
+  }, [onActiveDetectorChange, onSelect]);
 
   useEffect(() => {
     if (!isLoaded || startedRef.current) return;

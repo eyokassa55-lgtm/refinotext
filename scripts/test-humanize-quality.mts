@@ -1410,6 +1410,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     "new users see a small detector-mode tour after signup only",
     detectorTargetsSource.includes("DetectorModeTour") &&
       detectorTourSource.includes("Got it!") &&
+      detectorTourSource.includes("onSelect(DEFAULT_HUMANIZE_DETECTOR)") &&
       signUpPageSource.includes("ROUTES.signUpWelcome") &&
       signInPageSource.includes("fallbackRedirectUrl={ROUTES.home}") &&
       !signInPageSource.includes("signUpWelcome") &&
