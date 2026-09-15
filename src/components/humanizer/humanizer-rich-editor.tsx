@@ -60,7 +60,7 @@ export const HumanizerRichEditor = forwardRef<
         class:
           variant === "output"
             ? "humanizer-prose humanizer-prose-output min-h-full px-6 py-6 sm:px-8 sm:py-7"
-            : "humanizer-prose min-h-full px-4 pb-14 pt-4",
+            : "humanizer-prose min-h-full px-4 pb-4 pt-4",
       },
     },
     onUpdate: ({ editor: current }) => {

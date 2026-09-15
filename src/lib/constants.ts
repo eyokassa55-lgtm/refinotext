@@ -8,6 +8,7 @@ export const SUPPORT_EMAIL = "support@refinotext.com";
 export const ROUTES = {
   home: "/",
   humanizer: "/#humanizer",
+  signUpWelcome: "/?welcome=1",
   pricing: "/pricing",
   faq: "/faq",
   signIn: "/sign-in",

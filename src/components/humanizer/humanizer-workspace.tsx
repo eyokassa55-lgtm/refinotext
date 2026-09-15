@@ -10,7 +10,6 @@ import {
   Download,
   GraduationCap,
   Heart,
-  Keyboard,
   Lightbulb,
   Loader2,
   Lock,
@@ -370,7 +369,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         className="hidden"
       />
 
-      <div className="relative overflow-hidden rounded-2xl border-2 border-border/75 bg-transparent">
+      <div className="relative overflow-visible rounded-2xl border-2 border-border/75 bg-transparent lg:overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b-2 border-border/70 px-4 py-3">
           <div
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
@@ -408,9 +407,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </div>
         </div>
 
-        <div className="grid h-[min(70vh,640px)] max-h-[min(70vh,640px)] grid-cols-1 grid-rows-2 overflow-hidden gap-3 p-3 sm:grid-cols-2 sm:grid-rows-1">
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb]">
-            <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="grid grid-cols-1 gap-3 p-3 lg:h-[min(72vh,680px)] lg:grid-cols-2 lg:overflow-hidden">
+          <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] lg:min-h-0">
+            <div className="relative flex min-h-[14rem] flex-1 flex-col lg:min-h-0">
               <HumanizerRichEditor
                 ref={inputEditorRef}
                 ariaLabel="Input text"
@@ -418,16 +417,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 onTextChange={handleInputTextChange}
                 onEditor={setInputEditor}
               />
-
-              <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-3">
-                <span className="rounded-full border border-border/70 bg-white/95 px-2.5 py-1 font-mono text-xs text-[#374151] shadow-sm">
-                  {inputWordCount} words
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-border/70 bg-white/95 px-3 py-1.5 font-mono text-xs text-[#6b7280] shadow-sm">
-                  <Keyboard className="h-3.5 w-3.5" aria-hidden />
-                  Press Ctrl+Enter to humanize
-                </span>
-              </div>
             </div>
 
             <div className="border-t-2 border-border/60 shrink-0 bg-white/80">
@@ -472,6 +461,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 >
                   Clear
                 </button>
+                <span className="rounded-full border border-border/70 bg-white px-2.5 py-1 font-mono text-xs text-[#374151]">
+                  {inputWordCount} words
+                </span>
                 <button
                   type="button"
                   title="Copy input"
@@ -572,7 +564,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
           </section>
 
-          <section className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white">
+          <section className="relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white lg:min-h-0">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {output.trim() ? (
                 <div className="flex shrink-0 items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">

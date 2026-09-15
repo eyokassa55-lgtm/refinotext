@@ -47,7 +47,7 @@ export const clerkAfterSignInUrl = publicPath(
 );
 export const clerkAfterSignUpUrl = publicPath(
   process.env.NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL,
-  "/",
+  "/?welcome=1",
 );
 
 export const clerkAllowedRedirectOrigins = [

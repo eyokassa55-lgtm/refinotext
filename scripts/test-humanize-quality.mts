@@ -55,6 +55,11 @@ import {
   GRUBBY_MCP_URL,
   parseSseJsonRpcMessages,
 } from "../src/lib/grubby";
+import {
+  DETECTOR_TOUR_STEPS,
+  shouldStartDetectorTour,
+  stripWelcomeParamFromUrl,
+} from "../src/lib/detector-tour";
 
 let passed = 0;
 let failed = 0;
@@ -1389,6 +1394,54 @@ Rainforests also illustrate a much broader set of global development debates. It
       detectorTargetsSource.includes("ZeroGPT") &&
       detectorTargetsSource.includes("Best for detector"),
   );
+  const detectorTourSource = readFileSync(
+    join(process.cwd(), "src", "components", "humanizer", "detector-mode-tour.tsx"),
+    "utf8",
+  );
+  const signUpPageSource = readFileSync(
+    join(process.cwd(), "src", "app", "(auth)", "sign-up", "[[...sign-up]]", "page.tsx"),
+    "utf8",
+  );
+  const signInPageSource = readFileSync(
+    join(process.cwd(), "src", "app", "(auth)", "sign-in", "[[...sign-in]]", "page.tsx"),
+    "utf8",
+  );
+  assert(
+    "new users see a small detector-mode tour after signup only",
+    detectorTargetsSource.includes("DetectorModeTour") &&
+      detectorTourSource.includes("Got it!") &&
+      signUpPageSource.includes("ROUTES.signUpWelcome") &&
+      signInPageSource.includes("fallbackRedirectUrl={ROUTES.home}") &&
+      !signInPageSource.includes("signUpWelcome") &&
+      DETECTOR_TOUR_STEPS.length === 3 &&
+      DETECTOR_TOUR_STEPS[0]?.id === "academic-turnitin" &&
+      shouldStartDetectorTour({
+        isSignedIn: true,
+        welcomeParam: "1",
+        tourDone: false,
+      }) &&
+      shouldStartDetectorTour({
+        isSignedIn: true,
+        createdAt: new Date(),
+        tourDone: false,
+      }) &&
+      !shouldStartDetectorTour({
+        isSignedIn: true,
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        tourDone: false,
+      }) &&
+      !shouldStartDetectorTour({
+        isSignedIn: false,
+        welcomeParam: "1",
+        tourDone: false,
+      }) &&
+      !shouldStartDetectorTour({
+        isSignedIn: true,
+        welcomeParam: "1",
+        tourDone: true,
+      }) &&
+      stripWelcomeParamFromUrl("/?welcome=1#humanizer") === "/#humanizer",
+  );
   assert(
     "Humanize editor includes a working rich-text toolbar",
     workspaceSource.includes("HumanizerEditorToolbar") &&
@@ -1406,6 +1459,12 @@ Rainforests also illustrate a much broader set of global development debates. It
       workspaceSource.includes("Your humanized text will appear here") &&
       workspaceSource.includes('label: "Auto"') &&
       workspaceSource.includes('label: "Academic"'),
+  );
+  assert(
+    "Humanize editor stays visible at inspect widths and does not overlay a Ctrl+Enter chip",
+    !workspaceSource.includes("Press Ctrl+Enter to humanize") &&
+      workspaceSource.includes("min-h-[24rem]") &&
+      workspaceSource.includes("lg:grid-cols-2"),
   );
   const outputViewSource = readFileSync(
     join(process.cwd(), "src", "components", "humanizer", "humanized-output-view.tsx"),
