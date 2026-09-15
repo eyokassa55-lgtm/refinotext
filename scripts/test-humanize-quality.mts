@@ -591,7 +591,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, splitHumanizeOutput, stripWikiMath } = await import(
+  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, restoreDocumentFrame, splitDocumentFrame, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
   );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
@@ -653,6 +653,66 @@ Rainforests also illustrate a much broader set of global development debates. It
       essayFormatted.includes("rush.") &&
       essayFormatted.includes("roads."),
     essayFormatted,
+  );
+  const headedDraft = [
+    "Alex Rivera",
+    "Mrs. Chen",
+    "English 10 Honors",
+    "14 September 2026",
+    "Shared Work Is What Makes a Night Count",
+    "On a Halloween night I baked cookie dough brownies with friends after school. The oven timer was set for 18 minutes.",
+  ].join("\n\n");
+  const headedFrame = splitDocumentFrame(headedDraft);
+  assert(
+    "school heading and title stay in the document frame",
+    headedFrame.frame.includes("Alex Rivera") &&
+      headedFrame.frame.includes("Mrs. Chen") &&
+      headedFrame.frame.includes("English 10 Honors") &&
+      headedFrame.frame.includes("14 September 2026") &&
+      headedFrame.frame.includes("Shared Work Is What Makes a Night Count") &&
+      headedFrame.body.startsWith("On a Halloween night") &&
+      !headedFrame.frame.includes("Halloween"),
+    headedFrame.frame,
+  );
+  const restoredHeading = restoreDocumentFrame(
+    [
+      "Alex Rivera",
+      "Examining Halloween night in the field of Literature concerning shared moments can enhance critical thinking as students are asked to link baking cookie dough brownies to real evidence rather than simply reaching a single conclusion by heart. Separating observations from assumptions allows the underlying concepts to be more critically assessed. The oven, friends and timing should be examined in conjunction rather than as separate pieces of information.",
+      "Breaking the process down into stages makes it easier to follow. A shift in the 18 minutes can affect subsequently what occurs and the result can then impact safety. However, this does not imply that all situations will progress in this way. Different results can occur depending on time, resources available, conditions, scale and timing whilst the underlying principle remains the same.",
+    ].join("\n\n"),
+    headedDraft,
+  );
+  const restoredParts = splitHumanizeOutput(restoredHeading);
+  assert(
+    "academic rewrite keeps the original heading, title, names, dates and events",
+    restoredHeading.startsWith("Alex Rivera\n\nMrs. Chen\n\nEnglish 10 Honors\n\n14 September 2026\n\nShared Work Is What Makes a Night Count\n\nExamining Halloween") &&
+      restoredHeading.includes("cookie dough brownies") &&
+      restoredHeading.includes("18 minutes") &&
+      restoredParts.title === null &&
+      restoredParts.paragraphs[0] === "Alex Rivera" &&
+      restoredParts.paragraphs[1] === "Mrs. Chen" &&
+      restoredParts.paragraphs[4] === "Shared Work Is What Makes a Night Count" &&
+      restoredParts.paragraphs.some((paragraph) => paragraph.startsWith("Examining Halloween")),
+    restoredHeading,
+  );
+  const titledAcademic = restoreDocumentFrame(
+    "The discipline of boredom in the field of mental habits concerning empty space can enhance critical thinking as students are asked to stay with a quiet interval rather than simply reaching a single conclusion by heart. Separating observations from assumptions allows the underlying concepts to be more critically assessed. Silence, attention and patience should be examined in conjunction rather than as separate pieces of information.",
+    "The Discipline of Boredom\n\nBoredom is often treated as empty time.",
+  );
+  assert(
+    "a title-like first sentence does not replace the original heading line",
+    titledAcademic.startsWith("The Discipline of Boredom\n\nThe discipline of boredom in the field") &&
+      titledAcademic.split("\n\n")[0] === "The Discipline of Boredom",
+    titledAcademic,
+  );
+  const hashedAcademic = restoreDocumentFrame(
+    "Examining success in the field of personal development concerning what success can enhance critical thinking as students are asked to look at the result rather than simply reaching a single conclusion by heart.",
+    "# Success\n\nSuccess is not only a final prize. It is the work that led there.",
+  );
+  assert(
+    "a markdown title is restored as a plain heading line",
+    hashedAcademic.startsWith("Success\n\nExamining success"),
+    hashedAcademic,
   );
   const mathDump = `In deductive logic, a consistent theory is one that does not lead to a logical contradiction. A theory 
 
@@ -1134,16 +1194,15 @@ Rainforests also illustrate a much broader set of global development debates. It
       gptZeroPrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:"),
   );
   assert(
-    "ZeroGPT uses the exact academic gold-standard prompt",
-    zeroGptPrompt.startsWith("You are a human academic writer.") &&
-      zeroGptPrompt.includes("### GOLD STANDARD (copy this writing, not the topic)") &&
-      !zeroGptPrompt.includes("STYLE may change. CONTENT may not.") &&
+    "ZeroGPT uses the lock-pass academic gold-standard prompt",
+    zeroGptPrompt === turnitinPrompt &&
+      zeroGptPrompt.includes("STYLE may change. CONTENT may not.") &&
+      zeroGptPrompt.includes("Every paragraph must carry locked details from the source.") &&
       zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:"),
   );
   assert(
     "GPTZero prompt is not used unless GPTZero is selected",
     academicStylePrompt === turnitinPrompt &&
-      zeroGptPrompt !== turnitinPrompt &&
       gptZeroPrompt !== turnitinPrompt,
   );
   const autoUserContent = buildRewriteUserContent({
@@ -1221,9 +1280,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Humanize engine uses Gemini API plus the style prompt only",
     engineSource.includes("buildStyleRewriteInstruction") &&
       engineSource.includes("buildRewriteUserContent") &&
-      engineSource.includes('prompt: "gptzero"') &&
-      engineSource.includes('prompt: "zerogpt"') &&
-      engineSource.includes('prompt: "academic-turnitin"') &&
+      engineSource.includes('"gptzero"') &&
+      engineSource.includes('"zerogpt"') &&
+      engineSource.includes('"academic-turnitin"') &&
       engineSource.includes("geminiApiOnly: true") &&
       engineSource.includes("[GEMINI_API]") &&
       !engineSource.includes("findWikipediaLiveMatch") &&
@@ -1231,10 +1290,11 @@ Rainforests also illustrate a much broader set of global development debates. It
       !engineSource.includes("findDatabaseMatch"),
   );
   assert(
-    "Academic Turnitin keeps the six-paragraph Gemini output",
+    "Academic Turnitin and ZeroGPT keep the six-paragraph Gemini output and original heading",
     engineSource.includes("usesAcademicTurnitinPrompt") &&
+      engineSource.includes("restoreDocumentFrame") &&
       engineSource.includes("ACADEMIC_TURNITIN_TEMPERATURE = 0.5") &&
-      engineSource.includes("if (!usesAcademicTurnitinPrompt(request.detector))"),
+      engineSource.includes("if (usesAcademicTurnitinPrompt(request.detector))"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(

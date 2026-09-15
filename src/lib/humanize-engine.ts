@@ -11,13 +11,9 @@ import {
   buildRewriteUserContent,
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
-import {
-  isAcademicTurnitinDetector,
-  isGptZeroDetector,
-  isZeroGptDetector,
-} from "@/lib/humanize-detectors";
+import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
 import { stripModelChrome } from "@/lib/humanize-quality";
-import { formatEssayParagraphs, extractUserTitle } from "@/lib/humanize-output";
+import { formatEssayParagraphs, extractUserTitle, restoreDocumentFrame } from "@/lib/humanize-output";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 
 export type HumanizeRequest = {
@@ -68,7 +64,7 @@ const REWRITE_TEMPERATURE = 0.78;
 const ACADEMIC_TURNITIN_TEMPERATURE = 0.5;
 
 function usesAcademicTurnitinPrompt(detector?: string): boolean {
-  return isAcademicTurnitinDetector(detector) || (!isGptZeroDetector(detector) && !isZeroGptDetector(detector));
+  return !isGptZeroDetector(detector);
 }
 
 function toHumanizationError(error: unknown): never {
@@ -150,8 +146,10 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }
 
-    // Keep the six-paragraph academic mould. Do not reflow or add a title.
-    if (!usesAcademicTurnitinPrompt(request.detector)) {
+    // Keep the six-paragraph academic mould and the original heading block.
+    if (usesAcademicTurnitinPrompt(request.detector)) {
+      output = restoreDocumentFrame(output, request.text);
+    } else {
       output = formatEssayParagraphs(attachInputTitle(output, request.text));
     }
 

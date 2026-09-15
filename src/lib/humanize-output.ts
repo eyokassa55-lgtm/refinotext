@@ -23,6 +23,107 @@ export function extractUserTitle(text: string): string | null {
   return null;
 }
 
+const ACADEMIC_SKELETON_OPENER =
+  /^(?:Examining|Considering|Looking at|Linking|A study of|Working from theory|Breaking the process down into stages|Initially we need to establish)\b/i;
+
+function compactBlock(block: string): string {
+  return block.replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isAcademicSkeletonOpener(text: string): boolean {
+  return ACADEMIC_SKELETON_OPENER.test(text.trim());
+}
+
+/** Name, course, date, and untitled title lines — not the essay body. */
+function looksLikeHeaderBlock(block: string): boolean {
+  const line = compactBlock(block);
+  if (!line) return true;
+  if (isAcademicSkeletonOpener(line)) return false;
+
+  const withoutAbbrev = line.replace(/\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Jr|Sr|St|vs|etc)\./gi, "");
+  const hasSentenceEnd = /[.?!]["']?\s*$/.test(withoutAbbrev.trim());
+
+  if (hasSentenceEnd) return false;
+  if (line.length >= 180) return false;
+  return true;
+}
+
+/** Leading school heading / title vs the first body paragraph. */
+export function splitDocumentFrame(text: string): { frame: string; body: string } {
+  const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) return { frame: "", body: "" };
+
+  const hash = normalized.match(/^#\s+([^\n]+)(?:\n+|$)/);
+  if (hash) {
+    const title = hash[1]!.trim();
+    const rest = normalized.slice(hash[0].length).trim();
+    if (title && rest) return { frame: title, body: rest };
+  }
+
+  const blocks = normalized.split(/\n\s*\n/);
+  let index = 0;
+  while (index < blocks.length && looksLikeHeaderBlock(blocks[index]!)) {
+    index += 1;
+  }
+  if (index === 0 || index >= blocks.length) {
+    return { frame: "", body: normalized };
+  }
+  return {
+    frame: blocks.slice(0, index).join("\n\n"),
+    body: blocks.slice(index).join("\n\n"),
+  };
+}
+
+function bodyStartsWithExactFrame(body: string, frame: string): boolean {
+  const frameBlocks = toDisplayParagraphs(frame);
+  const bodyBlocks = toDisplayParagraphs(body);
+  if (frameBlocks.length === 0 || bodyBlocks.length < frameBlocks.length) return false;
+  return frameBlocks.every(
+    (block, index) => compactBlock(bodyBlocks[index] ?? "").toLowerCase() === compactBlock(block).toLowerCase(),
+  );
+}
+
+function peelRewrittenHeader(output: string): string {
+  const blocks = output
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  if (blocks.length <= 1) return output.trim();
+
+  let index = 0;
+  while (
+    index < blocks.length - 1 &&
+    looksLikeHeaderBlock(blocks[index]!) &&
+    !isAcademicSkeletonOpener(blocks[index]!)
+  ) {
+    index += 1;
+  }
+  return blocks.slice(index).join("\n\n");
+}
+
+/** Keep the original heading exactly; keep the academic body after it. */
+export function restoreDocumentFrame(output: string, input: string): string {
+  const rewritten = output.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (!rewritten) return rewritten;
+
+  const { frame } = splitDocumentFrame(input);
+  if (!frame) return rewritten;
+
+  const body = peelRewrittenHeader(rewritten);
+  if (bodyStartsWithExactFrame(body, frame)) return body;
+  return `${frame.trimEnd()}\n\n${body}`.trim();
+}
+
+function toDisplayParagraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((block) => compactBlock(block))
+    .filter(Boolean);
+}
+
 export function applyInputTitle(output: string, input: string): string {
   const body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
   const title = extractUserTitle(input);
@@ -42,6 +143,15 @@ export function splitHumanizeOutput(text: string): {
     return {
       title: hash[1]!.trim(),
       paragraphs: toParagraphs(trimmed.slice(hash[0].length)),
+    };
+  }
+
+  const { frame, body } = splitDocumentFrame(trimmed);
+  const frameBlocks = frame ? toDisplayParagraphs(frame) : [];
+  if (frameBlocks.length >= 2 && body) {
+    return {
+      title: null,
+      paragraphs: [...frameBlocks, ...toDisplayParagraphs(body)],
     };
   }
 
