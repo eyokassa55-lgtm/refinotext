@@ -28,6 +28,10 @@ import {
   resolveEditorStyle,
 } from "../src/lib/humanize-prompt";
 import {
+  needsLengthRepair,
+  rewriteMaxOutputTokens,
+} from "../src/lib/humanize-length";
+import {
   hasPaidHumanizerAccess,
   isPaidHumanizeLanguage,
   isPaidWritingStyle,
@@ -934,6 +938,21 @@ Rainforests also illustrate a much broader set of global development debates. It
       /technolog/i.test(engineStoredTech.text.slice(0, 400)),
     `source=${engineStoredTech.source} opening=${engineStoredTech.text.slice(0, 80)}`,
   );
+  const shortCountryLive = await runEngineHumanization({
+    text: "what is the name of the country",
+    detector: "academic-turnitin",
+  });
+  const shortCountryWords = countWords(shortCountryLive.text);
+  assert(
+    "a 7-word Academic draft stays near 7 words",
+    shortCountryLive.source === "FINE_TUNED_MODEL" &&
+      shortCountryWords >= 3 &&
+      shortCountryWords <= 18 &&
+      !/examining|breaking the process down into stages|initially we need to establish/i.test(
+        shortCountryLive.text,
+      ),
+    `words=${shortCountryWords} text=${shortCountryLive.text}`,
+  );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
@@ -1210,6 +1229,47 @@ Rainforests also illustrate a much broader set of global development debates. It
     academicStylePrompt === turnitinPrompt &&
       gptZeroPrompt !== turnitinPrompt,
   );
+  const shortCountryDraft = "what is the name of the country";
+  const shortTurnitinPrompt = buildStyleRewriteInstruction({
+    text: shortCountryDraft,
+    detector: "academic-turnitin",
+  });
+  const shortGptZeroPrompt = buildStyleRewriteInstruction({
+    text: shortCountryDraft,
+    detector: "gptzero",
+  });
+  const shortZeroGptPrompt = buildStyleRewriteInstruction({
+    text: shortCountryDraft,
+    detector: "zerogpt",
+  });
+  assert(
+    "short Academic drafts skip the six-paragraph gold-standard mould",
+    shortTurnitinPrompt.startsWith("You are a human academic writer.") &&
+      shortTurnitinPrompt.includes("7 words") &&
+      /do not expand/i.test(shortTurnitinPrompt) &&
+      !shortTurnitinPrompt.includes("Six-paragraph skeleton") &&
+      !shortTurnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)"),
+  );
+  assert(
+    "short GPTZero drafts skip the health gold-standard sample",
+    shortGptZeroPrompt.startsWith("You are a professional humanizer.") &&
+      shortGptZeroPrompt.includes("7 words") &&
+      !shortGptZeroPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
+      !shortGptZeroPrompt.includes("The Importance of Health"),
+  );
+  assert(
+    "short ZeroGPT drafts use the same length lock as Academic",
+    shortZeroGptPrompt === shortTurnitinPrompt,
+  );
+  assert(
+    "a 7-word draft cannot request a 300-word token budget",
+    rewriteMaxOutputTokens(7) <= 80 && rewriteMaxOutputTokens(7) < rewriteMaxOutputTokens(countWords(NEW_ESSAY)),
+  );
+  assert(
+    "a 7-word input expanded to ~300 words needs a length repair",
+    needsLengthRepair(shortCountryDraft, `${"word ".repeat(300)}end.`) &&
+      !needsLengthRepair(shortCountryDraft, "What is the country's name?"),
+  );
   const autoUserContent = buildRewriteUserContent({
     text: NEW_ESSAY,
     tone: "auto",
@@ -1300,6 +1360,19 @@ Rainforests also illustrate a much broader set of global development debates. It
       engineSource.includes("restoreDocumentFrame") &&
       engineSource.includes("ACADEMIC_TURNITIN_TEMPERATURE = 0.5") &&
       engineSource.includes("if (usesAcademicTurnitinPrompt(request.detector))"),
+  );
+  assert(
+    "Humanize engine caps output tokens and repairs length blow-ups",
+    engineSource.includes("rewriteMaxOutputTokens") &&
+      engineSource.includes("needsLengthRepair") &&
+      engineSource.includes("buildMatchedLengthRepairInstruction") &&
+      engineSource.includes("maxOutputTokens"),
+  );
+  const geminiSource = readFileSync(join(process.cwd(), "src", "lib", "gemini.ts"), "utf8");
+  assert(
+    "Gemini honors a requested token cap below 256",
+    geminiSource.includes("Math.max(16, Math.round(requested))") &&
+      !geminiSource.includes("Math.max(256, requested)"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
@@ -1453,6 +1526,10 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const persistBillingSource = readFileSync(
     join(process.cwd(), "src", "lib", "persist-billing-user.ts"),
+    "utf8",
+  );
+  const usersSource = readFileSync(
+    join(process.cwd(), "src", "lib", "users.ts"),
     "utf8",
   );
   const middlewareSource = readFileSync(

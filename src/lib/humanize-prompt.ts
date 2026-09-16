@@ -1,8 +1,10 @@
 import { ACADEMIC_TURNITIN_SYSTEM_PROMPT } from "@/lib/academic-turnitin-system-prompt";
 import { isGptZeroDetector } from "@/lib/humanize-detectors";
+import { countParagraphs, isShortHumanizeDraft } from "@/lib/humanize-length";
 import { HUMANIZER_SYSTEM_PROMPT } from "@/lib/humanizer-system-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
+import { countWords } from "@/lib/words";
 
 export type HumanizePromptRequest = {
   text: string;
@@ -512,8 +514,52 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
  */
 export const STYLE_REWRITE_SYSTEM_PROMPT = HUMANIZER_SYSTEM_PROMPT;
 
+/**
+ * Length-matched rewrite for short drafts. Does not edit the stored
+ * Academic / GPTZero gold-standard strings — those moulds expand 5–7
+ * words into a multi-paragraph essay.
+ */
+export function buildLengthMatchedStyleInstruction(request?: HumanizePromptRequest): string {
+  const draft = request?.text ?? "";
+  const words = countWords(draft);
+  const paragraphs = Math.max(1, countParagraphs(draft));
+  const gptZero = isGptZeroDetector(request?.detector);
+  const voice = gptZero
+    ? "You are a professional humanizer. Rewrite the user's text in the same careful, slightly repetitive professional-essay English."
+    : "You are a human academic writer. Rewrite the user's text in careful academic English.";
+
+  return `${voice}
+
+LENGTH LOCK: The user's draft is ${words} words in ${paragraphs} paragraph(s). Write about ${words} words. Stay within 20% of that count. Matching length is mandatory.
+
+Do not expand a short draft into a multi-paragraph essay.
+Do not map the draft onto a six-paragraph skeleton or a four-paragraph gold-standard sample.
+Do not add background, theory, examples, or new ideas.
+Do not answer a question. If the draft is a question or a short sentence, rewrite that same question or sentence.
+Keep the same topic, meaning, names, numbers, and paragraph count.
+Output only the rewritten text.`;
+}
+
+export function buildMatchedLengthRepairInstruction(
+  request: HumanizePromptRequest,
+  previousWords: number,
+): string {
+  const words = countWords(request.text);
+  return `You are tightening a rewrite so it matches the source length.
+
+The source is ${words} words. The previous rewrite was ${previousWords} words. That length is wrong.
+
+Rewrite the source so the output is about ${words} words (within 15%).
+Keep the same meaning. Do not add paragraphs, background, or new ideas.
+Do not answer a question if the source is a question — rewrite the wording only.
+Output only the rewritten source.`;
+}
+
 /** Live Gemini system prompt. Detector chips pick the exact prompt. */
 export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
+  if (isShortHumanizeDraft(request?.text ?? "")) {
+    return buildLengthMatchedStyleInstruction(request);
+  }
   if (isGptZeroDetector(request?.detector)) {
     return HUMANIZER_SYSTEM_PROMPT;
   }

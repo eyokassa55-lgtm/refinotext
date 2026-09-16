@@ -8,12 +8,15 @@ import {
   redactModelName,
 } from "@/lib/gemini";
 import {
+  buildMatchedLengthRepairInstruction,
   buildRewriteUserContent,
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
 import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
+import { needsLengthRepair, rewriteMaxOutputTokens } from "@/lib/humanize-length";
 import { stripModelChrome } from "@/lib/humanize-quality";
 import { formatEssayParagraphs, extractUserTitle, restoreDocumentFrame } from "@/lib/humanize-output";
+import { countWords } from "@/lib/words";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 
 export type HumanizeRequest = {
@@ -95,16 +98,20 @@ function attachInputTitle(output: string, input: string): string {
 }
 
 async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
-  const systemInstruction = buildStyleRewriteInstruction({
+  const promptRequest = {
     text: request.text,
     tone: request.tone,
     readability: request.readability,
     intensity: request.intensity,
     language: request.language,
     detector: request.detector,
-  });
+  };
+  const systemInstruction = buildStyleRewriteInstruction(promptRequest);
   const academicTurnitin = usesAcademicTurnitinPrompt(request.detector);
   const model = getGeminiApiModel();
+  const sourceWords = countWords(request.text);
+  const maxOutputTokens = rewriteMaxOutputTokens(sourceWords);
+  const userContent = buildRewriteUserContent(request);
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
     prompt: isGptZeroDetector(request.detector)
@@ -116,15 +123,35 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
     detector: request.detector ?? "academic-turnitin",
+    sourceWords,
+    maxOutputTokens,
   });
 
-  return generateText(buildRewriteUserContent(request), {
-    systemInstruction,
+  const generateOptions = {
     temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
     topP: REWRITE_TOP_P,
-    backend: "base",
+    maxOutputTokens,
+    backend: "base" as const,
     geminiApiOnly: true,
-  });
+  };
+
+  let output = stripModelChrome(
+    await generateText(userContent, {
+      ...generateOptions,
+      systemInstruction,
+    }),
+  );
+
+  if (needsLengthRepair(request.text, output)) {
+    output = stripModelChrome(
+      await generateText(userContent, {
+        ...generateOptions,
+        systemInstruction: buildMatchedLengthRepairInstruction(promptRequest, countWords(output)),
+      }),
+    );
+  }
+
+  return output;
 }
 
 /**
@@ -146,7 +173,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }
 
-    // Keep the six-paragraph academic mould and the original heading block.
+    // Keep the original heading block. Long Academic drafts still use the six-paragraph mould.
     if (usesAcademicTurnitinPrompt(request.detector)) {
       output = restoreDocumentFrame(output, request.text);
     } else {

@@ -481,7 +481,9 @@ function isRetryable(error: GeminiError): boolean {
 function maxOutputTokensFor(text: string, requested?: number): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   const sized = Math.min(2048, Math.max(256, Math.ceil(words * 2.4) + 160));
-  if (requested) return Math.min(sized, Math.max(256, requested));
+  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) {
+    return Math.min(8192, Math.max(16, Math.round(requested)));
+  }
   return sized;
 }
 
