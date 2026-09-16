@@ -120,6 +120,17 @@ export async function getCreditBalance(
     return getCreditBalance(userId);
   }
 
+  const freePlan = getPlanConfig("FREE");
+  if (
+    user.subscription.plan === "FREE" &&
+    (user.creditBalance.balance > freePlan.monthlyCredits ||
+      user.subscription.monthlyCredits !== freePlan.monthlyCredits ||
+      user.subscription.maxWordsPerRequest !== freePlan.maxWordsPerRequest)
+  ) {
+    await provisionFreeTier(userId);
+    return getCreditBalance(userId);
+  }
+
   const subscription = await syncPaidAllotment(user.subscription);
 
   if (subscription.plan !== "FREE" && subscription.status === "ACTIVE") {
@@ -139,7 +150,7 @@ export async function getCreditBalance(
 
 /**
  * Give a brand-new account its FREE plan and starting credits.
- * Safe to call repeatedly — existing records are left untouched.
+ * Paid plans are never changed. Legacy FREE 500-credit balances are clipped to 300.
  */
 async function provisionFreeTierRecords(
   userId: string,
@@ -148,14 +159,15 @@ async function provisionFreeTierRecords(
   const plan = getPlanConfig("FREE");
 
   const existingBalance = await db.creditBalance.findUnique({ where: { userId } });
-
-  await db.creditBalance.upsert({
+  const existingSubscription = await db.subscription.findUnique({
     where: { userId },
-    update: {},
-    create: { userId, balance: plan.monthlyCredits },
   });
+  const isPaidPlan = Boolean(existingSubscription && existingSubscription.plan !== "FREE");
 
   if (!existingBalance) {
+    await db.creditBalance.create({
+      data: { userId, balance: plan.monthlyCredits },
+    });
     await db.creditTransaction.createMany({
       data: [
         {
@@ -169,11 +181,25 @@ async function provisionFreeTierRecords(
       ],
       skipDuplicates: true,
     });
+  } else if (!isPaidPlan && existingBalance.balance > plan.monthlyCredits) {
+    await db.creditBalance.update({
+      where: { userId },
+      data: { balance: plan.monthlyCredits },
+    });
+    await db.creditTransaction.createMany({
+      data: [
+        {
+          userId,
+          type: "DEDUCTION",
+          amount: existingBalance.balance - plan.monthlyCredits,
+          balanceAfter: plan.monthlyCredits,
+          requestId: `${userId}:free-allotment-300`,
+          description: "Free plan allotment set to 300 credits",
+        },
+      ],
+      skipDuplicates: true,
+    });
   }
-
-  const existingSubscription = await db.subscription.findUnique({
-    where: { userId },
-  });
 
   if (!existingSubscription) {
     await db.subscription.create({
@@ -189,6 +215,7 @@ async function provisionFreeTierRecords(
     await db.subscription.update({
       where: { userId },
       data: {
+        monthlyCredits: plan.monthlyCredits,
         maxWordsPerRequest: plan.maxWordsPerRequest,
       },
     });

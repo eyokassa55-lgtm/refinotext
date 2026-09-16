@@ -170,7 +170,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
       {
         title: "6. Credits, plans, and pricing",
         content:
-          "The Free plan currently includes 500 credits per month and up to 500 words per request, with no credit card required. Paid plans are:",
+          "The Free plan currently includes 300 credits per month and up to 300 words per request, with no credit card required. Paid plans are:",
         bullets: [
           "Basic: $5.99 billed every month, or $35.88 billed once per year; 8,000 credits per month; up to 600 words per request",
           "Pro: $19.99 billed every month, or $119.00 billed once per year; 40,000 credits per month; up to 2,000 words per request",

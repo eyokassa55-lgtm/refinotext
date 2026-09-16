@@ -176,11 +176,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     isFree: true,
     monthlyPrice: 0,
     yearlyPrice: 0,
-    creditsPerMonth: 500,
-    maxWordsPerRequest: 500,
+    creditsPerMonth: 300,
+    maxWordsPerRequest: 300,
     features: [
-      "500 credits per month (500 words)",
-      "Up to 500 words per request",
+      "300 credits per month (300 words)",
+      "Up to 300 words per request",
       SHARED_REWRITE,
       "English and Spanish",
       "Email support",
@@ -309,7 +309,7 @@ export const FAQ_LANDING_ITEMS = [
   {
     question: "How do credits work?",
     answer:
-      "Credits are charged on the words you paste in—1 word equals 1 credit. The Free plan includes 500 credits per month with no credit card required. Paid plans and top-ups add more credits; billing is handled by Polar.",
+      "Credits are charged on the words you paste in—1 word equals 1 credit. The Free plan includes 300 credits per month with no credit card required. Paid plans and top-ups add more credits; billing is handled by Polar.",
   },
 ] as const;
 
@@ -340,7 +340,7 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
       {
         question: "Is RefinoText free to use?",
         answer:
-          "Yes. RefinoText offers a free plan with 500 credits per month (500 words) and no credit card required. When you need more capacity, you can upgrade to Basic, Pro, or Ultra—or purchase a one-time credit top-up.",
+          "Yes. RefinoText offers a free plan with 300 credits per month (300 words) and no credit card required. When you need more capacity, you can upgrade to Basic, Pro, or Ultra—or purchase a one-time credit top-up.",
       },
     ],
   },
@@ -395,7 +395,7 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
       {
         question: "Is there a word limit for humanization?",
         answer:
-          "Each request is limited by your plan—for example, 500 words per request on the Free plan. Larger drafts require more credits based on the words you paste in. Check the pricing page for plan limits and your dashboard for your current balance.",
+          "Each request is limited by your plan—for example, 300 words per request on the Free plan. Larger drafts require more credits based on the words you paste in. Check the pricing page for plan limits and your dashboard for your current balance.",
       },
       {
         question: "How do I contact support?",

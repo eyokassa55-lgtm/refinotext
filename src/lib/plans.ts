@@ -14,8 +14,8 @@ export const PLANS: Record<PlanTier, PlanConfig> = {
     tier: "FREE",
     label: "Free",
     monthlyPrice: 0,
-    monthlyCredits: 500,
-    maxWordsPerRequest: 500,
+    monthlyCredits: 300,
+    maxWordsPerRequest: 300,
   },
   BASIC: {
     tier: "BASIC",
@@ -46,7 +46,7 @@ export function getPlanConfig(tier: PlanTier): PlanConfig {
   return PLANS[tier] ?? PLANS[DEFAULT_PLAN];
 }
 
-/** Free accounts may spend their full 500-credit allotment in one request. */
+/** Free accounts may spend their full 300-credit allotment in one request. */
 export function resolveMaxWordsPerRequest(
   plan: PlanTier,
   storedMaxWordsPerRequest?: number | null,

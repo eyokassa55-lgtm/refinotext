@@ -113,8 +113,35 @@ async function main() {
 
   console.log("\n1. Free tier provisioning");
   const free = await getCreditBalance(user.id);
-  assert("new user starts on FREE with 500 credits", free?.plan === "FREE" && free?.balance === 500, `plan=${free?.plan} balance=${free?.balance}`);
-  assert("free tier allows the full 500-credit allotment per request", free?.maxWordsPerRequest === 500);
+  assert("new user starts on FREE with 300 credits", free?.plan === "FREE" && free?.balance === 300, `plan=${free?.plan} balance=${free?.balance}`);
+  assert("free tier allows the full 300-credit allotment per request", free?.maxWordsPerRequest === 300);
+  const { PLANS } = await import("../src/lib/plans");
+  assert(
+    "only FREE uses 300 credits; paid plans stay on their own allotments",
+    PLANS.FREE.monthlyCredits === 300 &&
+      PLANS.FREE.maxWordsPerRequest === 300 &&
+      PLANS.BASIC.monthlyCredits === 8_000 &&
+      PLANS.PRO.monthlyCredits === 40_000 &&
+      PLANS.ULTRA.monthlyCredits === 90_000,
+  );
+
+  await prisma.creditBalance.update({
+    where: { userId: user.id },
+    data: { balance: 500 },
+  });
+  await prisma.subscription.update({
+    where: { userId: user.id },
+    data: { monthlyCredits: 500, maxWordsPerRequest: 500 },
+  });
+  await provisionFreeTier(user.id);
+  const clippedFree = await getCreditBalance(user.id);
+  assert(
+    "legacy FREE 500-credit balances are clipped to 300",
+    clippedFree?.plan === "FREE" &&
+      clippedFree.balance === 300 &&
+      clippedFree.monthlyCredits === 300 &&
+      clippedFree.maxWordsPerRequest === 300,
+  );
 
   // Move to Basic so the 600-word rule can be exercised.
   await prisma.subscription.update({

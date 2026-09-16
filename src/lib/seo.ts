@@ -36,7 +36,7 @@ export const PAGE_SEO = {
     path: "/pricing",
     title: "Pricing — Plans and credits",
     description:
-      "RefinoText pricing: Free at 500 credits per month, then Basic, Pro, or Ultra subscriptions. Polar is the merchant of record for paid checkout. Cancel anytime through Polar.",
+      "RefinoText pricing: Free at 300 credits per month, then Basic, Pro, or Ultra subscriptions. Polar is the merchant of record for paid checkout. Cancel anytime through Polar.",
   },
   contact: {
     path: "/contact",
