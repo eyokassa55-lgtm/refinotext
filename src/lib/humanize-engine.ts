@@ -8,15 +8,11 @@ import {
   redactModelName,
 } from "@/lib/gemini";
 import {
-  buildMatchedLengthRepairInstruction,
   buildRewriteUserContent,
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
 import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
-import { needsLengthRepair, rewriteMaxOutputTokens } from "@/lib/humanize-length";
 import { stripModelChrome } from "@/lib/humanize-quality";
-import { formatEssayParagraphs, extractUserTitle, restoreDocumentFrame } from "@/lib/humanize-output";
-import { countWords } from "@/lib/words";
 import type { HumanizeApiSource } from "@/lib/training-schema";
 
 export type HumanizeRequest = {
@@ -86,32 +82,17 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-function attachInputTitle(output: string, input: string): string {
-  const titled = extractUserTitle(input);
-  if (!titled) return output;
-  let body = output.replace(/^#\s+[^\n]+\n*/, "").trim();
-  const firstLine = body.split(/\n/)[0]?.trim() ?? "";
-  if (firstLine.toLowerCase() === titled.toLowerCase()) {
-    body = body.slice(firstLine.length).replace(/^\n+/, "").trim();
-  }
-  return `${titled}\n\n${body}`;
-}
-
 async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
-  const promptRequest = {
+  const systemInstruction = buildStyleRewriteInstruction({
     text: request.text,
     tone: request.tone,
     readability: request.readability,
     intensity: request.intensity,
     language: request.language,
     detector: request.detector,
-  };
-  const systemInstruction = buildStyleRewriteInstruction(promptRequest);
+  });
   const academicTurnitin = usesAcademicTurnitinPrompt(request.detector);
   const model = getGeminiApiModel();
-  const sourceWords = countWords(request.text);
-  const maxOutputTokens = rewriteMaxOutputTokens(sourceWords);
-  const userContent = buildRewriteUserContent(request);
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
     prompt: isGptZeroDetector(request.detector)
@@ -123,40 +104,20 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
     detector: request.detector ?? "academic-turnitin",
-    sourceWords,
-    maxOutputTokens,
   });
 
-  const generateOptions = {
+  return generateText(buildRewriteUserContent(request), {
+    systemInstruction,
     temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
     topP: REWRITE_TOP_P,
-    maxOutputTokens,
-    backend: "base" as const,
+    backend: "base",
     geminiApiOnly: true,
-  };
-
-  let output = stripModelChrome(
-    await generateText(userContent, {
-      ...generateOptions,
-      systemInstruction,
-    }),
-  );
-
-  if (needsLengthRepair(request.text, output)) {
-    output = stripModelChrome(
-      await generateText(userContent, {
-        ...generateOptions,
-        systemInstruction: buildMatchedLengthRepairInstruction(promptRequest, countWords(output)),
-      }),
-    );
-  }
-
-  return output;
+  });
 }
 
 /**
- * Humanize is Gemini API + the style system prompt only.
- * No Wikipedia, no training lookup, no Vertex, no local rewrite.
+ * Humanize is Gemini API + the exact stored detector prompt.
+ * No local rewrite, no extra instructions, no post-processing.
  */
 export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
   if (!isGeminiApiConfigured()) {
@@ -168,16 +129,9 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
   }
 
   try {
-    let output = stripModelChrome(await rewriteWithGemini(request));
+    const output = stripModelChrome(await rewriteWithGemini(request));
     if (!output) {
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
-    }
-
-    // Keep the original heading block. Long Academic drafts still use the six-paragraph mould.
-    if (usesAcademicTurnitinPrompt(request.detector)) {
-      output = restoreDocumentFrame(output, request.text);
-    } else {
-      output = formatEssayParagraphs(attachInputTitle(output, request.text));
     }
 
     return {

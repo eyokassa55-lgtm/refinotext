@@ -27,10 +27,9 @@ import {
   buildTunedSystemInstruction,
   resolveEditorStyle,
 } from "../src/lib/humanize-prompt";
-import {
-  needsLengthRepair,
-  rewriteMaxOutputTokens,
-} from "../src/lib/humanize-length";
+import { ACADEMIC_TURNITIN_SYSTEM_PROMPT } from "../src/lib/academic-turnitin-system-prompt";
+import { HUMANIZER_SYSTEM_PROMPT } from "../src/lib/humanizer-system-prompt";
+import { ZEROGPT_SYSTEM_PROMPT } from "../src/lib/zerogpt-system-prompt";
 import {
   hasPaidHumanizerAccess,
   isPaidHumanizeLanguage,
@@ -938,21 +937,6 @@ Rainforests also illustrate a much broader set of global development debates. It
       /technolog/i.test(engineStoredTech.text.slice(0, 400)),
     `source=${engineStoredTech.source} opening=${engineStoredTech.text.slice(0, 80)}`,
   );
-  const shortCountryLive = await runEngineHumanization({
-    text: "what is the name of the country",
-    detector: "academic-turnitin",
-  });
-  const shortCountryWords = countWords(shortCountryLive.text);
-  assert(
-    "a 7-word Academic draft stays near 7 words",
-    shortCountryLive.source === "FINE_TUNED_MODEL" &&
-      shortCountryWords >= 3 &&
-      shortCountryWords <= 18 &&
-      !/examining|breaking the process down into stages|initially we need to establish/i.test(
-        shortCountryLive.text,
-      ),
-    `words=${shortCountryWords} text=${shortCountryLive.text}`,
-  );
 
   assert("B new essay is not a database match", findDatabaseMatch(NEW_ESSAY) === null);
   assert(
@@ -1204,7 +1188,8 @@ Rainforests also illustrate a much broader set of global development debates. It
   });
   assert(
     "Academic Turnitin uses the exact lock-pass academic gold-standard prompt",
-    turnitinPrompt.startsWith("You are a human academic writer.") &&
+    turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
+      turnitinPrompt.startsWith("You are a human academic writer.") &&
       turnitinPrompt.includes("STYLE may change. CONTENT may not.") &&
       turnitinPrompt.includes("Every paragraph must carry locked details from the source.") &&
       turnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)") &&
@@ -1213,16 +1198,17 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   assert(
     "GPTZero uses the exact professional humanizer prompt",
-    gptZeroPrompt.startsWith("You are a professional humanizer.") &&
+    gptZeroPrompt === HUMANIZER_SYSTEM_PROMPT &&
+      gptZeroPrompt.startsWith("You are a professional humanizer.") &&
       gptZeroPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
       gptZeroPrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:"),
   );
   assert(
-    "ZeroGPT uses the lock-pass academic gold-standard prompt",
-    zeroGptPrompt === turnitinPrompt &&
-      zeroGptPrompt.includes("STYLE may change. CONTENT may not.") &&
-      zeroGptPrompt.includes("Every paragraph must carry locked details from the source.") &&
-      zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:"),
+    "ZeroGPT uses the exact stored ZeroGPT prompt",
+    zeroGptPrompt === ZEROGPT_SYSTEM_PROMPT &&
+      zeroGptPrompt.startsWith("You are a human academic writer.") &&
+      zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:") &&
+      zeroGptPrompt !== turnitinPrompt,
   );
   assert(
     "GPTZero prompt is not used unless GPTZero is selected",
@@ -1243,32 +1229,10 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "short Academic drafts skip the six-paragraph gold-standard mould",
-    shortTurnitinPrompt.startsWith("You are a human academic writer.") &&
-      shortTurnitinPrompt.includes("7 words") &&
-      /do not expand/i.test(shortTurnitinPrompt) &&
-      !shortTurnitinPrompt.includes("Six-paragraph skeleton") &&
-      !shortTurnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)"),
-  );
-  assert(
-    "short GPTZero drafts skip the health gold-standard sample",
-    shortGptZeroPrompt.startsWith("You are a professional humanizer.") &&
-      shortGptZeroPrompt.includes("7 words") &&
-      !shortGptZeroPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
-      !shortGptZeroPrompt.includes("The Importance of Health"),
-  );
-  assert(
-    "short ZeroGPT drafts use the same length lock as Academic",
-    shortZeroGptPrompt === shortTurnitinPrompt,
-  );
-  assert(
-    "a 7-word draft cannot request a 300-word token budget",
-    rewriteMaxOutputTokens(7) <= 80 && rewriteMaxOutputTokens(7) < rewriteMaxOutputTokens(countWords(NEW_ESSAY)),
-  );
-  assert(
-    "a 7-word input expanded to ~300 words needs a length repair",
-    needsLengthRepair(shortCountryDraft, `${"word ".repeat(300)}end.`) &&
-      !needsLengthRepair(shortCountryDraft, "What is the country's name?"),
+    "short drafts still send the exact stored detector prompt",
+    shortTurnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
+      shortGptZeroPrompt === HUMANIZER_SYSTEM_PROMPT &&
+      shortZeroGptPrompt === ZEROGPT_SYSTEM_PROMPT,
   );
   const autoUserContent = buildRewriteUserContent({
     text: NEW_ESSAY,
@@ -1355,24 +1319,19 @@ Rainforests also illustrate a much broader set of global development debates. It
       !engineSource.includes("findDatabaseMatch"),
   );
   assert(
-    "Academic Turnitin and ZeroGPT keep the six-paragraph Gemini output and original heading",
+    "Academic Turnitin keeps the lock-pass temperature; Gemini output is not locally rewritten",
     engineSource.includes("usesAcademicTurnitinPrompt") &&
-      engineSource.includes("restoreDocumentFrame") &&
       engineSource.includes("ACADEMIC_TURNITIN_TEMPERATURE = 0.5") &&
-      engineSource.includes("if (usesAcademicTurnitinPrompt(request.detector))"),
+      !engineSource.includes("restoreDocumentFrame") &&
+      !engineSource.includes("formatEssayParagraphs") &&
+      !engineSource.includes("rewriteMaxOutputTokens"),
   );
   assert(
-    "Humanize engine caps output tokens and repairs length blow-ups",
-    engineSource.includes("rewriteMaxOutputTokens") &&
-      engineSource.includes("needsLengthRepair") &&
-      engineSource.includes("buildMatchedLengthRepairInstruction") &&
-      engineSource.includes("maxOutputTokens"),
-  );
-  const geminiSource = readFileSync(join(process.cwd(), "src", "lib", "gemini.ts"), "utf8");
-  assert(
-    "Gemini honors a requested token cap below 256",
-    geminiSource.includes("Math.max(16, Math.round(requested))") &&
-      !geminiSource.includes("Math.max(256, requested)"),
+    "Humanize engine sends the exact stored style prompt only",
+    engineSource.includes("buildStyleRewriteInstruction") &&
+      !engineSource.includes("buildMatchedLengthRepairInstruction") &&
+      !engineSource.includes("buildLengthMatchedStyleInstruction") &&
+      !engineSource.includes("humanizeLocally"),
   );
   const wikiSource = readFileSync(join(process.cwd(), "src", "lib", "wikipedia-corpus.ts"), "utf8");
   assert(
