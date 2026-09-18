@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import { Source_Serif_4 } from "next/font/google";
 import localFont from "next/font/local";
 
 import { SyncDbUser } from "@/components/auth/sync-db-user";
@@ -36,6 +37,13 @@ const caveat = localFont({
     },
   ],
   variable: "--font-caveat",
+  display: "swap",
+});
+
+const aiText = Source_Serif_4({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-ai-text",
   display: "swap",
 });
 
@@ -108,9 +116,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="overflow-x-clip">
+    <html lang="en" className={`${aiText.variable} overflow-x-clip`}>
       <body
-        className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
+        className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} ${aiText.variable} font-sans antialiased min-h-screen`}
       >
         {isClerkEnabled ? (
           <ClerkProvider

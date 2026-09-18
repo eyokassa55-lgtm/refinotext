@@ -606,15 +606,10 @@ img {
   line-height: 1.7;
 }
 
-.humanizer-prose-input {
-  color: #5c6e80;
-  font-family: Calibri, "Segoe UI", Candara, Arial, sans-serif;
-  font-size: 16.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.6;
-}
-
+.humanizer-ai-text,
+.humanizer-ai-text .tiptap,
+.humanizer-ai-text .ProseMirror,
+.humanizer-prose-input,
 .humanizer-prose.humanizer-prose-input,
 .humanizer-prose.humanizer-prose-input p,
 .humanizer-prose.humanizer-prose-input li,
@@ -625,10 +620,15 @@ img {
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
   color: #5c6e80;
-  font-family: Calibri, "Segoe UI", Candara, Arial, sans-serif !important;
+  font-family: var(--font-ai-text), "Source Serif 4", Georgia, "Times New Roman", serif !important;
+  font-feature-settings: "kern" 1 !important;
+  font-size: 16px !important;
+  font-style: normal !important;
+  font-variation-settings: normal !important;
   font-weight: 400;
-  letter-spacing: 0 !important;
-  line-height: 1.6;
+  letter-spacing: 0.01em !important;
+  line-height: 1.75 !important;
+  -webkit-font-smoothing: auto;
 }
 
 .humanizer-prose.humanizer-prose-input h1,
@@ -636,6 +636,19 @@ img {
 .humanizer-prose.humanizer-prose-input h3 {
   color: #4a5c6a;
   font-weight: 700;
+  line-height: 1.35 !important;
+}
+
+.humanizer-prose.humanizer-prose-input h1 {
+  font-size: 22px !important;
+}
+
+.humanizer-prose.humanizer-prose-input h2 {
+  font-size: 19px !important;
+}
+
+.humanizer-prose.humanizer-prose-input h3 {
+  font-size: 17px !important;
 }
 
 .humanizer-prose p {
