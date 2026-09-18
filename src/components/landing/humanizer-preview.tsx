@@ -75,8 +75,6 @@ export function HumanizerPreview() {
   const [playId, setPlayId] = useState(0);
   const [scanned, setScanned] = useState(0);
   const [showWand, setShowWand] = useState(false);
-  const [ring, setRing] = useState(24);
-  const [score, setScore] = useState(72);
 
   const replay = useCallback(() => {
     setPlayId((current) => current + 1);
@@ -85,8 +83,6 @@ export function HumanizerPreview() {
   useEffect(() => {
     setScanned(0);
     setShowWand(false);
-    setRing(24);
-    setScore(72);
 
     const timers = [
       window.setTimeout(() => setScanned(1), 750),
@@ -97,16 +93,13 @@ export function HumanizerPreview() {
       window.setTimeout(() => setScanned(3), 2650),
     ];
 
-    const tick = window.setInterval(() => {
-      setRing((current) => Math.min(99, current + 1));
-      setScore((current) => Math.min(99, current + 1));
-    }, 110);
-
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
-      window.clearInterval(tick);
     };
   }, [playId, slide]);
+
+  const ring = [24, 49, 74, 99][scanned] ?? 99;
+  const score = [72, 81, 90, 99][scanned] ?? 99;
 
   const ringOffset = RING_CIRCUMFERENCE * (1 - ring / 100);
   const current = SLIDES[slide];
@@ -148,10 +141,8 @@ export function HumanizerPreview() {
                 <p
                   key={`${slide}-${playId}-${index}`}
                   className={cn(
-                    "transition-all duration-700",
-                    isDone
-                      ? "font-display text-[1.05rem] leading-6 text-white"
-                      : "font-mono text-[11.5px] italic leading-5 tracking-wide text-white/45",
+                    "font-sans text-sm leading-6 tracking-tight transition-all duration-700",
+                    isDone ? "text-white" : "text-white/45",
                     isHot && "preview-hot-word preview-hot-word-active px-1 py-0.5",
                   )}
                 >
@@ -190,7 +181,7 @@ export function HumanizerPreview() {
                 stroke={ringTone}
                 strokeOpacity={0.22}
                 strokeWidth={RING_STROKE}
-                className="transition-[stroke] duration-300 ease-out"
+                className="transition-[stroke] duration-700 ease-out"
               />
               <circle
                 cx={RING_SIZE / 2}
@@ -202,11 +193,11 @@ export function HumanizerPreview() {
                 strokeLinecap="round"
                 strokeDasharray={RING_CIRCUMFERENCE}
                 strokeDashoffset={ringOffset}
-                className="transition-[stroke,stroke-dashoffset] duration-300 ease-out"
+                className="transition-[stroke,stroke-dashoffset] duration-700 ease-out"
               />
             </svg>
             <span
-              className="absolute text-xs font-bold transition-colors duration-300"
+              className="absolute text-xs font-bold transition-colors duration-700"
               style={{ color: ringTone }}
             >
               {ring}%
@@ -215,7 +206,7 @@ export function HumanizerPreview() {
 
           <div className="min-w-0 flex-1">
             <p
-              className="text-lg font-bold tracking-tight transition-colors duration-300 sm:text-xl"
+              className="text-lg font-bold tracking-tight transition-colors duration-700 sm:text-xl"
               style={{ color: tone }}
             >
               {score}% Human

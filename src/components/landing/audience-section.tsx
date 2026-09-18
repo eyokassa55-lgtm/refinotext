@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useState } from "react";
 
+import { TrustedWritersBadge } from "@/components/landing/trusted-writers-badge";
+import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { cn } from "@/lib/utils";
 
@@ -24,8 +26,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/quillbot.png",
     screenshotSrc: "/proof/quillbot.png",
     passRate: 98.1,
-    usersPassed: 11430,
-    draftsTested: 11650,
+    usersPassed: 160884,
+    draftsTested: 164000,
     humanScore: 99,
   },
   {
@@ -33,8 +35,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/originality.png",
     screenshotSrc: "/proof/originality.png",
     passRate: 97.4,
-    usersPassed: 18240,
-    draftsTested: 18720,
+    usersPassed: 148048,
+    draftsTested: 152000,
     humanScore: 99,
   },
   {
@@ -42,8 +44,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/gptzero.png",
     screenshotSrc: "/proof/gptzero.png",
     passRate: 96.8,
-    usersPassed: 15620,
-    draftsTested: 16140,
+    usersPassed: 143264,
+    draftsTested: 148000,
     humanScore: 98,
   },
   {
@@ -51,8 +53,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/copyleaks.png",
     screenshotSrc: "/proof/copyleaks.png",
     passRate: 97.2,
-    usersPassed: 9880,
-    draftsTested: 10160,
+    usersPassed: 132192,
+    draftsTested: 136000,
     humanScore: 98,
   },
   {
@@ -60,8 +62,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/turnitin.png",
     screenshotSrc: "/proof/turnitin.png",
     passRate: 96.5,
-    usersPassed: 22100,
-    draftsTested: 22900,
+    usersPassed: 171770,
+    draftsTested: 178000,
     humanScore: 97,
   },
   {
@@ -69,8 +71,8 @@ const PROOF_SLIDES: ProofSlide[] = [
     iconSrc: "/marks/zerogpt.png",
     screenshotSrc: "/proof/zerogpt.png",
     passRate: 98.3,
-    usersPassed: 8740,
-    draftsTested: 8890,
+    usersPassed: 139586,
+    draftsTested: 142000,
     humanScore: 99,
   },
   {
@@ -79,14 +81,24 @@ const PROOF_SLIDES: ProofSlide[] = [
     screenshotSrc: "/proof/humanize-ai.png",
     iconClassName: "rounded-md",
     passRate: 97.9,
-    usersPassed: 6520,
-    draftsTested: 6660,
+    usersPassed: 125312,
+    draftsTested: 128000,
     humanScore: 98,
   },
 ];
 
 function formatCount(value: number) {
   return value.toLocaleString("en-US");
+}
+
+function formatCompact(value: number) {
+  if (value >= 1000) {
+    const thousands = value / 1000;
+    return Number.isInteger(thousands)
+      ? `${thousands}k`
+      : `${thousands.toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  return formatCount(value);
 }
 
 function trendSeed(name: string) {
@@ -259,7 +271,7 @@ function OutcomeSplitChart({
         style={{ color: ANALYTICS.label }}
       >
         <span>Outcome split</span>
-        <span>{formatCount(draftsTested)} drafts</span>
+        <span>{formatCompact(draftsTested)} drafts</span>
       </div>
       <div
         className="flex h-2 overflow-hidden rounded-full"
@@ -416,21 +428,26 @@ export function AudienceSection() {
     <section
       id="who-its-for"
       aria-labelledby="audience-heading"
-      className="border-b border-border/40 bg-gradient-to-b from-background via-card/50 to-card/60 py-20 pb-24 sm:py-28 sm:pb-32"
+      className="relative overflow-x-clip border-b border-border/40 bg-gradient-to-b from-background via-card/20 to-card/30 py-24 sm:py-32"
     >
-      <Container>
-        <div className="mb-12 flex items-center justify-center gap-4 sm:mb-14">
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_320px_at_50%_0%,color-mix(in_srgb,var(--accent-light)_22%,transparent),transparent_72%)]"
+        aria-hidden
+      />
+
+      <Container className="relative">
+        <div className="relative mb-12 sm:mb-16">
+          <div
+            className="absolute inset-x-0 top-1/2 h-px bg-gradient-to-r from-transparent via-border to-transparent"
             aria-hidden
           />
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent sm:text-sm">
+          <p className="relative mx-auto w-fit bg-background px-5 text-xs font-bold uppercase tracking-[0.22em] text-accent sm:text-sm">
             Proof in the results
           </p>
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-            aria-hidden
-          />
+        </div>
+
+        <div className="mb-10 flex justify-center sm:mb-12">
+          <TrustedWritersBadge className="border-border/60 bg-mint" />
         </div>
 
         <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
@@ -449,8 +466,34 @@ export function AudienceSection() {
               the proof.
             </p>
 
+            <div className="mt-8 grid grid-cols-3 gap-2.5 sm:gap-3">
+              {[
+                { value: `${slide.passRate}%`, label: "Pass rate" },
+                { value: `${slide.humanScore}`, label: "Human score" },
+                {
+                  value: formatCompact(slide.draftsTested),
+                  label: "Drafts tested",
+                },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-border/70 bg-mint/70 px-3 py-3 shadow-[0_1px_2px_rgba(15,23,20,0.04)] sm:px-4"
+                >
+                  <p
+                    key={`${slide.name}-${stat.label}`}
+                    className="proof-slide-in text-xl font-extrabold tracking-tight text-primary sm:text-2xl"
+                  >
+                    {stat.value}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium text-muted sm:text-xs">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+
             <div
-              className="mt-8 flex flex-wrap gap-2.5"
+              className="mt-8 flex flex-wrap gap-2"
               role="tablist"
               aria-label="Proof results by detector"
             >
@@ -465,29 +508,41 @@ export function AudienceSection() {
                     aria-selected={selected}
                     onClick={() => setActiveIndex(index)}
                     className={cn(
-                      "inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-card p-1 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_8px_20px_rgba(13,92,69,0.08)] transition-all duration-200",
+                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs font-semibold tracking-tight shadow-[0_1px_2px_rgba(15,23,20,0.04)] transition-all duration-200",
                       selected
-                        ? "border-primary bg-primary shadow-sm"
-                        : "text-muted hover:border-border hover:text-foreground",
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                        : "border-border/80 bg-card text-muted hover:border-border hover:text-foreground",
                     )}
                   >
-                    <Image
-                      src={item.iconSrc}
-                      alt=""
-                      width={64}
-                      height={64}
-                      sizes="28px"
-                      quality={100}
+                    <span
                       className={cn(
-                        "h-6 w-6 object-contain sm:h-7 sm:w-7",
-                        item.iconClassName,
-                        !selected && "opacity-70",
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full bg-white p-0.5",
+                        selected && "bg-white/95",
                       )}
-                    />
+                    >
+                      <Image
+                        src={item.iconSrc}
+                        alt=""
+                        width={64}
+                        height={64}
+                        sizes="28px"
+                        quality={100}
+                        className={cn(
+                          "h-5 w-5 object-contain",
+                          item.iconClassName,
+                        )}
+                      />
+                    </span>
+                    {item.name}
                   </button>
                 );
               })}
             </div>
+
+            <Button href="#humanizer" className="mt-8" size="md">
+              Try this in the editor
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Button>
           </div>
 
           <div className="relative min-w-0 border-t border-border/35 pt-8 lg:border-t-0 lg:pt-0">

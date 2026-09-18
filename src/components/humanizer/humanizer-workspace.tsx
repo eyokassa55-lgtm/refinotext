@@ -13,6 +13,7 @@ import {
   Lightbulb,
   Loader2,
   Lock,
+  Sparkles,
   UploadCloud,
   Wand2,
 } from "lucide-react";
@@ -53,6 +54,27 @@ const EDITOR_STYLES = [
 ] as const;
 
 type EditorStyleId = (typeof EDITOR_STYLES)[number]["id"];
+
+const HUMANIZE_BUTTON_CLASS =
+  "inline-flex shrink-0 items-center gap-2 rounded-full bg-[#0F634A] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,99,74,0.28),0_8px_18px_rgba(15,99,74,0.22)] transition-[filter,opacity] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F634A] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+
+function HumanizeButtonContents({ isProcessing = false }: { isProcessing?: boolean }) {
+  return (
+    <>
+      {isProcessing ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      ) : (
+        <Sparkles className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+      )}
+      <span>{isProcessing ? "Humanizing..." : "Humanize Text"}</span>
+      {isProcessing ? null : (
+        <kbd className="inline-flex items-center rounded-md bg-black/25 px-1.5 py-0.5 text-[11px] font-medium leading-none text-white/95">
+          Ctrl+↵
+        </kbd>
+      )}
+    </>
+  );
+}
 
 export function HumanizerWorkspace() {
   if (!isClerkEnabled) {
@@ -518,11 +540,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 {isClerkEnabled ? (
                   <>
                     <Show when="signed-out">
-                      <Link
-                        href={ROUTES.signIn}
-                        className="inline-flex shrink-0 items-center rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground"
-                      >
-                        Humanize
+                      <Link href={ROUTES.signIn} className={HUMANIZE_BUTTON_CLASS}>
+                        <HumanizeButtonContents />
                       </Link>
                     </Show>
                     <Show when="signed-in">
@@ -530,12 +549,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                         type="button"
                         onClick={handleRefine}
                         disabled={!input.trim() || isProcessing}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
+                        className={HUMANIZE_BUTTON_CLASS}
                       >
-                        {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                        ) : null}
-                        {isProcessing ? "Humanizing..." : "Humanize"}
+                        <HumanizeButtonContents isProcessing={isProcessing} />
                       </button>
                     </Show>
                   </>
@@ -544,12 +560,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     type="button"
                     onClick={handleRefine}
                     disabled={!input.trim() || isProcessing}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark/80 px-5 py-2 text-sm font-semibold text-muted transition-colors hover:bg-mint-dark hover:text-foreground disabled:opacity-50"
+                    className={HUMANIZE_BUTTON_CLASS}
                   >
-                    {isProcessing ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    ) : null}
-                    {isProcessing ? "Humanizing..." : "Humanize"}
+                    <HumanizeButtonContents isProcessing={isProcessing} />
                   </button>
                 )}
               </div>

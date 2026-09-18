@@ -17,6 +17,8 @@ export const TRUST_MARKERS = [
   "Typical short drafts return in seconds",
 ] as const;
 
+export const TRUSTED_WRITERS_COUNT = "1,389,694";
+
 export const FEATURES = [
   {
     title: "Natural sentence rhythm",

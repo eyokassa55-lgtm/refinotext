@@ -427,7 +427,7 @@ img {
   box-shadow:
     0 0 10px #4ade80,
     0 0 22px rgba(74, 222, 128, 0.55);
-  animation: preview-scan-y 5.2s ease-in-out 1 both;
+  animation: preview-scan-y 2.7s ease-in-out 1 both;
 }
 
 .preview-hot-word {
