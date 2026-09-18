@@ -606,6 +606,24 @@ img {
   line-height: 1.7;
 }
 
+.humanizer-prose-input {
+  color: #5c6e80;
+  font-family: Georgia, "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.65;
+}
+
+.humanizer-prose-input h1,
+.humanizer-prose-input h2,
+.humanizer-prose-input h3 {
+  color: #4a5c6a;
+  font-family: Georgia, "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
+  font-weight: 700;
+  letter-spacing: 0.005em;
+}
+
 .humanizer-prose p {
   margin: 0 0 0.85em;
 }
