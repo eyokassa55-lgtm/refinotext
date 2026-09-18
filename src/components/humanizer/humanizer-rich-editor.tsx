@@ -61,7 +61,17 @@ export const HumanizerRichEditor = forwardRef<
           variant === "output"
             ? "humanizer-prose humanizer-prose-output min-h-full px-6 py-6 sm:px-8 sm:py-7"
             : "humanizer-prose humanizer-prose-input min-h-full px-4 pb-4 pt-4 sm:px-5",
+        ...(variant === "input"
+          ? {
+              style:
+                'font-family: Calibri, "Segoe UI", Candara, Arial, sans-serif; font-size: 16.5px; font-weight: 400; letter-spacing: 0; line-height: 1.6; color: #5c6e80;',
+            }
+          : {}),
       },
+      transformPastedHTML: (html) =>
+        html
+          .replace(/font-family\s*:\s*[^;"]+;?/gi, "")
+          .replace(/font-size\s*:\s*[^;"]+;?/gi, ""),
     },
     onUpdate: ({ editor: current }) => {
       onTextChange(readPlainText(current));

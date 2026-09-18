@@ -608,20 +608,34 @@ img {
 
 .humanizer-prose-input {
   color: #5c6e80;
-  font-family: Georgia, "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
-  font-size: 17px;
+  font-family: Calibri, "Segoe UI", Candara, Arial, sans-serif;
+  font-size: 16.5px;
   font-weight: 400;
-  letter-spacing: 0.01em;
-  line-height: 1.65;
+  letter-spacing: 0;
+  line-height: 1.6;
 }
 
-.humanizer-prose-input h1,
-.humanizer-prose-input h2,
-.humanizer-prose-input h3 {
+.humanizer-prose.humanizer-prose-input,
+.humanizer-prose.humanizer-prose-input p,
+.humanizer-prose.humanizer-prose-input li,
+.humanizer-prose.humanizer-prose-input span,
+.humanizer-prose.humanizer-prose-input strong,
+.humanizer-prose.humanizer-prose-input em,
+.humanizer-prose.humanizer-prose-input h1,
+.humanizer-prose.humanizer-prose-input h2,
+.humanizer-prose.humanizer-prose-input h3 {
+  color: #5c6e80;
+  font-family: Calibri, "Segoe UI", Candara, Arial, sans-serif !important;
+  font-weight: 400;
+  letter-spacing: 0 !important;
+  line-height: 1.6;
+}
+
+.humanizer-prose.humanizer-prose-input h1,
+.humanizer-prose.humanizer-prose-input h2,
+.humanizer-prose.humanizer-prose-input h3 {
   color: #4a5c6a;
-  font-family: Georgia, "Palatino Linotype", Palatino, "Times New Roman", Times, serif;
   font-weight: 700;
-  letter-spacing: 0.005em;
 }
 
 .humanizer-prose p {
