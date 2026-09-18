@@ -61,7 +61,7 @@ export const HumanizerRichEditor = forwardRef<
         class:
           variant === "output"
             ? "humanizer-prose humanizer-prose-output min-h-full px-6 py-6 sm:px-8 sm:py-7"
-            : "humanizer-prose humanizer-prose-input humanizer-ai-text min-h-full px-4 pb-4 pt-4 sm:px-5",
+            : "humanizer-prose humanizer-prose-input humanizer-ai-text font-mono min-h-full px-4 pb-4 pt-4 sm:px-5",
         ...(variant === "input" ? { style: HUMANIZER_AI_TEXT_STYLE } : {}),
       },
       transformPastedHTML: (html) =>
@@ -116,14 +116,14 @@ export const HumanizerRichEditor = forwardRef<
       editor={editor}
       className={cn(
         "min-h-0 flex-1 overflow-y-auto",
-        variant === "input" && "humanizer-ai-text",
+        variant === "input" && "humanizer-ai-text font-mono",
         className,
       )}
       style={
         variant === "input"
           ? {
               fontFamily:
-                'var(--font-ai-text), "Source Serif 4", Georgia, "Times New Roman", serif',
+                'var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace',
             }
           : undefined
       }

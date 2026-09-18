@@ -619,16 +619,13 @@ img {
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #5c6e80;
-  font-family: var(--font-ai-text), "Source Serif 4", Georgia, "Times New Roman", serif !important;
-  font-feature-settings: "kern" 1 !important;
-  font-size: 16px !important;
+  color: #4a5c55;
+  font-family: var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace !important;
+  font-size: 15px !important;
   font-style: normal !important;
-  font-variation-settings: normal !important;
   font-weight: 400;
-  letter-spacing: 0.01em !important;
-  line-height: 1.75 !important;
-  -webkit-font-smoothing: auto;
+  letter-spacing: -0.011em !important;
+  line-height: 1.5rem !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1,
