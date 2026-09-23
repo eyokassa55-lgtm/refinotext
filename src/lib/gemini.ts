@@ -4,23 +4,24 @@ import { ApiError, GoogleGenAI } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 /** Fast models that currently work for new Gemini API keys. */
 const GEMINI_API_FALLBACK_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-3.6-flash-lite",
   "gemini-3.5-flash-lite",
-  "gemini-flash-lite-latest",
   "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
 ];
-const GEMINI_TIMEOUT_MS = 20_000;
+const GEMINI_TIMEOUT_MS = 45_000;
 const VERTEX_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
-const MAX_GEMINI_API_ATTEMPTS = 1;
+const MAX_GEMINI_API_ATTEMPTS = 2;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
-/** Dead, retired, or too-slow IDs — never send these on the Gemini API path. */
+/** Dead or retired IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
   "gemini-flash-latest",
   "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-1.5-flash",
@@ -322,7 +323,7 @@ function modelsToTry(
   geminiApiOnly = false,
 ): { provider: GenerateProvider; model: string }[] {
   if (geminiApiOnly) {
-    const targets = geminiApiTargets(2);
+    const targets = geminiApiTargets();
     if (targets.length === 0) {
       throw new GeminiError(
         "The writing service is not configured. Please try again later.",
@@ -434,20 +435,6 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
   }
 
   if (
-    status === 503 ||
-    status === 502 ||
-    lower.includes("overloaded") ||
-    lower.includes("high demand") ||
-    lower.includes("unavailable")
-  ) {
-    return new GeminiError(
-      "The writing service is temporarily unavailable. Try again shortly.",
-      "UNAVAILABLE",
-      status ?? 503,
-    );
-  }
-
-  if (
     status === 404 ||
     lower.includes("not found") ||
     lower.includes("is not found") ||
@@ -459,6 +446,20 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
       "The writing service is temporarily unavailable. Please try again later.",
       "MODEL_NOT_FOUND",
       404,
+    );
+  }
+
+  if (
+    status === 503 ||
+    status === 502 ||
+    lower.includes("overloaded") ||
+    lower.includes("high demand") ||
+    lower.includes("unavailable")
+  ) {
+    return new GeminiError(
+      "The writing service is temporarily unavailable. Try again shortly.",
+      "UNAVAILABLE",
+      status ?? 503,
     );
   }
 
@@ -480,9 +481,37 @@ function isRetryable(error: GeminiError): boolean {
 
 function maxOutputTokensFor(text: string, requested?: number): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const sized = Math.min(2048, Math.max(256, Math.ceil(words * 2.4) + 160));
+  const sized = Math.min(4096, Math.max(1024, Math.ceil(words * 2.4) + 320));
   if (requested) return Math.min(sized, Math.max(256, requested));
   return sized;
+}
+
+function isGemini3Model(model: string): boolean {
+  const id = model.toLowerCase();
+  return (
+    id.includes("gemini-3") ||
+    id.includes("flash-lite-latest") ||
+    id.includes("flash-latest")
+  );
+}
+
+function thinkingConfigFor(model: string, requested?: number) {
+  if (isGemini3Model(model)) {
+    return {
+      thinkingConfig: {
+        thinkingLevel: "minimal",
+        includeThoughts: false,
+      },
+    };
+  }
+
+  const budget = typeof requested === "number" ? requested : 0;
+  return {
+    thinkingConfig: {
+      thinkingBudget: Math.max(0, budget),
+      includeThoughts: false,
+    },
+  };
 }
 
 /**
@@ -513,7 +542,6 @@ async function generateOnce(
       ? getGeminiApiClient()
       : getVertexClient(requireVertexConfig());
   const tuned = provider === "vertex";
-  const thinkingBudget = options.thinkingBudget;
 
   const response = await client.models.generateContent({
     model,
@@ -529,9 +557,7 @@ async function generateOnce(
       topP: options.topP ?? (tuned ? 0.1 : 0.95),
       maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
       candidateCount: 1,
-      ...(typeof thinkingBudget === "number" && thinkingBudget > 0
-        ? { thinkingConfig: { thinkingBudget, includeThoughts: false } }
-        : {}),
+      ...thinkingConfigFor(model, options.thinkingBudget),
       ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     },
   });
