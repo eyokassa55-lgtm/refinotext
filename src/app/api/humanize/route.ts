@@ -62,6 +62,31 @@ function humanizeSuccess(body: {
   });
 }
 
+function sseResponse(write: (send: (data: unknown) => void) => Promise<void>) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: unknown) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
+      try {
+        await write(send);
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 function getHumanizationErrorStatus(error: HumanizationFailedError): number {
   if (error.status) return error.status;
 
@@ -197,17 +222,124 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const rewriteInput = {
+    text,
+    tone: parsed.tone,
+    readability: parsed.readability,
+    intensity: parsed.intensity,
+    language: parsed.language,
+    detector: parsed.detector,
+  };
+
+  const wantsStream = req.headers.get("accept")?.includes("text/event-stream");
+  if (wantsStream) {
+    return sseResponse(async (send) => {
+      let output = "";
+      let source: "database" | "model" = "model";
+      try {
+        const result = await runHumanization(rewriteInput, (visible) => {
+          output = visible;
+          send({ type: "text", output: visible });
+        });
+        output = result.text;
+        source = toApiSource(result.source);
+      } catch (error) {
+        if (error instanceof HumanizationFailedError) {
+          send({
+            type: "error",
+            error: error.message,
+            code: error.code,
+          });
+          return;
+        }
+        if (error instanceof GeminiError) {
+          send({
+            type: "error",
+            error: error.message,
+            code: error.code || "HUMANIZATION_FAILED",
+          });
+          return;
+        }
+        console.error("[humanize] unexpected rewrite failure", error);
+        send({
+          type: "error",
+          error: "Humanization failed. No credits were charged.",
+          code: "HUMANIZATION_FAILED",
+        });
+        return;
+      }
+
+      try {
+        const saved = await saveHumanizationAndCharge({
+          userId: user.id,
+          requestId,
+          wordCount: check.wordCount,
+          text,
+          output,
+          tone: parsed.tone ?? null,
+          readability: parsed.readability ?? null,
+          intensity: parsed.intensity ?? null,
+        });
+
+        send({
+          type: "done",
+          id: saved.id,
+          output: saved.output,
+          humanizedText: saved.output,
+          source,
+          wordCount: saved.wordCount,
+          creditsCharged: saved.charged,
+          creditsRemaining: saved.balanceAfter,
+          duplicate: saved.duplicate,
+        });
+      } catch (error) {
+        if (error instanceof CreditError) {
+          send({ type: "error", error: error.message, code: error.code, output });
+          return;
+        }
+
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          const saved = await prisma.humanization.findUnique({
+            where: { requestId },
+          });
+          if (saved) {
+            const account = await prisma.creditBalance.findUnique({
+              where: { userId: user.id },
+            });
+            send({
+              type: "done",
+              id: saved.id,
+              output: saved.outputText,
+              humanizedText: saved.outputText,
+              source: "model",
+              wordCount: saved.inputWordCount,
+              creditsCharged: 0,
+              creditsRemaining: account?.balance ?? check.balance,
+              duplicate: true,
+            });
+            return;
+          }
+        }
+
+        console.error("[humanize] Failed to save result after a successful rewrite");
+        send({
+          type: "error",
+          error:
+            "Humanization succeeded but could not be saved. No extra credits were charged. Please try again.",
+          code: "SAVE_FAILED",
+          output,
+        });
+      }
+    });
+  }
+
   let output: string;
   let source: "database" | "model";
   try {
-    const result = await runHumanization({
-      text,
-      tone: parsed.tone,
-      readability: parsed.readability,
-      intensity: parsed.intensity,
-      language: parsed.language,
-      detector: parsed.detector,
-    });
+    const result = await runHumanization(rewriteInput);
     output = result.text;
     source = toApiSource(result.source);
   } catch (error) {

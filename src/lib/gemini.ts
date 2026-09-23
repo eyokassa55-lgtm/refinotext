@@ -53,6 +53,8 @@ export type GenerateTextOptions = {
   thinkingBudget?: number;
   /** Humanize path: GEMINI_API_KEY only — never Vertex. */
   geminiApiOnly?: boolean;
+  /** Called with each new piece and the full text so far. */
+  onDelta?: (chunk: string, accumulated: string) => void;
 };
 
 const BASE_VERTEX_MODEL = "gemini-2.5-flash";
@@ -522,12 +524,7 @@ export function preserveSourceText(text: string): string {
   return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
 }
 
-async function generateOnce(
-  provider: GenerateProvider,
-  model: string,
-  userText: string,
-  options: GenerateTextOptions,
-): Promise<string> {
+function assertVertexModel(provider: GenerateProvider, model: string) {
   if (provider === "vertex" && (isInvalidEndpointValue(model) || /^gemini-/i.test(model))) {
     throw new GeminiError(
       "The writing service is not configured. Please try again later.",
@@ -535,6 +532,15 @@ async function generateOnce(
       503,
     );
   }
+}
+
+function buildGenerateRequest(
+  provider: GenerateProvider,
+  model: string,
+  userText: string,
+  options: GenerateTextOptions,
+) {
+  assertVertexModel(provider, model);
 
   const timeoutMs = provider === "gemini-api" ? GEMINI_TIMEOUT_MS : VERTEX_TIMEOUT_MS;
   const client =
@@ -543,37 +549,76 @@ async function generateOnce(
       : getVertexClient(requireVertexConfig());
   const tuned = provider === "vertex";
 
-  const response = await client.models.generateContent({
-    model,
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: userText }],
+  return {
+    client,
+    params: {
+      model,
+      contents: [
+        {
+          role: "user" as const,
+          parts: [{ text: userText }],
+        },
+      ],
+      config: {
+        httpOptions: { timeout: timeoutMs },
+        temperature: options.temperature ?? (tuned ? 0 : 0.72),
+        topP: options.topP ?? (tuned ? 0.1 : 0.95),
+        maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
+        candidateCount: 1,
+        ...thinkingConfigFor(model, options.thinkingBudget),
+        ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
       },
-    ],
-    config: {
-      httpOptions: { timeout: timeoutMs },
-      temperature: options.temperature ?? (tuned ? 0 : 0.72),
-      topP: options.topP ?? (tuned ? 0.1 : 0.95),
-      maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
-      candidateCount: 1,
-      ...thinkingConfigFor(model, options.thinkingBudget),
-      ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     },
-  });
+  };
+}
 
+function emptyResponseError(finishReason?: string) {
+  return new GeminiError(
+    finishReason === "SAFETY" || finishReason === "BLOCKLIST"
+      ? "This text could not be rewritten. Try different wording."
+      : "The writing service returned an empty response.",
+    "EMPTY_RESPONSE",
+    502,
+  );
+}
+
+async function generateOnce(
+  provider: GenerateProvider,
+  model: string,
+  userText: string,
+  options: GenerateTextOptions,
+): Promise<string> {
+  const { client, params } = buildGenerateRequest(provider, model, userText, options);
+  const response = await client.models.generateContent(params);
   const text = response.text?.trim();
   if (!text) {
-    const finishReason = response.candidates?.[0]?.finishReason;
-    throw new GeminiError(
-      finishReason === "SAFETY" || finishReason === "BLOCKLIST"
-        ? "This text could not be rewritten. Try different wording."
-        : "The writing service returned an empty response.",
-      "EMPTY_RESPONSE",
-      502,
-    );
+    throw emptyResponseError(response.candidates?.[0]?.finishReason);
+  }
+  return text;
+}
+
+async function generateOnceStream(
+  provider: GenerateProvider,
+  model: string,
+  userText: string,
+  options: GenerateTextOptions,
+): Promise<string> {
+  const { client, params } = buildGenerateRequest(provider, model, userText, options);
+  const stream = await client.models.generateContentStream(params);
+
+  let text = "";
+  let finishReason: string | undefined;
+  for await (const chunk of stream) {
+    finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
+    const piece = chunk.text ?? "";
+    if (!piece) continue;
+    text += piece;
+    options.onDelta?.(piece, text);
   }
 
+  if (!text.trim()) {
+    throw emptyResponseError(finishReason);
+  }
   return text;
 }
 
@@ -582,9 +627,15 @@ async function generateOnce(
  * `backend: "tuned"` uses the Vertex endpoint. `backend: "base"` uses a
  * publisher Gemini model so new drafts are not sent to a lookup-tuned endpoint.
  */
-export async function generateText(
+async function generateWithRetries(
   prompt: string,
-  options: GenerateTextOptions = {},
+  options: GenerateTextOptions,
+  runner: (
+    provider: GenerateProvider,
+    model: string,
+    userText: string,
+    options: GenerateTextOptions,
+  ) => Promise<string>,
 ): Promise<string> {
   const trimmed = preserveSourceText(prompt);
   if (!trimmed) {
@@ -598,6 +649,7 @@ export async function generateText(
 
   for (const target of modelsToTry(backend, geminiApiOnly)) {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let emitted = false;
       try {
         console.info("[gemini] generateContent", {
           provider: target.provider,
@@ -605,8 +657,17 @@ export async function generateText(
           location: target.provider === "gemini-api" ? undefined : getVertexConfig()?.location,
           baseGemini: target.provider !== "vertex",
           attempt,
+          stream: Boolean(options.onDelta),
         });
-        return await generateOnce(target.provider, target.model, trimmed, options);
+        return await runner(target.provider, target.model, trimmed, {
+          ...options,
+          onDelta: options.onDelta
+            ? (chunk, accumulated) => {
+                emitted = true;
+                options.onDelta?.(chunk, accumulated);
+              }
+            : undefined,
+        });
       } catch (error) {
         const sanitized = sanitizeGeminiError(error);
         lastError = sanitized;
@@ -617,6 +678,9 @@ export async function generateText(
           code: sanitized.code,
           status: sanitized.status,
         });
+
+        // Tokens already reached the client — do not start a second draft.
+        if (emitted) throw sanitized;
 
         if (sanitized.code === "MODEL_NOT_FOUND") break;
         // Keep going through other providers for auth/config failures on one target.
@@ -638,4 +702,19 @@ export async function generateText(
   }
 
   throw lastError ?? new GeminiError("Humanization failed. Please try again.", "GEMINI_ERROR", 502);
+}
+
+export async function generateText(
+  prompt: string,
+  options: GenerateTextOptions = {},
+): Promise<string> {
+  const { onDelta: _onDelta, ...rest } = options;
+  return generateWithRetries(prompt, rest, generateOnce);
+}
+
+export async function generateTextStream(
+  prompt: string,
+  options: GenerateTextOptions = {},
+): Promise<string> {
+  return generateWithRetries(prompt, options, generateOnceStream);
 }

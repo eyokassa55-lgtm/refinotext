@@ -3,6 +3,7 @@ import "server-only";
 import {
   GeminiError,
   generateText,
+  generateTextStream,
   getGeminiApiModel,
   isGeminiApiConfigured,
   redactModelName,
@@ -82,16 +83,28 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
-  const systemInstruction = buildStyleRewriteInstruction({
-    text: request.text,
-    tone: request.tone,
-    readability: request.readability,
-    intensity: request.intensity,
-    language: request.language,
-    detector: request.detector,
-  });
+function rewriteOptions(request: HumanizeRequest) {
   const academicTurnitin = usesAcademicTurnitinPrompt(request.detector);
+  return {
+    systemInstruction: buildStyleRewriteInstruction({
+      text: request.text,
+      tone: request.tone,
+      readability: request.readability,
+      intensity: request.intensity,
+      language: request.language,
+      detector: request.detector,
+    }),
+    temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
+    topP: REWRITE_TOP_P,
+    backend: "base" as const,
+    geminiApiOnly: true,
+  };
+}
+
+async function rewriteWithGemini(
+  request: HumanizeRequest,
+  onDelta?: (visible: string) => void,
+): Promise<string> {
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
     model: redactModelName(model),
@@ -104,14 +117,20 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
     language: request.language ?? "en",
     tone: request.tone ?? "auto",
     detector: request.detector ?? "academic-turnitin",
+    stream: Boolean(onDelta),
   });
 
-  return generateText(buildRewriteUserContent(request), {
-    systemInstruction,
-    temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
-    topP: REWRITE_TOP_P,
-    backend: "base",
-    geminiApiOnly: true,
+  const options = rewriteOptions(request);
+  const prompt = buildRewriteUserContent(request);
+  if (!onDelta) {
+    return generateText(prompt, options);
+  }
+
+  return generateTextStream(prompt, {
+    ...options,
+    onDelta: (_chunk, accumulated) => {
+      onDelta(stripModelChrome(accumulated));
+    },
   });
 }
 
@@ -119,7 +138,10 @@ async function rewriteWithGemini(request: HumanizeRequest): Promise<string> {
  * Humanize is Gemini API + the exact stored detector prompt.
  * No local rewrite, no extra instructions, no post-processing.
  */
-export async function runHumanization(request: HumanizeRequest): Promise<HumanizeResult> {
+export async function runHumanization(
+  request: HumanizeRequest,
+  onDelta?: (visible: string) => void,
+): Promise<HumanizeResult> {
   if (!isGeminiApiConfigured()) {
     throw new HumanizationFailedError(
       "The writing service is not configured.",
@@ -129,7 +151,7 @@ export async function runHumanization(request: HumanizeRequest): Promise<Humaniz
   }
 
   try {
-    const output = stripModelChrome(await rewriteWithGemini(request));
+    const output = stripModelChrome(await rewriteWithGemini(request, onDelta));
     if (!output) {
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }

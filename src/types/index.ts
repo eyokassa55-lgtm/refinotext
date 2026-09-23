@@ -27,3 +27,8 @@ export type HumanizeResponse = {
   creditsRemaining: number;
   duplicate: boolean;
 };
+
+export type HumanizeStreamEvent =
+  | { type: "text"; output: string }
+  | ({ type: "done" } & HumanizeResponse)
+  | { type: "error"; error: string; code?: string; output?: string };

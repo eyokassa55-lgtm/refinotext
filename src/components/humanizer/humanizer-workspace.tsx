@@ -34,7 +34,9 @@ import {
 } from "@/lib/editor-versions";
 import { DEFAULT_HUMANIZE_DETECTOR, type HumanizeDetectorId } from "@/lib/humanize-detectors";
 import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-access";
+import { HumanizeStreamError, readHumanizeSse } from "@/lib/humanize-stream";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
+import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import type { Editor } from "@tiptap/react";
 import { HumanizerDetectorTargets } from "./humanizer-detector-targets";
@@ -114,6 +116,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const isProcessingRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
+  const revealTargetRef = useRef("");
+  const revealShownRef = useRef("");
+  const revealRafRef = useRef(0);
 
   const inputWordCount = countWords(input);
   const upgradeHref = isSignedIn ? ROUTES.pricing : ROUTES.signIn;
@@ -140,6 +145,66 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     setTimeout(() => setStatusMsg(null), 3000);
   };
 
+  const stopReveal = () => {
+    if (revealRafRef.current) {
+      window.cancelAnimationFrame(revealRafRef.current);
+      revealRafRef.current = 0;
+    }
+  };
+
+  const paintReveal = (text: string) => {
+    skipStatusRef.current = true;
+    outputEditorRef.current?.setStreamText(text);
+    skipStatusRef.current = false;
+    setOutput(text);
+  };
+
+  const pumpReveal = () => {
+    const target = revealTargetRef.current;
+    const shown = revealShownRef.current;
+    if (shown === target) {
+      revealRafRef.current = 0;
+      return;
+    }
+    if (!target.startsWith(shown)) {
+      revealShownRef.current = target;
+      paintReveal(target);
+      revealRafRef.current = 0;
+      return;
+    }
+    const remaining = target.length - shown.length;
+    const step = remaining > 160 ? Math.ceil(remaining / 3) : remaining > 48 ? 12 : 5;
+    revealShownRef.current = target.slice(0, shown.length + step);
+    paintReveal(revealShownRef.current);
+    revealRafRef.current = window.requestAnimationFrame(pumpReveal);
+  };
+
+  const queueReveal = (text: string) => {
+    revealTargetRef.current = text;
+    if (!revealRafRef.current) {
+      revealRafRef.current = window.requestAnimationFrame(pumpReveal);
+    }
+  };
+
+  const finishReveal = (text: string) => {
+    stopReveal();
+    revealTargetRef.current = text;
+    revealShownRef.current = text;
+    skipStatusRef.current = true;
+    outputEditorRef.current?.setHumanizedText(text);
+    skipStatusRef.current = false;
+    setOutput(text);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (revealRafRef.current) {
+        window.cancelAnimationFrame(revealRafRef.current);
+        revealRafRef.current = 0;
+      }
+    };
+  }, []);
+
   const handleRefine = useCallback(async () => {
     if (isProcessingRef.current) return;
 
@@ -161,6 +226,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     }
 
     setError(null);
+    stopReveal();
+    revealTargetRef.current = "";
+    revealShownRef.current = "";
     skipStatusRef.current = true;
     outputEditorRef.current?.clear();
     skipStatusRef.current = false;
@@ -176,6 +244,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       const res = await fetch("/api/humanize", {
         method: "POST",
         headers: {
+          Accept: "text/event-stream",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -187,46 +256,73 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         }),
       });
 
-      const raw = await res.text();
-      let data: HumanizeResponse | ApiErrorResponse | null = null;
-      try {
-        data = raw ? (JSON.parse(raw) as HumanizeResponse | ApiErrorResponse) : null;
-      } catch {
-        setError(
-          res.status >= 500
-            ? "The humanizer timed out or hit a server error. Please try again."
-            : "The humanizer returned an unexpected response. Please try again.",
-        );
-        return;
-      }
+      const contentType = res.headers.get("content-type") ?? "";
+      let result: HumanizeResponse | null = null;
 
-      if (!res.ok) {
-        const apiError = (data ?? {}) as ApiErrorResponse;
-        if (apiError.code === "NO_WIKIPEDIA_MATCH") {
-          setError(null);
+      if (contentType.includes("text/event-stream")) {
+        try {
+          result = await readHumanizeSse(res, queueReveal);
+        } catch (error) {
+          if (error instanceof HumanizeStreamError) {
+            if (error.code === "NO_WIKIPEDIA_MATCH") {
+              setError(null);
+              return;
+            }
+            if (error.code === "PAID_FEATURE") {
+              setError(error.message || "Upgrade to unlock this feature.");
+              router.push(ROUTES.pricing);
+              return;
+            }
+            setError(error.message || "Humanization failed. Please try again.");
+            return;
+          }
+          throw error;
+        }
+      } else {
+        const raw = await res.text();
+        let data: HumanizeResponse | ApiErrorResponse | null = null;
+        try {
+          data = raw ? (JSON.parse(raw) as HumanizeResponse | ApiErrorResponse) : null;
+        } catch {
+          setError(
+            res.status >= 500
+              ? "The humanizer timed out or hit a server error. Please try again."
+              : "The humanizer returned an unexpected response. Please try again.",
+          );
           return;
         }
-        if (apiError.code === "PAID_FEATURE") {
-          setError(apiError.error || "Upgrade to unlock this feature.");
-          router.push(ROUTES.pricing);
+
+        if (!res.ok) {
+          const apiError = (data ?? {}) as ApiErrorResponse;
+          if (apiError.code === "NO_WIKIPEDIA_MATCH") {
+            setError(null);
+            return;
+          }
+          if (apiError.code === "PAID_FEATURE") {
+            setError(apiError.error || "Upgrade to unlock this feature.");
+            router.push(ROUTES.pricing);
+            return;
+          }
+          setError(apiError.error || "Humanization failed. Please try again.");
           return;
         }
-        setError(apiError.error || "Humanization failed. Please try again.");
-        return;
+
+        if (!data || !("output" in data) || typeof data.output !== "string") {
+          setError("The humanizer returned an empty response. Please try again.");
+          return;
+        }
+
+        result = data as HumanizeResponse;
       }
 
-      if (!data || !("output" in data) || typeof data.output !== "string") {
+      if (!result || typeof result.output !== "string") {
         setError("The humanizer returned an empty response. Please try again.");
         return;
       }
 
       requestIdRef.current = null;
       requestKeyRef.current = null;
-      const result = data as HumanizeResponse;
-      skipStatusRef.current = true;
-      outputEditorRef.current?.setHumanizedText(result.output);
-      skipStatusRef.current = false;
-      setOutput(result.output);
+      finishReveal(result.output);
       setDocStatus("ready");
       notifyStatus(
         result.creditsCharged > 0
@@ -237,6 +333,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     } catch {
       setError("Could not reach the humanizer API. Please try again.");
     } finally {
+      stopReveal();
       isProcessingRef.current = false;
       setIsProcessing(false);
       setDocStatus((current) => (current === "humanizing" ? "ready" : current));
@@ -577,7 +674,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             </div>
           </section>
 
-          <section className="relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white lg:min-h-0">
+          <section
+            className={cn(
+              "relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white lg:min-h-0",
+              isProcessing && "humanizer-output-streaming",
+            )}
+          >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {output.trim() ? (
                 <div className="flex shrink-0 items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
@@ -636,19 +738,6 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               />
             </div>
 
-            {isProcessing && (
-              <div
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card/90 backdrop-blur-[2px]"
-                role="status"
-                aria-live="polite"
-              >
-                <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-                <p className="text-sm font-medium text-foreground">
-                  Humanizing your draft…
-                </p>
-              </div>
-            )}
-
             {!output && !isProcessing && (
               <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-white px-6 text-center">
                 <Image
@@ -677,7 +766,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </section>
         </div>
 
-        {statusMsg ? (
+        {error && output ? (
+          <p className="border-t-2 border-border/60 px-4 py-2 text-center text-xs text-red-600" role="alert">
+            {error}
+          </p>
+        ) : statusMsg ? (
           <p className="border-t-2 border-border/60 px-4 py-2 text-center text-xs text-muted/70" role="status">
             {statusMsg}
           </p>

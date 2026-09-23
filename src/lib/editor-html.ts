@@ -28,6 +28,32 @@ export function humanizePlainTextToHtml(text: string): string {
   return parts.join("") || "<p></p>";
 }
 
+/** Live rewrite: keep unfinished last words, do not polish mid-stream. */
+export function streamHumanizeTextToHtml(text: string): string {
+  const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (!normalized) return "<p></p>";
+
+  const firstBreak = normalized.indexOf("\n\n");
+  if (firstBreak > 0) {
+    const firstLine = normalized.slice(0, firstBreak).trim();
+    const words = firstLine.split(/\s+/).filter(Boolean);
+    if (
+      words.length >= 1 &&
+      words.length <= 20 &&
+      !/[.?!]$/.test(firstLine) &&
+      !firstLine.includes("\n")
+    ) {
+      const rest = normalized.slice(firstBreak + 2);
+      const paragraphs = rest
+        .split(/\n\s*\n/)
+        .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`);
+      return `<h1>${escapeHtml(firstLine)}</h1>${paragraphs.join("") || "<p></p>"}`;
+    }
+  }
+
+  return plainTextToHtml(normalized);
+}
+
 export function sanitizeEditorUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;

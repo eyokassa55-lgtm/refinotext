@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { forwardRef, useEffect, useImperativeHandle } from "react";
 
 import { HUMANIZER_AI_TEXT_STYLE } from "@/components/humanizer/humanizer-editor-styles";
-import { humanizePlainTextToHtml, plainTextToHtml } from "@/lib/editor-html";
+import { humanizePlainTextToHtml, plainTextToHtml, streamHumanizeTextToHtml } from "@/lib/editor-html";
 import { createHumanizerExtensions } from "@/lib/humanizer-editor-extensions";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
@@ -15,6 +15,7 @@ export type HumanizerRichEditorHandle = {
   setText: (text: string) => void;
   setHtml: (html: string) => void;
   setHumanizedText: (text: string) => void;
+  setStreamText: (text: string) => void;
   clear: () => void;
   focus: () => void;
   getEditor: () => Editor | null;
@@ -97,6 +98,10 @@ export const HumanizerRichEditor = forwardRef<
       },
       setHumanizedText: (text: string) => {
         editor?.commands.setContent(humanizePlainTextToHtml(text), { emitUpdate: false });
+        onTextChange(text);
+      },
+      setStreamText: (text: string) => {
+        editor?.commands.setContent(streamHumanizeTextToHtml(text), { emitUpdate: false });
         onTextChange(text);
       },
       clear: () => {

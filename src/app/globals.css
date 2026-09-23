@@ -761,3 +761,26 @@ img {
   font-size: 20px;
   margin-bottom: 0.75em;
 }
+
+.humanizer-output-streaming .humanizer-prose-output h1:last-child::after,
+.humanizer-output-streaming .humanizer-prose-output p:last-child::after {
+  animation: humanizer-caret 1s steps(1, end) infinite;
+  background: #111111;
+  content: "";
+  display: inline-block;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  width: 2px;
+}
+
+@keyframes humanizer-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
