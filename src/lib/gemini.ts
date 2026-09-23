@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ApiError, GoogleGenAI } from "@google/genai/node";
+import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
@@ -499,7 +499,7 @@ function thinkingConfigFor(model: string, requested?: number) {
   if (isGemini3Model(model)) {
     return {
       thinkingConfig: {
-        thinkingLevel: "minimal",
+        thinkingLevel: ThinkingLevel.MINIMAL,
         includeThoughts: false,
       },
     };
