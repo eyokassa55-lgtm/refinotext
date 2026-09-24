@@ -4,9 +4,10 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
-/** Gemini API only. Paid Flash first; Lite is the same-API backup. */
+const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+/** Gemini API only. 3.6 Flash first; Lite is the same-API backup. */
 const GEMINI_API_FALLBACK_MODELS = [
+  "gemini-3.6-flash",
   "gemini-3-flash-preview",
   "gemini-3.5-flash-lite",
 ];
@@ -37,7 +38,6 @@ const BROKEN_GEMINI_API_MODELS = new Set([
  * word. Humanize swaps them for DEFAULT_GEMINI_MODEL.
  */
 const SLOW_GEMINI_API_MODELS = new Set([
-  "gemini-3.6-flash",
   "gemini-3.7-flash",
   "gemini-3.8-flash",
   "gemini-3.5-flash",
@@ -523,12 +523,12 @@ function isGemini3Model(model: string): boolean {
 function thinkingConfigFor(
   model: string,
   requested?: number,
-  systemInstruction?: string,
+  _systemInstruction?: string,
 ) {
   const id = model.toLowerCase();
-  // Gemma rejects thinkingConfig. Large stored detector prompts + thinking
-  // makes Gemini 3 503 / hang, which is the live "unavailable" error.
-  if (id.includes("gemma") || (systemInstruction && systemInstruction.length > 2000)) {
+  // Gemma rejects thinkingConfig. Gemini 3 must get lowercase "minimal"
+  // or it thinks until the request is killed.
+  if (id.includes("gemma")) {
     return {};
   }
 
