@@ -17,7 +17,7 @@ const VERTEX_TIMEOUT_MS = 60_000;
 /** One attempt per model. Do not sit in a 40s retry loop. */
 const TOTAL_BUDGET_MS = 12_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
-const MAX_GEMINI_API_ATTEMPTS = 2;
+const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
 /** Dead or retired IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
@@ -643,7 +643,12 @@ async function generateOnceStream(
   let finishReason: string | undefined;
   for await (const chunk of stream) {
     finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
-    const piece = chunk.text ?? "";
+    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+    const piece =
+      chunk.text ||
+      parts
+        .map((part) => ("text" in part && typeof part.text === "string" ? part.text : ""))
+        .join("");
     if (!piece) continue;
     text += piece;
     options.onDelta?.(piece, text);
