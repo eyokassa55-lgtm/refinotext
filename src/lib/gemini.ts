@@ -4,28 +4,41 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash-lite";
-/** Fast models first. 3.6-flash thinks too long for Humanize. */
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
+/** Measured first-token latency on this key, fastest first. */
 const GEMINI_API_FALLBACK_MODELS = [
-  "gemini-3.6-flash-lite",
-  "gemini-flash-lite-latest",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash-lite",
+  "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
 ];
-const GEMINI_TIMEOUT_MS = 28_000;
+const GEMINI_TIMEOUT_MS = 12_000;
 const VERTEX_TIMEOUT_MS = 60_000;
+/** Ceiling across every model in the chain, well under the route's 60s. */
+const TOTAL_BUDGET_MS = 40_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
 const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
 /** Dead or retired IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
   "gemini-flash-latest",
+  "gemini-3.6-flash-lite",
   "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
   "gemini-1.5-flash",
   "gemini-1.5-flash-8b",
+]);
+/**
+ * Served, but they stall for 25s+ or reject `thinkingLevel` before the first
+ * word. Humanize swaps them for DEFAULT_GEMINI_MODEL.
+ */
+const SLOW_GEMINI_API_MODELS = new Set([
+  "gemini-3.6-flash",
+  "gemini-3.7-flash",
+  "gemini-3.8-flash",
+  "gemini-3.5-flash",
 ]);
 
 export class GeminiError extends Error {
@@ -228,8 +241,7 @@ export function getGeminiApiModel(): string {
     !model.includes("endpoints/") &&
     !BROKEN_GEMINI_API_MODELS.has(model.toLowerCase())
   ) {
-    // Full 3.6-flash thinks for tens of seconds before the first word.
-    if (model.toLowerCase() === "gemini-3.6-flash") {
+    if (SLOW_GEMINI_API_MODELS.has(model.toLowerCase())) {
       return DEFAULT_GEMINI_MODEL;
     }
     return model;
@@ -655,8 +667,11 @@ async function generateWithRetries(
   const backend = options.backend ?? "tuned";
   const geminiApiOnly = options.geminiApiOnly === true;
   const maxAttempts = geminiApiOnly ? MAX_GEMINI_API_ATTEMPTS : MAX_ATTEMPTS_PER_MODEL;
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   for (const target of modelsToTry(backend, geminiApiOnly)) {
+    // Better to surface the last error than to keep the user waiting.
+    if (Date.now() >= deadline && lastError) break;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       let emitted = false;
       try {

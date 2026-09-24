@@ -524,6 +524,31 @@ export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): s
   return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
 }
 
+/**
+ * Live Humanize path: Wikipedia voice + Gemini only.
+ * Does not use the stored detector system prompt strings.
+ */
+export function buildWikipediaRewriteInstruction(
+  wiki: { topic?: string; output?: string; rawExtract?: string } | null,
+): string {
+  const sample = clipStyleReference((wiki?.rawExtract || wiki?.output || "").trim(), 1400);
+  const topic = wiki?.topic?.trim();
+  const voice = sample
+    ? `Live Wikipedia extract${topic ? ` (${topic})` : ""} — copy only its cadence, sentence mix, and plain encyclopedia wording:
+${sample}`
+    : "Write like a live English Wikipedia article: plain, direct, mixed sentence lengths, no chatbot or essay-template phrasing.";
+
+  return `Rewrite the user's draft like a human Wikipedia article.
+
+${voice}
+
+The user draft is the only source of meaning. Keep every claim, name, number, date, and example from the draft.
+Do not add Wikipedia facts or switch topics. Do not copy Wikipedia sentences.
+Keep about the same length and paragraph breaks.
+Write plain text only: no markdown, no bold, no headings, no bullet points, no citation brackets.
+Return only the rewritten draft.`;
+}
+
 function clipStyleReference(text: string, max = 520): string {
   const trimmed = text.trim();
   if (trimmed.length <= max) return trimmed;

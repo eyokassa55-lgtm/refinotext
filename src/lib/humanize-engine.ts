@@ -10,11 +10,11 @@ import {
 } from "@/lib/gemini";
 import {
   buildRewriteUserContent,
-  buildStyleRewriteInstruction,
+  buildWikipediaRewriteInstruction,
 } from "@/lib/humanize-prompt";
-import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
 import { stripModelChrome } from "@/lib/humanize-quality";
 import type { HumanizeApiSource } from "@/lib/training-schema";
+import { findWikipediaLiveMatch } from "@/lib/wikipedia-corpus";
 
 export type HumanizeRequest = {
   text: string;
@@ -60,11 +60,24 @@ export class HumanizationFailedError extends Error {
 }
 
 const REWRITE_TOP_P = 0.95;
-const REWRITE_TEMPERATURE = 0.78;
-const ACADEMIC_TURNITIN_TEMPERATURE = 0.5;
+const REWRITE_TEMPERATURE = 0.62;
+/** Nothing streams until the voice reference resolves, so cap the wait. */
+const WIKI_WAIT_MS = 1_600;
 
-function usesAcademicTurnitinPrompt(detector?: string): boolean {
-  return !isGptZeroDetector(detector);
+type WikiMatch = Awaited<ReturnType<typeof findWikipediaLiveMatch>>;
+
+async function findVoiceReference(text: string): Promise<WikiMatch> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      findWikipediaLiveMatch(text).catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), WIKI_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function toHumanizationError(error: unknown): never {
@@ -83,60 +96,9 @@ export function toApiSource(source: HumanizeSource): HumanizeApiSource {
   return source === "FINE_TUNED_MODEL" ? "model" : "database";
 }
 
-function rewriteOptions(request: HumanizeRequest) {
-  const academicTurnitin = usesAcademicTurnitinPrompt(request.detector);
-  return {
-    systemInstruction: buildStyleRewriteInstruction({
-      text: request.text,
-      tone: request.tone,
-      readability: request.readability,
-      intensity: request.intensity,
-      language: request.language,
-      detector: request.detector,
-    }),
-    temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
-    topP: REWRITE_TOP_P,
-    backend: "base" as const,
-    geminiApiOnly: true,
-  };
-}
-
-async function rewriteWithGemini(
-  request: HumanizeRequest,
-  onDelta?: (visible: string) => void,
-): Promise<string> {
-  const model = getGeminiApiModel();
-  console.info("[humanize] [GEMINI_API]", {
-    model: redactModelName(model),
-    prompt: isGptZeroDetector(request.detector)
-      ? "gptzero"
-      : isZeroGptDetector(request.detector)
-        ? "zerogpt"
-        : "academic-turnitin",
-    intensity: request.intensity ?? 75,
-    language: request.language ?? "en",
-    tone: request.tone ?? "auto",
-    detector: request.detector ?? "academic-turnitin",
-    stream: Boolean(onDelta),
-  });
-
-  const options = rewriteOptions(request);
-  const prompt = buildRewriteUserContent(request);
-  if (!onDelta) {
-    return generateText(prompt, options);
-  }
-
-  return generateTextStream(prompt, {
-    ...options,
-    onDelta: (_chunk, accumulated) => {
-      onDelta(stripModelChrome(accumulated));
-    },
-  });
-}
-
 /**
- * Humanize is Gemini API + the exact stored detector prompt.
- * No local rewrite, no extra instructions, no post-processing.
+ * Humanize uses live Wikipedia + Gemini only.
+ * Stored detector system prompts are not sent.
  */
 export async function runHumanization(
   request: HumanizeRequest,
@@ -151,15 +113,44 @@ export async function runHumanization(
   }
 
   try {
-    const output = stripModelChrome(await rewriteWithGemini(request, onDelta));
+    const wiki = await findVoiceReference(request.text);
+    const model = getGeminiApiModel();
+    console.info("[humanize] [WIKIPEDIA_GEMINI]", {
+      model: redactModelName(model),
+      wikiTopic: wiki?.topic ?? null,
+      wikiScore: wiki?.score ?? null,
+      language: request.language ?? "en",
+      stream: Boolean(onDelta),
+    });
+
+    const options = {
+      systemInstruction: buildWikipediaRewriteInstruction(wiki),
+      temperature: REWRITE_TEMPERATURE,
+      topP: REWRITE_TOP_P,
+      backend: "base" as const,
+      geminiApiOnly: true,
+    };
+    const prompt = buildRewriteUserContent(request);
+    const raw = onDelta
+      ? await generateTextStream(prompt, {
+          ...options,
+          onDelta: (_chunk, accumulated) => {
+            onDelta(stripModelChrome(accumulated));
+          },
+        })
+      : await generateText(prompt, options);
+
+    const output = stripModelChrome(raw);
     if (!output) {
       throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }
 
     return {
       text: output.trim(),
-      source: "FINE_TUNED_MODEL",
-      retrieval: null,
+      source: wiki ? "TOPIC_TRAINING_MATCH" : "FINE_TUNED_MODEL",
+      retrieval: wiki
+        ? { band: "high", matches: [{ index: wiki.index, score: wiki.score }] }
+        : null,
     };
   } catch (error) {
     toHumanizationError(error);

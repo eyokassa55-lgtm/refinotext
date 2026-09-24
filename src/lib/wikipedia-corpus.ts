@@ -1,5 +1,6 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -1084,9 +1085,25 @@ const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
 const WIKIPEDIA_LIVE_INDEX = 90_000;
 const WIKIPEDIA_USER_AGENT =
   "RefinoText/1.0 (https://refinotext.com; same-topic Wikipedia lookup for Humanize)";
+const WIKI_REQUEST_TIMEOUT_MS = 2_500;
+/** The lookup runs before the first streamed word, so it gets a hard ceiling. */
+const WIKI_LOOKUP_BUDGET_MS = 1_200;
 
 const pageCache = new Map<string, WikipediaRow | null>();
 const searchCache = new Map<string, string[]>();
+
+/**
+ * Per-lookup deadline. Without it a batch of in-flight page fetches keeps
+ * running long after the budget is spent, because the budget is only checked
+ * between batches.
+ */
+const lookupDeadline = new AsyncLocalStorage<number>();
+
+function requestTimeoutMs(): number {
+  const deadline = lookupDeadline.getStore();
+  if (deadline === undefined) return WIKI_REQUEST_TIMEOUT_MS;
+  return Math.max(150, Math.min(WIKI_REQUEST_TIMEOUT_MS, deadline - Date.now()));
+}
 
 export function isWikipediaLiveLookupEnabled(): boolean {
   return true;
@@ -1116,7 +1133,7 @@ async function wikiQuery(params: Record<string, string>): Promise<Record<string,
         "User-Agent": WIKIPEDIA_USER_AGENT,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(requestTimeoutMs()),
     });
     if (!response.ok) return null;
     return (await response.json()) as Record<string, unknown>;
@@ -1577,6 +1594,7 @@ async function findClosestLiveWikipediaPage(
   userText: string,
   userKeys: Set<string>,
   contentTokens: readonly string[],
+  deadline = Date.now() + WIKI_LOOKUP_BUDGET_MS,
 ): Promise<WikipediaRow | null> {
   const strongTokens = strongUserTopicTokens(userKeys);
   if (strongTokens.length === 0) return null;
@@ -1585,7 +1603,9 @@ async function findClosestLiveWikipediaPage(
   const seen = new Set<string>();
 
   for (const query of liveSearchQueries(userText).slice(0, 10)) {
+    if (Date.now() >= deadline) break;
     for (const title of await searchWikipediaTitles(query, 10)) {
+      if (Date.now() >= deadline) break;
       const key = title.trim().toLowerCase();
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -1648,11 +1668,23 @@ function queryBelongsToUserTopic(query: string, userKeys: Set<string>): boolean 
  * Scores candidates and returns the best same-topic rematch; weak keyword
  * collisions (Memory for Cultural Memory, Collaboration for Organs) are rejected.
  */
-export async function findWikipediaLiveMatch(userText: string): Promise<DatabaseTrainingMatch | null> {
+export function findWikipediaLiveMatch(
+  userText: string,
+  budgetMs = WIKI_LOOKUP_BUDGET_MS,
+): Promise<DatabaseTrainingMatch | null> {
+  const deadline = Date.now() + budgetMs;
+  return lookupDeadline.run(deadline, () => runLiveMatch(userText, deadline));
+}
+
+async function runLiveMatch(
+  userText: string,
+  deadline: number,
+): Promise<DatabaseTrainingMatch | null> {
   if (typeof userText !== "string" || userText.trim().length === 0) return null;
   const userKeys = new Set(userTopicKeys(userText));
   if (userKeys.size === 0) return null;
   const contentTokens = contentTopicTokens(userText);
+  const outOfTime = () => Date.now() >= deadline;
 
   // Peaceful-assembly / protest-policing drafts → Freedom of assembly (not the ICCPR treaty page).
   if (/\b(peaceful assembly|freedom of assembly|right to protest)\b/i.test(userText)) {
@@ -1701,10 +1733,14 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
   };
 
   for (const query of liveSearchQueries(userText)) {
+    if (outOfTime()) break;
     const queryKey = topicKey(tokenizeTopic(query));
     if (!queryKey || !queryBelongsToUserTopic(query, userKeys)) continue;
 
-    const exact = await fetchWikipediaPage(query);
+    const [exact, titles] = await Promise.all([
+      fetchWikipediaPage(query),
+      searchWikipediaTitles(query, 12),
+    ]);
     if (exact) {
       if (!preferProsePage(userText, exact)) {
         mathFallback ??= exact;
@@ -1716,14 +1752,13 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
       }
     }
 
-    for (const title of await searchWikipediaTitles(query, 12)) {
-      if (
-        !titleMatchesUserTopic(title, userKeys) &&
-        topicKey(tokenizeTopic(title)) !== queryKey
-      ) {
-        continue;
-      }
-      const page = await fetchWikipediaPage(title);
+    const candidates = titles.filter(
+      (title) =>
+        titleMatchesUserTopic(title, userKeys) ||
+        topicKey(tokenizeTopic(title)) === queryKey,
+    );
+    if (candidates.length === 0) continue;
+    for (const page of await Promise.all(candidates.map(fetchWikipediaPage))) {
       if (!page) continue;
       if (!preferProsePage(userText, page)) {
         mathFallback ??= page;
@@ -1743,7 +1778,13 @@ export async function findWikipediaLiveMatch(userText: string): Promise<Database
     if (score >= 8) return toMatch(mathFallback, 0.8, "topic");
   }
 
-  const related = await findClosestLiveWikipediaPage(userText, userKeys, contentTokens);
+  if (outOfTime()) return null;
+  const related = await findClosestLiveWikipediaPage(
+    userText,
+    userKeys,
+    contentTokens,
+    deadline,
+  );
   if (related) return toMatch(related, 0.88, "topic");
 
   return null;
