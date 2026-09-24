@@ -236,11 +236,30 @@ export async function POST(req: NextRequest) {
     return sseResponse(async (send) => {
       let output = "";
       let source: "database" | "model" = "model";
+      const heartbeat = setInterval(() => {
+        send({ type: "status", stage: "writing" });
+      }, 8_000);
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        deadlineTimer = setTimeout(() => {
+          reject(
+            new HumanizationFailedError(
+              "The request took too long and was stopped. Try a shorter text or try again.",
+              "TIMEOUT",
+              504,
+            ),
+          );
+        }, 45_000);
+      });
       try {
-        const result = await runHumanization(rewriteInput, (visible) => {
-          output = visible;
-          send({ type: "text", output: visible });
-        });
+        send({ type: "status", stage: "start" });
+        const result = await Promise.race([
+          runHumanization(rewriteInput, (visible) => {
+            output = visible;
+            send({ type: "text", output: visible });
+          }),
+          deadline,
+        ]);
         output = result.text;
         source = toApiSource(result.source);
       } catch (error) {
@@ -267,6 +286,9 @@ export async function POST(req: NextRequest) {
           code: "HUMANIZATION_FAILED",
         });
         return;
+      } finally {
+        if (deadlineTimer) clearTimeout(deadlineTimer);
+        clearInterval(heartbeat);
       }
 
       try {

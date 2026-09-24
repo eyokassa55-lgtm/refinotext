@@ -15,10 +15,10 @@ const GEMINI_API_FALLBACK_MODELS = [
  * Google rejects deadlines under 10s. 10s is also too short for the stored
  * detector prompt (~3k tokens) — the call 504s and the UI shows unavailable.
  */
-const GEMINI_TIMEOUT_MS = 30_000;
+const GEMINI_TIMEOUT_MS = 16_000;
 const VERTEX_TIMEOUT_MS = 60_000;
-/** One or two Gemini models, not a 40s walk. */
-const TOTAL_BUDGET_MS = 35_000;
+/** Leave time to send an SSE error before Vercel kills the function. */
+const TOTAL_BUDGET_MS = 40_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
 const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
@@ -601,6 +601,7 @@ function buildGenerateRequest(
         candidateCount: 1,
         ...thinkingConfigFor(model, options.thinkingBudget, options.systemInstruction),
         ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
+        ...(provider === "gemini-api" ? { httpOptions: { timeout: GEMINI_TIMEOUT_MS } } : {}),
       },
     },
   };

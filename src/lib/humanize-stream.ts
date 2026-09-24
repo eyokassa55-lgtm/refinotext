@@ -49,6 +49,9 @@ export async function readHumanizeSse(
         continue;
       }
       if (!event) continue;
+      if (event.type === "status") {
+        continue;
+      }
       if (event.type === "text" && typeof event.output === "string") {
         onText(event.output);
       } else if (event.type === "done") {
@@ -64,6 +67,9 @@ export async function readHumanizeSse(
         };
       } else if (event.type === "error") {
         streamError = new HumanizeStreamError(event.error, event.code);
+        if (typeof event.output === "string" && event.output.trim()) {
+          onText(event.output);
+        }
       }
     }
 
@@ -72,7 +78,10 @@ export async function readHumanizeSse(
 
   if (streamError) throw streamError;
   if (!done || typeof done.output !== "string") {
-    throw new HumanizeStreamError("The humanizer returned an empty response. Please try again.");
+    throw new HumanizeStreamError(
+      "The request took too long and was stopped. Try again.",
+      "TIMEOUT",
+    );
   }
   return done;
 }
@@ -81,7 +90,14 @@ async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>): Promi
   value?: Uint8Array;
   finished: boolean;
 }> {
-  const { value, done } = await reader.read();
-  return { value, finished: done };
+  try {
+    const { value, done } = await reader.read();
+    return { value, finished: done };
+  } catch {
+    throw new HumanizeStreamError(
+      "The request took too long and was stopped. Try again.",
+      "TIMEOUT",
+    );
+  }
 }
 

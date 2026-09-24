@@ -249,21 +249,31 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     requestIdRef.current = crypto.randomUUID();
     requestKeyRef.current = text;
 
-    try {
-      const res = await fetch("/api/humanize", {
+    const body = JSON.stringify({
+      text,
+      requestId: requestIdRef.current,
+      language,
+      tone: style === "auto" ? undefined : style,
+      detector,
+    });
+
+    const requestHumanize = (stream: boolean) =>
+      fetch("/api/humanize", {
         method: "POST",
         headers: {
-          Accept: "text/event-stream",
+          Accept: stream ? "text/event-stream" : "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          text,
-          requestId: requestIdRef.current,
-          language,
-          tone: style === "auto" ? undefined : style,
-          detector,
-        }),
+        body,
       });
+
+    try {
+      let res: Response;
+      try {
+        res = await requestHumanize(true);
+      } catch {
+        res = await requestHumanize(false);
+      }
 
       const contentType = res.headers.get("content-type") ?? "";
       let result: HumanizeResponse | null = null;
@@ -280,6 +290,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             if (error.code === "PAID_FEATURE") {
               setError(error.message || "Upgrade to unlock this feature.");
               router.push(ROUTES.pricing);
+              return;
+            }
+            const partial = revealShownRef.current.trim();
+            if (partial) {
+              finishReveal(partial);
+              setError(null);
               return;
             }
             setError(error.message || "Humanization failed. Please try again.");
@@ -340,7 +356,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       );
       window.dispatchEvent(new Event("refinotext:credits-updated"));
     } catch {
-      setError("Could not reach the humanizer API. Please try again.");
+      const partial = revealShownRef.current.trim();
+      if (partial) {
+        finishReveal(partial);
+      } else {
+        setError("The request took too long and was stopped. Try again.");
+      }
     } finally {
       stopReveal();
       isProcessingRef.current = false;
@@ -761,7 +782,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                   className="mb-4 h-28 w-28 scale-[1.45] object-contain bg-transparent opacity-[0.14]"
                 />
                 {error ? (
-                  <p className="max-w-xs text-sm text-red-600">{error}</p>
+                  <p className="max-w-sm text-pretty px-2 text-sm leading-6 text-red-600">{error}</p>
                 ) : (
                   <>
                     <p className="text-[15px] font-semibold text-foreground/85">

@@ -29,6 +29,7 @@ export type HumanizeResponse = {
 };
 
 export type HumanizeStreamEvent =
+  | { type: "status"; stage?: string }
   | { type: "text"; output: string }
   | ({ type: "done" } & HumanizeResponse)
   | { type: "error"; error: string; code?: string; output?: string };
