@@ -4,12 +4,12 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
-/** Gemini API only. 3.6 Flash first; Lite is the same-API backup. */
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
+/** Fastest billed model first. 3.6 Flash stays in the chain if preview is busy. */
 const GEMINI_API_FALLBACK_MODELS = [
-  "gemini-3.6-flash",
   "gemini-3-flash-preview",
   "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
 ];
 /**
  * Google rejects deadlines under 10s. 10s is also too short for the stored
@@ -351,7 +351,7 @@ function modelsToTry(
   geminiApiOnly = false,
 ): { provider: GenerateProvider; model: string }[] {
   if (geminiApiOnly) {
-    const targets = geminiApiTargets(1);
+    const targets = geminiApiTargets(3);
     if (targets.length === 0) {
       throw new GeminiError(
         "The writing service is not configured. Please try again later.",
