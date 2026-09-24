@@ -41,6 +41,7 @@ import type { ApiErrorResponse, HumanizeResponse } from "@/types";
 import type { Editor } from "@tiptap/react";
 import { HumanizerDetectorTargets } from "./humanizer-detector-targets";
 import { HumanizerEditorToolbar, type EditorDocStatus } from "./humanizer-editor-toolbar";
+import { HumanizerOutputMotion } from "./humanizer-output-motion";
 import { HumanizerRichEditor, type HumanizerRichEditorHandle } from "./humanizer-rich-editor";
 import { HumanizerVersionHistory } from "./humanizer-version-history";
 import { LanguagePicker } from "./language-picker";
@@ -173,7 +174,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       return;
     }
     const remaining = target.length - shown.length;
-    const step = remaining > 80 ? remaining : remaining > 24 ? 16 : 8;
+    const step = remaining > 160 ? 24 : remaining > 48 ? 10 : remaining > 12 ? 4 : 2;
     revealShownRef.current = target.slice(0, shown.length + step);
     paintReveal(revealShownRef.current);
     revealRafRef.current = window.requestAnimationFrame(pumpReveal);
@@ -181,7 +182,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const queueReveal = (text: string) => {
     revealTargetRef.current = text;
-    if (!revealShownRef.current) {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
       revealShownRef.current = text;
       paintReveal(text);
       return;
@@ -742,6 +746,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 onTextChange={handleOutputTextChange}
               />
             </div>
+
+            {isProcessing && !output ? <HumanizerOutputMotion /> : null}
 
             {!output && !isProcessing && (
               <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-white px-6 text-center">

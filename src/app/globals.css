@@ -592,7 +592,12 @@ img {
   .preview-gradient-wash,
   .preview-status-dot,
   .preview-chip-in,
-  .preview-scan-beam {
+  .preview-scan-beam,
+  .humanizer-write-beam,
+  .humanizer-write-line,
+  .humanizer-write-caret,
+  .humanizer-write-aurora,
+  .humanizer-output-streaming::after {
     animation: none;
   }
 
@@ -797,5 +802,131 @@ img {
   50%,
   100% {
     opacity: 0;
+  }
+}
+
+.humanizer-output-streaming {
+  border-color: color-mix(in srgb, #0f634a 38%, var(--border));
+}
+
+.humanizer-output-streaming::after {
+  animation: humanizer-write-wash 2.4s ease-in-out infinite;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(15, 99, 74, 0.07) 46%,
+    transparent 100%
+  );
+  background-size: 100% 42%;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+@keyframes humanizer-write-wash {
+  0% {
+    background-position: 0 -40%;
+  }
+  100% {
+    background-position: 0 140%;
+  }
+}
+
+.humanizer-write-motion {
+  background: #ffffff;
+}
+
+.humanizer-write-aurora {
+  animation: humanizer-write-aurora 3.6s ease-in-out infinite;
+  background:
+    radial-gradient(42% 34% at 18% 20%, rgba(15, 99, 74, 0.1), transparent 70%),
+    radial-gradient(36% 30% at 86% 72%, rgba(78, 168, 132, 0.12), transparent 72%);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes humanizer-write-aurora {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.humanizer-write-beam {
+  animation: humanizer-write-beam 2.1s ease-in-out infinite;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(15, 99, 74, 0.1),
+    transparent
+  );
+  height: 5.5rem;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+@keyframes humanizer-write-beam {
+  0% {
+    opacity: 0;
+    top: -18%;
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    top: 108%;
+  }
+}
+
+.humanizer-write-caret {
+  animation: humanizer-caret 1s steps(1, end) infinite;
+  background: #111111;
+  display: inline-block;
+  height: 1.05em;
+  vertical-align: -0.12em;
+  width: 2px;
+}
+
+.humanizer-write-line {
+  animation: humanizer-write-line 1.55s ease-out infinite;
+  background: linear-gradient(90deg, #d7e4de 0%, #b7d2c6 46%, #e8f1ed 100%);
+  background-size: 180% 100%;
+  border-radius: 999px;
+  height: 11px;
+  transform-origin: left center;
+}
+
+@keyframes humanizer-write-line {
+  0% {
+    background-position: 100% 0;
+    opacity: 0.18;
+    transform: scaleX(0.08);
+  }
+  28% {
+    opacity: 0.7;
+  }
+  72% {
+    background-position: 0 0;
+    opacity: 0.55;
+    transform: scaleX(1);
+  }
+  100% {
+    background-position: 0 0;
+    opacity: 0.22;
+    transform: scaleX(1);
   }
 }
