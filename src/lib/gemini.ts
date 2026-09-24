@@ -4,18 +4,20 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it";
+const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
+/** Gemini API only. Paid Flash first; Lite is the same-API backup. */
+const GEMINI_API_FALLBACK_MODELS = [
+  "gemini-3-flash-preview",
+  "gemini-3.5-flash-lite",
+];
 /**
- * Preview Flash is 20 requests/day on the free tier — that is the live
- * "unavailable" error. Gemma starts streaming in ~1.5s on the same API key.
- * Lite models are the backup when Gemma returns 500.
+ * Google rejects deadlines under 10s. 10s is also too short for the stored
+ * detector prompt (~3k tokens) — the call 504s and the UI shows unavailable.
  */
-const GEMINI_API_FALLBACK_MODELS = ["gemma-4-26b-a4b-it"];
-/** Gemini rejects anything under 10s ("Manually set deadline 8s is too short"). */
-const GEMINI_TIMEOUT_MS = 10_000;
+const GEMINI_TIMEOUT_MS = 30_000;
 const VERTEX_TIMEOUT_MS = 60_000;
-/** One attempt per model. Do not sit in a 40s retry loop. */
-const TOTAL_BUDGET_MS = 12_000;
+/** One or two Gemini models, not a 40s walk. */
+const TOTAL_BUDGET_MS = 35_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
 const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
@@ -35,7 +37,6 @@ const BROKEN_GEMINI_API_MODELS = new Set([
  * word. Humanize swaps them for DEFAULT_GEMINI_MODEL.
  */
 const SLOW_GEMINI_API_MODELS = new Set([
-  "gemini-3-flash-preview",
   "gemini-3.6-flash",
   "gemini-3.7-flash",
   "gemini-3.8-flash",
@@ -505,7 +506,7 @@ function isRetryable(error: GeminiError): boolean {
 
 function maxOutputTokensFor(text: string, requested?: number): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const sized = Math.min(1400, Math.max(400, Math.ceil(words * 1.6) + 80));
+  const sized = Math.min(2048, Math.max(768, Math.ceil(words * 2.4) + 200));
   if (requested) return Math.min(sized, Math.max(256, requested));
   return sized;
 }
@@ -605,6 +606,19 @@ function buildGenerateRequest(
   };
 }
 
+function visibleModelText(response: {
+  text?: string;
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+}): string {
+  const direct = response.text?.trim();
+  if (direct) return direct;
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  return parts
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+}
+
 function emptyResponseError(finishReason?: string) {
   return new GeminiError(
     finishReason === "SAFETY" || finishReason === "BLOCKLIST"
@@ -623,7 +637,7 @@ async function generateOnce(
 ): Promise<string> {
   const { client, params } = buildGenerateRequest(provider, model, userText, options);
   const response = await client.models.generateContent(params);
-  const text = response.text?.trim();
+  const text = visibleModelText(response);
   if (!text) {
     throw emptyResponseError(response.candidates?.[0]?.finishReason);
   }
@@ -654,10 +668,15 @@ async function generateOnceStream(
     options.onDelta?.(piece, text);
   }
 
-  if (!text.trim()) {
-    throw emptyResponseError(finishReason);
+  if (text.trim()) {
+    return text;
   }
-  return text;
+
+  // Some Gemini models finish a stream with no visible tokens. One non-stream
+  // call on the same model usually has the rewrite.
+  const fallback = await generateOnce(provider, model, userText, options);
+  options.onDelta?.(fallback, fallback);
+  return fallback;
 }
 
 /**
@@ -724,7 +743,6 @@ async function generateWithRetries(
         if (emitted) throw sanitized;
 
         if (sanitized.code === "MODEL_NOT_FOUND") break;
-        // Keep going through other providers for auth/config failures on one target.
         if (
           sanitized.code === "INVALID_VERTEX_ENDPOINT" ||
           sanitized.code === "INVALID_SERVICE_ACCOUNT" ||
@@ -733,7 +751,14 @@ async function generateWithRetries(
         ) {
           break;
         }
-        if (!isRetryable(sanitized) || attempt === maxAttempts) {
+        // Empty / 500 / 503: leave this model and try the next Gemini ID.
+        if (
+          sanitized.code === "EMPTY_RESPONSE" ||
+          sanitized.code === "UNAVAILABLE" ||
+          sanitized.code === "TIMEOUT" ||
+          !isRetryable(sanitized) ||
+          attempt === maxAttempts
+        ) {
           break;
         }
 

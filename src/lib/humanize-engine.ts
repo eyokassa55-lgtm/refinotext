@@ -8,7 +8,6 @@ import {
   isGeminiApiConfigured,
   redactModelName,
 } from "@/lib/gemini";
-import { GrubbyError, humanizeWithGrubby, isGrubbyConfigured } from "@/lib/grubby";
 import {
   buildRewriteUserContent,
   buildStyleRewriteInstruction,
@@ -63,8 +62,6 @@ export class HumanizationFailedError extends Error {
 const REWRITE_TOP_P = 0.95;
 const REWRITE_TEMPERATURE = 0.78;
 const ACADEMIC_TURNITIN_TEMPERATURE = 0.5;
-/** If Gemini has not streamed a word by then, switch to Grubby. */
-const FIRST_TOKEN_MS = 4_000;
 
 function usesAcademicTurnitinPrompt(detector?: string): boolean {
   return !isGptZeroDetector(detector);
@@ -72,7 +69,7 @@ function usesAcademicTurnitinPrompt(detector?: string): boolean {
 
 function toHumanizationError(error: unknown): never {
   if (error instanceof HumanizationFailedError) throw error;
-  if (error instanceof GeminiError || error instanceof GrubbyError) {
+  if (error instanceof GeminiError) {
     throw new HumanizationFailedError(
       error.message,
       error.code || "HUMANIZATION_FAILED",
@@ -107,7 +104,6 @@ function rewriteOptions(request: HumanizeRequest) {
 async function rewriteWithGemini(
   request: HumanizeRequest,
   onDelta?: (visible: string) => void,
-  session?: { live: boolean },
 ): Promise<string> {
   const model = getGeminiApiModel();
   console.info("[humanize] [GEMINI_API]", {
@@ -130,57 +126,22 @@ async function rewriteWithGemini(
     return generateText(prompt, options);
   }
 
-  let gotToken = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const watchdog = new Promise<string>((_, reject) => {
-    timer = setTimeout(() => {
-      if (!gotToken) {
-        reject(new GeminiError("The writing service did not start in time.", "TIMEOUT", 504));
-      }
-    }, FIRST_TOKEN_MS);
+  return generateTextStream(prompt, {
+    ...options,
+    onDelta: (_chunk, accumulated) => {
+      onDelta(stripModelChrome(accumulated));
+    },
   });
-
-  try {
-    return await Promise.race([
-      generateTextStream(prompt, {
-        ...options,
-        onDelta: (_chunk, accumulated) => {
-          if (session && !session.live) return;
-          gotToken = true;
-          if (timer) clearTimeout(timer);
-          onDelta(stripModelChrome(accumulated));
-        },
-      }),
-      watchdog,
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-async function rewriteWithGrubby(
-  request: HumanizeRequest,
-  onDelta?: (visible: string) => void,
-): Promise<string> {
-  console.info("[humanize] [GRUBBY]", {
-    language: request.language ?? "en",
-    detector: request.detector ?? "academic-turnitin",
-  });
-  const output = stripModelChrome(await humanizeWithGrubby(request.text));
-  if (output) onDelta?.(output);
-  return output;
 }
 
 /**
- * Humanize tries Gemini API + the stored detector prompt first.
- * If that 500s, returns empty, or does not start in 4s, Grubby finishes the rewrite
- * so the live pane cannot die on a single flaky model.
+ * Humanize is Gemini API + the exact stored detector prompt.
  */
 export async function runHumanization(
   request: HumanizeRequest,
   onDelta?: (visible: string) => void,
 ): Promise<HumanizeResult> {
-  if (!isGeminiApiConfigured() && !isGrubbyConfigured()) {
+  if (!isGeminiApiConfigured()) {
     throw new HumanizationFailedError(
       "The writing service is not configured.",
       "MISSING_API_KEY",
@@ -189,47 +150,16 @@ export async function runHumanization(
   }
 
   try {
-    let lastError: unknown = null;
-    const session = { live: true };
-
-    if (isGeminiApiConfigured()) {
-      try {
-        const output = stripModelChrome(await rewriteWithGemini(request, onDelta, session));
-        if (output) {
-          return {
-            text: output.trim(),
-            source: "FINE_TUNED_MODEL",
-            retrieval: null,
-          };
-        }
-        lastError = new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
-      } catch (error) {
-        lastError = error;
-        session.live = false;
-        console.error("[humanize] gemini failed, trying Grubby", {
-          code: error instanceof GeminiError ? error.code : undefined,
-          status: error instanceof GeminiError ? error.status : undefined,
-        });
-      }
+    const output = stripModelChrome(await rewriteWithGemini(request, onDelta));
+    if (!output) {
+      throw new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
     }
 
-    if (isGrubbyConfigured()) {
-      const output = await rewriteWithGrubby(request, onDelta);
-      if (!output) {
-        throw lastError ?? new HumanizationFailedError("Empty model response.", "EMPTY_RESPONSE", 502);
-      }
-      return {
-        text: output.trim(),
-        source: "FINE_TUNED_MODEL",
-        retrieval: null,
-      };
-    }
-
-    toHumanizationError(lastError ?? new HumanizationFailedError(
-      "The writing service is not configured.",
-      "MISSING_API_KEY",
-      503,
-    ));
+    return {
+      text: output.trim(),
+      source: "FINE_TUNED_MODEL",
+      retrieval: null,
+    };
   } catch (error) {
     toHumanizationError(error);
   }

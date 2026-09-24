@@ -36,7 +36,7 @@ export const env = {
 
   gemini: {
     apiKey: getEnv("GEMINI_API_KEY"),
-    model: getEnv("GEMINI_MODEL")?.replace(/-+$/, "") ?? "gemma-4-26b-a4b-it",
+    model: getEnv("GEMINI_MODEL")?.replace(/-+$/, "") ?? "gemini-3-flash-preview",
   },
 
   grubby: {
