@@ -173,7 +173,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       return;
     }
     const remaining = target.length - shown.length;
-    const step = remaining > 160 ? Math.ceil(remaining / 3) : remaining > 48 ? 12 : 5;
+    const step = remaining > 80 ? remaining : remaining > 24 ? 16 : 8;
     revealShownRef.current = target.slice(0, shown.length + step);
     paintReveal(revealShownRef.current);
     revealRafRef.current = window.requestAnimationFrame(pumpReveal);
@@ -181,6 +181,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const queueReveal = (text: string) => {
     revealTargetRef.current = text;
+    if (!revealShownRef.current) {
+      revealShownRef.current = text;
+      paintReveal(text);
+      return;
+    }
     if (!revealRafRef.current) {
       revealRafRef.current = window.requestAnimationFrame(pumpReveal);
     }

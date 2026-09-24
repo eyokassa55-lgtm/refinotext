@@ -4,19 +4,19 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
-/** Fast models that currently work for new Gemini API keys. */
+const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash-lite";
+/** Fast models first. 3.6-flash thinks too long for Humanize. */
 const GEMINI_API_FALLBACK_MODELS = [
-  "gemini-3.6-flash",
   "gemini-3.6-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.6-flash",
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
-  "gemini-flash-lite-latest",
 ];
-const GEMINI_TIMEOUT_MS = 45_000;
+const GEMINI_TIMEOUT_MS = 28_000;
 const VERTEX_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
-const MAX_GEMINI_API_ATTEMPTS = 2;
+const MAX_GEMINI_API_ATTEMPTS = 1;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
 /** Dead or retired IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
@@ -228,6 +228,10 @@ export function getGeminiApiModel(): string {
     !model.includes("endpoints/") &&
     !BROKEN_GEMINI_API_MODELS.has(model.toLowerCase())
   ) {
+    // Full 3.6-flash thinks for tens of seconds before the first word.
+    if (model.toLowerCase() === "gemini-3.6-flash") {
+      return DEFAULT_GEMINI_MODEL;
+    }
     return model;
   }
   return DEFAULT_GEMINI_MODEL;
@@ -308,9 +312,17 @@ function sleep(ms: number) {
 function geminiApiTargets(limit?: number): { provider: GenerateProvider; model: string }[] {
   const targets: { provider: GenerateProvider; model: string }[] = [];
   if (!isGeminiApiConfigured()) return targets;
-  const primary = getGeminiApiModel();
-  if (primary.startsWith("gemini-") && !BROKEN_GEMINI_API_MODELS.has(primary.toLowerCase())) {
-    targets.push({ provider: "gemini-api", model: primary });
+  const preferred = DEFAULT_GEMINI_MODEL;
+  if (!BROKEN_GEMINI_API_MODELS.has(preferred)) {
+    targets.push({ provider: "gemini-api", model: preferred });
+  }
+  const configured = getGeminiApiModel();
+  if (
+    configured !== preferred &&
+    configured.startsWith("gemini-") &&
+    !BROKEN_GEMINI_API_MODELS.has(configured.toLowerCase())
+  ) {
+    targets.push({ provider: "gemini-api", model: configured });
   }
   for (const model of GEMINI_API_FALLBACK_MODELS) {
     if (!targets.some((target) => target.provider === "gemini-api" && target.model === model)) {
@@ -473,17 +485,12 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
 }
 
 function isRetryable(error: GeminiError): boolean {
-  return (
-    error.code === "UNAVAILABLE" ||
-    error.code === "RATE_LIMITED" ||
-    error.code === "TIMEOUT" ||
-    error.code === "EMPTY_RESPONSE"
-  );
+  return error.code === "UNAVAILABLE" || error.code === "RATE_LIMITED";
 }
 
 function maxOutputTokensFor(text: string, requested?: number): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const sized = Math.min(4096, Math.max(1024, Math.ceil(words * 2.4) + 320));
+  const sized = Math.min(2048, Math.max(512, Math.ceil(words * 2.1) + 160));
   if (requested) return Math.min(sized, Math.max(256, requested));
   return sized;
 }
@@ -501,7 +508,9 @@ function thinkingConfigFor(model: string, requested?: number) {
   if (isGemini3Model(model)) {
     return {
       thinkingConfig: {
-        thinkingLevel: ThinkingLevel.MINIMAL,
+        // API expects lowercase. The SDK enum value "MINIMAL" is ignored and
+        // the model thinks at the default level until the 45s timeout.
+        thinkingLevel: "minimal" as ThinkingLevel,
         includeThoughts: false,
       },
     };
