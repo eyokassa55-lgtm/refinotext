@@ -454,10 +454,10 @@ export function AudienceSection() {
           <div className="min-w-0">
             <h2
               id="audience-heading"
-              className="text-4xl font-extrabold tracking-[-0.035em] sm:text-5xl sm:leading-[1.08]"
+              className="proof-heading text-4xl leading-[1.08] tracking-[-0.035em] break-words sm:text-5xl lg:text-[3.35rem]"
             >
               Human scores on{" "}
-              <span className="text-primary">leading writing tools</span>
+              <span className="proof-heading-accent">leading writing tools</span>
             </h2>
 
             <p className="mt-4 max-w-xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
@@ -481,7 +481,7 @@ export function AudienceSection() {
                 >
                   <p
                     key={`${slide.name}-${stat.label}`}
-                    className="proof-slide-in text-xl font-extrabold tracking-tight text-primary sm:text-2xl"
+                    className="proof-stat-num proof-slide-in text-xl font-extrabold tracking-tight text-primary sm:text-2xl"
                   >
                     {stat.value}
                   </p>

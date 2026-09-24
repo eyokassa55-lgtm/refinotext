@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 
 import { SyncDbUser } from "@/components/auth/sync-db-user";
@@ -21,6 +22,13 @@ import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 import { SEO_TITLE } from "@/lib/seo";
 
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: "800",
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const caveat = localFont({
   src: [
@@ -110,7 +118,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="overflow-x-clip">
       <body
-        className={`${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
+        className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
       >
         {isClerkEnabled ? (
           <ClerkProvider

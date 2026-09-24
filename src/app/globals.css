@@ -472,6 +472,21 @@ img {
   animation-direction: reverse;
 }
 
+.proof-heading {
+  color: #111111;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif !important;
+  font-weight: 800;
+}
+
+.proof-heading-accent {
+  color: #2f8a38;
+}
+
+.proof-stat-num {
+  font-family: var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
 .proof-slide-in {
   animation: proof-slide-in 0.45s ease both;
 }
