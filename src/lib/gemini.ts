@@ -4,20 +4,20 @@ import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai/node";
 
 import { getGoogleAuthOptions, VertexAuthError } from "@/lib/vertex-auth";
 
-const DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview";
-/** Measured first-token latency on this key, fastest first. */
-const GEMINI_API_FALLBACK_MODELS = [
-  "gemini-3-flash-preview",
-  "gemini-3.1-flash-lite",
-  "gemini-flash-lite-latest",
-  "gemini-3.5-flash-lite",
-];
-const GEMINI_TIMEOUT_MS = 12_000;
+const DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it";
+/**
+ * Preview Flash is 20 requests/day on the free tier — that is the live
+ * "unavailable" error. Gemma starts streaming in ~1.5s on the same API key.
+ * Lite models are the backup when Gemma returns 500.
+ */
+const GEMINI_API_FALLBACK_MODELS = ["gemma-4-26b-a4b-it"];
+/** Gemini rejects anything under 10s ("Manually set deadline 8s is too short"). */
+const GEMINI_TIMEOUT_MS = 10_000;
 const VERTEX_TIMEOUT_MS = 60_000;
-/** Ceiling across every model in the chain, well under the route's 60s. */
-const TOTAL_BUDGET_MS = 40_000;
+/** One attempt per model. Do not sit in a 40s retry loop. */
+const TOTAL_BUDGET_MS = 12_000;
 const MAX_ATTEMPTS_PER_MODEL = 2;
-const MAX_GEMINI_API_ATTEMPTS = 1;
+const MAX_GEMINI_API_ATTEMPTS = 2;
 const DEFAULT_VERTEX_LOCATION = "us-central1";
 /** Dead or retired IDs — never send these on the Gemini API path. */
 const BROKEN_GEMINI_API_MODELS = new Set([
@@ -35,6 +35,7 @@ const BROKEN_GEMINI_API_MODELS = new Set([
  * word. Humanize swaps them for DEFAULT_GEMINI_MODEL.
  */
 const SLOW_GEMINI_API_MODELS = new Set([
+  "gemini-3-flash-preview",
   "gemini-3.6-flash",
   "gemini-3.7-flash",
   "gemini-3.8-flash",
@@ -218,7 +219,7 @@ export function redactModelName(model: string): string {
   if (endpointMatch?.[1]) return endpointMatch[1];
   const modelMatch = model.match(/\/(models\/[^/]+)$/);
   if (modelMatch?.[1]) return modelMatch[1];
-  if (model.startsWith("gemini-")) return model;
+  if (model.startsWith("gemini-") || model.startsWith("gemma-")) return model;
   return "tuned-endpoint";
 }
 
@@ -237,7 +238,7 @@ export function getGeminiApiModel(): string {
   const model = cleanEnv(process.env.GEMINI_MODEL)?.replace(/-+$/, "");
   if (
     model &&
-    /^gemini-/i.test(model) &&
+    /^(gemini|gemma)-/i.test(model) &&
     !model.includes("endpoints/") &&
     !BROKEN_GEMINI_API_MODELS.has(model.toLowerCase())
   ) {
@@ -331,7 +332,7 @@ function geminiApiTargets(limit?: number): { provider: GenerateProvider; model: 
   const configured = getGeminiApiModel();
   if (
     configured !== preferred &&
-    configured.startsWith("gemini-") &&
+    /^(gemini|gemma)-/i.test(configured) &&
     !BROKEN_GEMINI_API_MODELS.has(configured.toLowerCase())
   ) {
     targets.push({ provider: "gemini-api", model: configured });
@@ -349,7 +350,7 @@ function modelsToTry(
   geminiApiOnly = false,
 ): { provider: GenerateProvider; model: string }[] {
   if (geminiApiOnly) {
-    const targets = geminiApiTargets();
+    const targets = geminiApiTargets(1);
     if (targets.length === 0) {
       throw new GeminiError(
         "The writing service is not configured. Please try again later.",
@@ -476,10 +477,12 @@ export function sanitizeGeminiError(error: unknown): GeminiError {
   }
 
   if (
+    status === 500 ||
     status === 503 ||
     status === 502 ||
     lower.includes("overloaded") ||
     lower.includes("high demand") ||
+    lower.includes("internal error") ||
     lower.includes("unavailable")
   ) {
     return new GeminiError(
@@ -502,7 +505,7 @@ function isRetryable(error: GeminiError): boolean {
 
 function maxOutputTokensFor(text: string, requested?: number): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const sized = Math.min(2048, Math.max(512, Math.ceil(words * 2.1) + 160));
+  const sized = Math.min(1400, Math.max(400, Math.ceil(words * 1.6) + 80));
   if (requested) return Math.min(sized, Math.max(256, requested));
   return sized;
 }
@@ -516,7 +519,18 @@ function isGemini3Model(model: string): boolean {
   );
 }
 
-function thinkingConfigFor(model: string, requested?: number) {
+function thinkingConfigFor(
+  model: string,
+  requested?: number,
+  systemInstruction?: string,
+) {
+  const id = model.toLowerCase();
+  // Gemma rejects thinkingConfig. Large stored detector prompts + thinking
+  // makes Gemini 3 503 / hang, which is the live "unavailable" error.
+  if (id.includes("gemma") || (systemInstruction && systemInstruction.length > 2000)) {
+    return {};
+  }
+
   if (isGemini3Model(model)) {
     return {
       thinkingConfig: {
@@ -563,7 +577,6 @@ function buildGenerateRequest(
 ) {
   assertVertexModel(provider, model);
 
-  const timeoutMs = provider === "gemini-api" ? GEMINI_TIMEOUT_MS : VERTEX_TIMEOUT_MS;
   const client =
     provider === "gemini-api"
       ? getGeminiApiClient()
@@ -581,12 +594,11 @@ function buildGenerateRequest(
         },
       ],
       config: {
-        httpOptions: { timeout: timeoutMs },
         temperature: options.temperature ?? (tuned ? 0 : 0.72),
         topP: options.topP ?? (tuned ? 0.1 : 0.95),
         maxOutputTokens: maxOutputTokensFor(userText, options.maxOutputTokens),
         candidateCount: 1,
-        ...thinkingConfigFor(model, options.thinkingBudget),
+        ...thinkingConfigFor(model, options.thinkingBudget, options.systemInstruction),
         ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
       },
     },
