@@ -13,6 +13,7 @@ import {
   buildStyleRewriteInstruction,
 } from "@/lib/humanize-prompt";
 import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
+import { normalizeContinuousProse } from "@/lib/editor-html";
 import { preserveAcademicMeaning } from "@/lib/humanize-output";
 import { stripEchoedSource, stripModelChrome } from "@/lib/humanize-quality";
 import type { HumanizeApiSource } from "@/lib/training-schema";
@@ -125,10 +126,11 @@ async function rewriteWithGemini(
   const prompt = buildRewriteUserContent(request);
   const visible = (raw: string) => {
     const cleaned = stripEchoedSource(stripModelChrome(raw), request.text);
-    if (isGptZeroDetector(request.detector) || isZeroGptDetector(request.detector)) {
-      return cleaned;
-    }
-    return preserveAcademicMeaning(cleaned, request.text);
+    const next =
+      isGptZeroDetector(request.detector) || isZeroGptDetector(request.detector)
+        ? cleaned
+        : preserveAcademicMeaning(cleaned, request.text);
+    return normalizeContinuousProse(next);
   };
   if (!onDelta) {
     return visible(await generateText(prompt, options));

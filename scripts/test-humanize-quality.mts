@@ -443,6 +443,12 @@ async function runOfflineTests() {
     "Harborline counted 4,812 commuters.",
   );
   assert("strips echoed Academic source block", echoed.startsWith("Linking commuter counts"));
+  const { normalizeContinuousProse } = await import("../src/lib/editor-html");
+  assert(
+    "continuous output keeps spaces between smashed sentences",
+    normalizeContinuousProse("informationBreaking the process.Initially we need") ===
+      "information Breaking the process. Initially we need",
+  );
 
   const droppedNumber = assessRewriteQuality(source, "Priya met Jordan and talked about an invoice.");
   assert("flags dropped numbers", droppedNumber.issues.some((issue) => issue.code === "MISSING_FACTS"));

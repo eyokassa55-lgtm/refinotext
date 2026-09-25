@@ -8,8 +8,22 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** One flowing document: no paragraph gaps, but keep a space between sentences. */
+export function normalizeContinuousProse(text: string): string {
+  return text
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n+/g, " ")
+    .replace(/([.?!])([A-Za-z])/g, "$1 $2")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([,;:])([A-Za-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function continuousParagraph(text: string): string {
-  return `<p>${escapeHtml(text.replace(/\n{2,}/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim())}</p>`;
+  const body = normalizeContinuousProse(text);
+  return body ? `<p>${escapeHtml(body)}</p>` : "<p></p>";
 }
 
 export function plainTextToHtml(text: string): string {

@@ -1,3 +1,4 @@
+import { normalizeContinuousProse } from "@/lib/editor-html";
 import { splitHumanizeOutput } from "@/lib/humanize-output";
 
 type HumanizedOutputViewProps = {
@@ -16,7 +17,7 @@ export function HumanizedOutputView({ text }: HumanizedOutputViewProps) {
       ) : null}
       {paragraphs.length > 0 ? (
         <p className="text-[15px] font-normal leading-[1.7] text-[#202122]">
-          {paragraphs.join(" ")}
+          {normalizeContinuousProse(paragraphs.join(" "))}
         </p>
       ) : null}
     </article>
