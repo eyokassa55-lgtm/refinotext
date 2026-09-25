@@ -49,6 +49,7 @@ import {
   extractStatedNames,
   lengthRatio,
   phraseCopyRatio,
+  stripEchoedSource,
   stripModelChrome,
 } from "../src/lib/humanize-quality";
 import { countWords } from "../src/lib/words";
@@ -437,6 +438,11 @@ async function runOfflineTests() {
     "Here are the rewritten paragraphs, maintaining the original meaning and facts:\n\nHarborline counted 4,812 commuters.",
   );
   assert("strips rewritten-paragraphs wrapper", strippedParagraphs.startsWith("Harborline counted"));
+  const echoed = stripEchoedSource(
+    "Harborline counted 4,812 commuters.\n\nLinking commuter counts in the field of transport can enhance critical thinking.",
+    "Harborline counted 4,812 commuters.",
+  );
+  assert("strips echoed Academic source block", echoed.startsWith("Linking commuter counts"));
 
   const droppedNumber = assessRewriteQuality(source, "Priya met Jordan and talked about an invoice.");
   assert("flags dropped numbers", droppedNumber.issues.some((issue) => issue.code === "MISSING_FACTS"));
@@ -1187,13 +1193,13 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "Academic Turnitin uses the exact lock-pass academic gold-standard prompt",
+    "Academic Turnitin uses the stored academic gold-standard prompt",
     turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
       turnitinPrompt.startsWith("You are a human academic writer.") &&
-      turnitinPrompt.includes("STYLE may change. CONTENT may not.") &&
-      turnitinPrompt.includes("Every paragraph must carry locked details from the source.") &&
-      turnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)") &&
-      turnitinPrompt.endsWith("Now rewrite the following text in this exact style:") &&
+      turnitinPrompt.includes("GOLD STANDARD (Style and Structure Reference)") &&
+      turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
+      turnitinPrompt.includes("MANDATORY OUTPUT FORMAT") &&
+      turnitinPrompt.endsWith("Now, rewrite the following text:") &&
       !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );
   assert(

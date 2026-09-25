@@ -261,6 +261,31 @@ export function stripModelChrome(text: string): string {
   return output.trim();
 }
 
+/** Academic Turnitin asks Gemini to echo the source first. Keep only the rewrite. */
+export function stripEchoedSource(output: string, input: string): string {
+  const out = output.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimStart();
+  const src = input.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (!src || !out) return out.trim();
+  if (out.startsWith(src)) {
+    return out.slice(src.length).replace(/^\s+/, "").trim();
+  }
+
+  const compactSrc = src.replace(/\s+/g, " ").trim();
+  const firstBlock = out.split(/\n\s*\n/, 1)[0]?.replace(/\s+/g, " ").trim() ?? "";
+  if (firstBlock && firstBlock === compactSrc) {
+    return out.slice(out.split(/\n\s*\n/, 1)[0]!.length).replace(/^\s+/, "").trim();
+  }
+
+  const skeleton = out.match(
+    /(?:^|\n\s*\n)([^\n]{8,400}in the field of[^\n]{0,240}can enhance critical thinking\b)/i,
+  );
+  if (skeleton?.index !== undefined && skeleton.index > 20) {
+    return out.slice(skeleton.index).trim();
+  }
+
+  return out.trim();
+}
+
 function retrievedFactIssues(
   input: string,
   output: string,
