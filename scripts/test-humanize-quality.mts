@@ -699,8 +699,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     ].join("\n\n"),
   );
   assert(
-    "Academic output drops the gold-standard title phrase",
-    !/linking theory to real world evidence/i.test(leakedTitle) &&
+    "Academic output drops the gold-standard title phrase and keeps the input first paragraph",
+    leakedTitle.startsWith("Time is not a single thing that everyone feels in the same way.") &&
+      !/linking theory to real world evidence/i.test(leakedTitle) &&
       leakedTitle.includes("Examining time in the field of human existence"),
     leakedTitle,
   );
@@ -1210,14 +1211,17 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "Academic Turnitin uses the GPTZero prompt plus preserve-meaning only",
+    "Academic Turnitin keeps its gold-standard prompt and only adds GPTZero meaning rules",
     turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
-      turnitinPrompt.startsWith("You are a professional humanizer.") &&
-      turnitinPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
-      turnitinPrompt.includes("PRESERVE MEANING. Style may change. Meaning may not.") &&
-      turnitinPrompt.includes("Preserve the original meaning exactly.") &&
-      turnitinPrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:") &&
-      !turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
+      turnitinPrompt.startsWith("You are a human academic writer.") &&
+      turnitinPrompt.includes("GOLD STANDARD (Style and Structure Reference)") &&
+      turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
+      turnitinPrompt.includes("PRESERVE MEANING") &&
+      turnitinPrompt.includes("Style may change. Meaning may not.") &&
+      turnitinPrompt.includes("Preserve who did what, to whom, when, and why.") &&
+      !turnitinPrompt.includes("You are a professional humanizer.") &&
+      !turnitinPrompt.includes("The Importance of Health") &&
+      turnitinPrompt.endsWith("Now, rewrite the following text:") &&
       !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );
   assert(
