@@ -621,10 +621,10 @@ img {
 .humanizer-prose {
   min-height: 100%;
   outline: none;
-  color: #202122;
-  font-family: Georgia, "Times New Roman", ui-serif, serif;
-  font-size: 15px;
-  line-height: 1.7;
+  color: #1f2328;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif;
+  font-size: 16px;
+  line-height: 1.75;
 }
 
 .humanizer-ai-text,
@@ -640,25 +640,25 @@ img {
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #202122;
-  font-family: Georgia, "Times New Roman", ui-serif, serif !important;
-  font-size: 15px !important;
+  color: #1f2328;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif !important;
+  font-size: 16px !important;
   font-style: normal !important;
   font-weight: 400;
   letter-spacing: 0 !important;
-  line-height: 1.7 !important;
+  line-height: 1.75 !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #4a5c6a;
+  color: #111111;
   font-weight: 700;
   line-height: 1.35 !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1 {
-  font-size: 22px !important;
+  font-size: 20px !important;
 }
 
 .humanizer-prose.humanizer-prose-input h2 {
@@ -799,18 +799,21 @@ img {
 }
 
 .humanizer-prose-output {
-  color: #202122;
-  font-size: 15px;
-  line-height: 1.7;
+  color: #1f2328;
+  font-size: 16px;
+  line-height: 1.75;
   white-space: normal !important;
 }
 
 .humanizer-prose-output h1,
 .humanizer-prose-output.ProseMirror h1,
 .ProseMirror.humanizer-prose-output h1 {
-  display: block;
-  font-size: 18px;
-  margin: 0 0 0.2em !important;
+  display: block !important;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif !important;
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  margin: 0 0 0.45em !important;
 }
 
 .humanizer-output-streaming .humanizer-prose-output h1:last-child::after,

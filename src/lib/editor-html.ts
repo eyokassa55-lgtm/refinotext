@@ -21,31 +21,42 @@ export function normalizeContinuousProse(text: string): string {
     .trim();
 }
 
-function peelDocumentTitle(text: string): { title: string | null; body: string } {
+function looksLikeDocumentTitle(line: string): boolean {
+  const words = line.split(/\s+/).filter(Boolean);
+  return (
+    words.length >= 1 &&
+    words.length <= 20 &&
+    !/[.?!]$/.test(line) &&
+    !line.includes("\n") &&
+    !/linking theory to real[\s-]*world evidence/i.test(line)
+  );
+}
+
+export function peelDocumentTitle(text: string): { title: string | null; body: string } {
   const trimmed = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
   if (!trimmed) return { title: null, body: "" };
 
-  const hash = trimmed.match(/^#\s+([^\n]+)\n+/);
-  if (hash) {
+  const hash = trimmed.match(/^#\s+([^\n]+)(?:\n+|$)/);
+  if (hash && trimmed.slice(hash[0].length).trim()) {
     return { title: hash[1]!.trim(), body: trimmed.slice(hash[0].length) };
   }
 
-  const firstBreak = trimmed.indexOf("\n\n");
+  const firstBreak = trimmed.search(/\n+/);
   if (firstBreak > 0) {
     const firstLine = trimmed.slice(0, firstBreak).trim();
-    const words = firstLine.split(/\s+/).filter(Boolean);
-    if (
-      words.length >= 1 &&
-      words.length <= 20 &&
-      !/[.?!]$/.test(firstLine) &&
-      !firstLine.includes("\n") &&
-      !/linking theory to real[\s-]*world evidence/i.test(firstLine)
-    ) {
-      return { title: firstLine, body: trimmed.slice(firstBreak + 2) };
+    if (looksLikeDocumentTitle(firstLine)) {
+      return { title: firstLine, body: trimmed.slice(firstBreak).trim() };
     }
   }
 
   return { title: null, body: trimmed };
+}
+
+/** Keep a title line, then one continuous body. */
+export function formatContinuousDocument(text: string): string {
+  const { title, body } = peelDocumentTitle(text);
+  const flow = normalizeContinuousProse(body);
+  return title ? `${title}\n\n${flow}` : flow;
 }
 
 function continuousDocument(text: string, allowTitle: boolean): string {
@@ -61,7 +72,7 @@ function continuousDocument(text: string, allowTitle: boolean): string {
 export function plainTextToHtml(text: string): string {
   const trimmed = text.replace(/^\uFEFF/, "").trim();
   if (!trimmed) return "<p></p>";
-  return continuousDocument(trimmed, false);
+  return continuousDocument(trimmed, true);
 }
 
 export function humanizePlainTextToHtml(text: string): string {
@@ -70,7 +81,7 @@ export function humanizePlainTextToHtml(text: string): string {
 
 /** Live rewrite: keep unfinished last words, do not polish mid-stream. */
 export function streamHumanizeTextToHtml(text: string): string {
-  return continuousDocument(text, false);
+  return continuousDocument(text, true);
 }
 
 /** Saved HTML can still have many <p> blocks — collapse to title + one body. */

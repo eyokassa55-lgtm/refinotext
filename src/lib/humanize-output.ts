@@ -37,24 +37,42 @@ function isGoldStandardTitleLeak(text: string): boolean {
 }
 
 export function firstInputParagraph(input: string): string {
+  return firstInputBodyParagraph(input);
+}
+
+/** First essay paragraph only — not the title or heading frame. */
+export function firstInputBodyParagraph(input: string): string {
   const normalized = input.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
   if (!normalized) return "";
 
-  const { frame, body } = splitDocumentFrame(normalized);
+  const title = extractUserTitle(normalized);
+  let rest = normalized;
+  if (title) {
+    const stripped = normalized.replace(/^#\s+/, "");
+    if (stripped.toLowerCase().startsWith(title.toLowerCase())) {
+      rest = stripped.slice(title.length).replace(/^\s+/, "");
+    }
+  }
+
+  const { frame, body } = splitDocumentFrame(rest);
   const bodyFirst =
     body
       .split(/\n\s*\n/)
       .map((block) => block.trim())
       .find(Boolean) ?? "";
-  if (frame && bodyFirst) return `${frame.trim()}\n\n${bodyFirst}`;
-  if (bodyFirst) return bodyFirst;
-  if (frame) return frame.trim();
-  return (
-    normalized
+  if (bodyFirst && !extractUserTitle(bodyFirst)) return bodyFirst;
+  if (frame && !extractUserTitle(frame) && compactBlock(frame) !== compactBlock(title ?? "")) {
+    return frame.trim();
+  }
+  const firstBlock =
+    rest
       .split(/\n\s*\n/)
       .map((block) => block.trim())
-      .find(Boolean) ?? normalized
-  );
+      .find(Boolean) ?? rest;
+  if (title && compactBlock(firstBlock).toLowerCase() === compactBlock(title).toLowerCase()) {
+    return "";
+  }
+  return firstBlock;
 }
 
 export function stripGoldStandardTitleLeak(output: string): string {
@@ -80,25 +98,52 @@ export function stripGoldStandardTitleLeak(output: string): string {
 /** Drop leaked Gold Standard titles and open with the user's first paragraph. */
 export function preserveAcademicMeaning(output: string, input: string): string {
   const text = stripGoldStandardTitleLeak(output).trim();
-  const opening = firstInputParagraph(input);
+  const opening = firstInputBodyParagraph(input);
   if (!opening) return text;
   if (!text) return opening;
 
-  const inputBlocks = input
-    .replace(/^\uFEFF/, "")
-    .replace(/\r\n/g, "\n")
-    .trim()
-    .split(/\n\s*\n/)
-    .filter(Boolean);
-  if (inputBlocks.length <= 1 && opening.length > 400) return text;
+  const title = extractUserTitle(input);
+  if (
+    !title &&
+    opening.length > 400 &&
+    compactBlock(opening).length > compactBlock(input).length * 0.8
+  ) {
+    return text;
+  }
 
   const compactOpening = compactBlock(opening).toLowerCase();
-  if (compactBlock(text).toLowerCase().startsWith(compactOpening)) return text;
-
-  const firstOut = text.split(/\n\s*\n/).map((block) => block.trim()).find(Boolean) ?? "";
-  if (compactBlock(firstOut).toLowerCase() === compactOpening) return text;
+  if (compactBlock(text).toLowerCase().includes(compactOpening.slice(0, Math.min(120, compactOpening.length)))) {
+    return text;
+  }
 
   return `${opening}\n\n${text}`.trim();
+}
+
+/** Academic output: same title as input, input first paragraph kept, then the rewrite. */
+export function formatAcademicTurnitinOutput(output: string, input: string): string {
+  const titled = applyInputTitle(preserveAcademicMeaning(output, input), input);
+  const title = extractUserTitle(input);
+  const { body } = peelLeadingTitle(titled, title);
+  const flow = body.replace(/\s+/g, " ").trim();
+  return title ? `${title}\n\n${flow}` : flow;
+}
+
+function peelLeadingTitle(text: string, title: string | null): { body: string } {
+  const trimmed = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (!title) return { body: trimmed };
+  const compactTitle = compactBlock(title).toLowerCase();
+  const hash = trimmed.match(/^#\s+([^\n]+)(?:\n+|$)/);
+  if (hash) {
+    return { body: trimmed.slice(hash[0].length).trim() };
+  }
+  if (compactBlock(trimmed).toLowerCase().startsWith(compactTitle)) {
+    return { body: trimmed.slice(title.length).replace(/^\s+/, "") };
+  }
+  const firstBreak = trimmed.search(/\n+/);
+  if (firstBreak > 0 && compactBlock(trimmed.slice(0, firstBreak)).toLowerCase() === compactTitle) {
+    return { body: trimmed.slice(firstBreak).trim() };
+  }
+  return { body: trimmed };
 }
 
 function compactBlock(block: string): string {

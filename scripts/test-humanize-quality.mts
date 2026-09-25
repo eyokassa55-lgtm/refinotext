@@ -625,7 +625,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, preserveAcademicMeaning, restoreDocumentFrame, splitDocumentFrame, splitHumanizeOutput, stripWikiMath } = await import(
+  const { applyInputTitle, formatAcademicTurnitinOutput, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, preserveAcademicMeaning, restoreDocumentFrame, splitDocumentFrame, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
   );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
@@ -707,6 +707,20 @@ Rainforests also illustrate a much broader set of global development debates. It
       headedFrame.body.startsWith("On a Halloween night") &&
       !headedFrame.frame.includes("Halloween"),
     headedFrame.frame,
+  );
+  const academicTitled = formatAcademicTurnitinOutput(
+    "Examining writing in the field of language concerning machines can enhance critical thinking as students are asked to link voice to evidence rather than simply reaching a single conclusion by heart.",
+    [
+      "The Quest for the Human Voice in the Machine Age",
+      "Language is the most profound technology humanity has ever invented.",
+    ].join("\n\n"),
+  );
+  assert(
+    "Academic Turnitin keeps the input title and first paragraph",
+    academicTitled.startsWith("The Quest for the Human Voice in the Machine Age\n\n") &&
+      academicTitled.includes("Language is the most profound technology humanity has ever invented.") &&
+      !/linking theory to real world evidence/i.test(academicTitled),
+    academicTitled,
   );
   const leakedTitle = preserveAcademicMeaning(
     [
