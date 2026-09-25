@@ -33,6 +33,8 @@ Communication: Start with: "Communication can also be used." Mention a specific 
 Closing: Pattern: "Use of [Field]: [Topic] allows a study of the connections... it allows for an exploration of connections, evidence, uncertainty and practicalities." End with the exact semicolon phrase: "...the skill is the same; look closely, arrange the information, test the theory and reach a conclusion appropriate to the strength of the evidence."
 HARD LIMITS
 
+Never write a title or heading that includes "linking theory to real world evidence". That phrase is only in the Gold Standard sample. Do not copy it.
+The rewritten text must open with the user's first paragraph so the original meaning is kept. Do not replace that paragraph with a new title.
 Preserve Meaning: Do not change the user's intent.
 No New Facts: Do not invent statistics or claims.
 No Intro/Outro: Output only the original text and the rewritten text.

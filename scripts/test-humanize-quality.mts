@@ -605,7 +605,7 @@ Rainforests also illustrate a much broader set of global development debates. It
   );
   const { findDatabaseMatch, findTopicMatch, storedMatchAlignsWithDraft } = await import("../src/lib/training-retrieval");
   const { findWikipediaLiveMatch, titleMatchesUserTopic } = await import("../src/lib/wikipedia-corpus");
-  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, restoreDocumentFrame, splitDocumentFrame, splitHumanizeOutput, stripWikiMath } = await import(
+  const { applyInputTitle, formatEssayParagraphs, formatWikipediaEditorText, hasLatexDump, preserveAcademicMeaning, restoreDocumentFrame, splitDocumentFrame, splitHumanizeOutput, stripWikiMath } = await import(
     "../src/lib/humanize-output"
   );
   const { HumanizationFailedError, toApiSource } = await import("../src/lib/humanize-engine");
@@ -688,6 +688,24 @@ Rainforests also illustrate a much broader set of global development debates. It
       !headedFrame.frame.includes("Halloween"),
     headedFrame.frame,
   );
+  const leakedTitle = preserveAcademicMeaning(
+    [
+      "Time - The nature and management of time - linking theory to real world evidence",
+      "Examining time in the field of human existence concerning how it shapes our lives can enhance critical thinking as students are asked to link time to the link between physical and psychological concepts rather than simply reaching a single conclusion by heart.",
+    ].join("\n\n"),
+    [
+      "Time is not a single thing that everyone feels in the same way.",
+      "However, time is not always perceived in the same way.",
+    ].join("\n\n"),
+  );
+  assert(
+    "Academic output drops the gold-standard title phrase and keeps the input first paragraph",
+    leakedTitle.startsWith("Time is not a single thing that everyone feels in the same way.") &&
+      !/linking theory to real world evidence/i.test(leakedTitle) &&
+      leakedTitle.includes("Examining time in the field of human existence"),
+    leakedTitle,
+  );
+
   const restoredHeading = restoreDocumentFrame(
     [
       "Alex Rivera",
@@ -1199,6 +1217,7 @@ Rainforests also illustrate a much broader set of global development debates. It
       turnitinPrompt.includes("GOLD STANDARD (Style and Structure Reference)") &&
       turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
       turnitinPrompt.includes("MANDATORY OUTPUT FORMAT") &&
+      turnitinPrompt.includes('Never write a title or heading that includes "linking theory to real world evidence"') &&
       turnitinPrompt.endsWith("Now, rewrite the following text:") &&
       !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );

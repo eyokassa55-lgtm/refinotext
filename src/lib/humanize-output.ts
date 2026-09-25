@@ -4,6 +4,8 @@ import { countWords } from "@/lib/words";
 const NAV_OR_SECTION_LINE =
   /^(?:={2,}\s*.+?\s*={2,}|see also|references|external links|further reading|notes|bibliography|citations|sources|contents|etymology|terminology|classification|gallery|footnotes|references and notes|history|overview|types|applications|description|background|origins|development|usage|definition|examples|characteristics|variants)$/i;
 
+const GOLD_STANDARD_TITLE_PHRASE = /linking theory to real[\s-]*world evidence/i;
+
 export function extractUserTitle(text: string): string | null {
   const first = text
     .trim()
@@ -17,6 +19,7 @@ export function extractUserTitle(text: string): string | null {
     .replace(/^\*\*(.+)\*\*$/, "$1")
     .trim();
   const words = heading.split(/\s+/).filter(Boolean);
+  if (isGoldStandardTitleLeak(heading)) return null;
   if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(heading)) {
     return heading;
   }
@@ -25,6 +28,78 @@ export function extractUserTitle(text: string): string | null {
 
 const ACADEMIC_SKELETON_OPENER =
   /^(?:Examining|Considering|Looking at|Linking|A study of|Working from theory|Breaking the process down into stages|Initially we need to establish)\b/i;
+
+function isGoldStandardTitleLeak(text: string): boolean {
+  const line = compactBlock(text);
+  if (!GOLD_STANDARD_TITLE_PHRASE.test(line)) return false;
+  if (/can enhance critical thinking/i.test(line)) return false;
+  return line.length < 180 || / - .+ - /.test(line);
+}
+
+export function firstInputParagraph(input: string): string {
+  const normalized = input.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) return "";
+
+  const { frame, body } = splitDocumentFrame(normalized);
+  const bodyFirst =
+    body
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .find(Boolean) ?? "";
+  if (frame && bodyFirst) return `${frame.trim()}\n\n${bodyFirst}`;
+  if (bodyFirst) return bodyFirst;
+  if (frame) return frame.trim();
+  return (
+    normalized
+      .split(/\n\s*\n/)
+      .map((block) => block.trim())
+      .find(Boolean) ?? normalized
+  );
+}
+
+export function stripGoldStandardTitleLeak(output: string): string {
+  const blocks = output
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return blocks
+    .flatMap((block) => {
+      if (isGoldStandardTitleLeak(block)) return [];
+      const cleaned = block
+        .replace(/\s*[-–—]\s*linking theory to real[\s-]*world evidence\s*/gi, "")
+        .trim();
+      return cleaned ? [cleaned] : [];
+    })
+    .join("\n\n");
+}
+
+/** Drop leaked Gold Standard titles and open with the user's first paragraph. */
+export function preserveAcademicMeaning(output: string, input: string): string {
+  const text = stripGoldStandardTitleLeak(output).trim();
+  const opening = firstInputParagraph(input);
+  if (!opening) return text;
+  if (!text) return opening;
+
+  const inputBlocks = input
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n\s*\n/)
+    .filter(Boolean);
+  if (inputBlocks.length <= 1 && opening.length > 400) return text;
+
+  const compactOpening = compactBlock(opening).toLowerCase();
+  if (compactBlock(text).toLowerCase().startsWith(compactOpening)) return text;
+
+  const firstOut = text.split(/\n\s*\n/).map((block) => block.trim()).find(Boolean) ?? "";
+  if (compactBlock(firstOut).toLowerCase() === compactOpening) return text;
+
+  return `${opening}\n\n${text}`.trim();
+}
 
 function compactBlock(block: string): string {
   return block.replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ").trim();
@@ -159,7 +234,13 @@ export function splitHumanizeOutput(text: string): {
   if (firstBreak > 0) {
     const firstLine = trimmed.slice(0, firstBreak).trim();
     const words = firstLine.split(/\s+/).filter(Boolean);
-    if (words.length >= 1 && words.length <= 20 && !/[.?!]$/.test(firstLine) && !firstLine.includes("\n")) {
+    if (
+      words.length >= 1 &&
+      words.length <= 20 &&
+      !/[.?!]$/.test(firstLine) &&
+      !firstLine.includes("\n") &&
+      !isGoldStandardTitleLeak(firstLine)
+    ) {
       return {
         title: firstLine,
         paragraphs: toParagraphs(trimmed.slice(firstBreak + 2)),
