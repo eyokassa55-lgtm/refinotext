@@ -670,12 +670,22 @@ img {
   font-size: 17px !important;
 }
 
-.humanizer-prose p {
-  margin: 0;
+.humanizer-prose p,
+.humanizer-prose.ProseMirror p,
+.ProseMirror.humanizer-prose p {
+  display: inline;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.humanizer-prose p + p::before,
+.humanizer-prose.ProseMirror p + p::before,
+.ProseMirror.humanizer-prose p + p::before {
+  content: " ";
 }
 
 .humanizer-prose p:last-child {
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
 }
 
 .humanizer-prose h1,
@@ -775,13 +785,16 @@ img {
 
 .humanizer-prose-output {
   color: #202122;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
-.humanizer-prose-output h1 {
+.humanizer-prose-output h1,
+.humanizer-prose-output.ProseMirror h1,
+.ProseMirror.humanizer-prose-output h1 {
+  display: block;
   font-size: 18px;
-  margin: 0 0 0.35em;
+  margin: 0 0 0.2em !important;
 }
 
 .humanizer-output-streaming .humanizer-prose-output h1:last-child::after,
