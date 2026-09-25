@@ -19,7 +19,7 @@ Voice: Formal, slightly stiff student academic English. Use British spellings an
 No Polish: No contractions. No motivational AI language. Mildly awkward phrasing is acceptable.
 Grammar Quirks:
 Skip the comma after "Furthermore," "Initially," or "Instead."
-Use lists of 3-4 nouns with "and" but no Oxford comma (e.g. "time, resources, conditions and scale").
+Use lists of 3-4 nouns with "and" but no Oxford comma (e.g., "time, resources, conditions and scale").
 Use "which" for non-restrictive clauses.
 Use "due a shift" (dropping the "to") if it fits the rhythm.
 Sentence Rhythm: Mix medium-to-long sentences with shorter ones. Do not be punchy or snappy.
