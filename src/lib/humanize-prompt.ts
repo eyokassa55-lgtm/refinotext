@@ -2,6 +2,7 @@ import { ACADEMIC_TURNITIN_SYSTEM_PROMPT } from "@/lib/academic-turnitin-system-
 import { isGptZeroDetector, isZeroGptDetector } from "@/lib/humanize-detectors";
 import { HUMANIZER_SYSTEM_PROMPT } from "@/lib/humanizer-system-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
+import { firstInputBodyParagraph } from "@/lib/humanize-output";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
 import { ZEROGPT_SYSTEM_PROMPT } from "@/lib/zerogpt-system-prompt";
 
@@ -505,7 +506,11 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
   const language = resolveHumanizeLanguage(request.language);
 
   if (language.id === "en") return request.text;
-  return `Write the rewritten text in ${language.englishName} (${language.nativeName}). Keep the same meaning, structure, and paragraph count.\n\n${request.text}`;
+  const opening = firstInputBodyParagraph(request.text);
+  const translateOpening = opening
+    ? ` Translate the title and this first sentence too, and start with that translated opening: "${opening}"`
+    : " Translate the title and first sentence too.";
+  return `Write the rewritten text in ${language.englishName} (${language.nativeName}).${translateOpening} Do not leave any wording from the source language in the output. Keep the same meaning.\n\n${request.text}`;
 }
 
 /**

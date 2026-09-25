@@ -732,6 +732,18 @@ Rainforests also illustrate a much broader set of global development debates. It
       academicSentence.includes("Considering theory and real world evidence"),
     academicSentence,
   );
+  const academicTranslated = formatAcademicTurnitinOutput(
+    "The Stage\n\nWhen I think about storytelling, I remember standing on a stage as a little girl, wearing a hanbok and staring into a room full of people. Al pensar en la narración, recuerdo que estaba en un escenario.",
+    "The Stage\n\nWhen I think about storytelling, I remember standing on a stage as a little girl, wearing a hanbok and staring into a room full of people. I was only seven.",
+    "es",
+  );
+  assert(
+    "Academic does not keep English copies when the rewrite is translated",
+    !academicTranslated.startsWith("The Stage") &&
+      !academicTranslated.startsWith("When I think about storytelling") &&
+      academicTranslated.includes("Al pensar en la narración"),
+    academicTranslated,
+  );
   const leakedTitle = preserveAcademicMeaning(
     [
       "Time - The nature and management of time - linking theory to real world evidence",

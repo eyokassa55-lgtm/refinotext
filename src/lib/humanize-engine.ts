@@ -129,7 +129,7 @@ async function rewriteWithGemini(
     if (isGptZeroDetector(request.detector) || isZeroGptDetector(request.detector)) {
       return formatContinuousDocument(cleaned);
     }
-    return formatContinuousDocument(formatAcademicTurnitinOutput(cleaned, request.text));
+    return formatContinuousDocument(formatAcademicTurnitinOutput(cleaned, request.text, request.language));
   };
   if (!onDelta) {
     return visible(await generateText(prompt, options));

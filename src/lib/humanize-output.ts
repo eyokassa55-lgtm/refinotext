@@ -102,9 +102,36 @@ export function stripGoldStandardTitleLeak(output: string): string {
     .join("\n\n");
 }
 
+export function stripCopiedSourcePrefix(output: string, input: string): string {
+  let next = compactBlock(output);
+  const title = extractUserTitle(input);
+  if (title) {
+    const compactTitle = compactBlock(title);
+    if (next.toLowerCase().startsWith(compactTitle.toLowerCase())) {
+      next = next.slice(compactTitle.length).replace(/^[\s.,;:]+/, "");
+    }
+  }
+  const opening = firstInputBodyParagraph(input);
+  if (opening) {
+    const compactOpening = compactBlock(opening);
+    if (next.toLowerCase().startsWith(compactOpening.toLowerCase())) {
+      next = next.slice(compactOpening.length).replace(/^[\s.,;:]+/, "");
+    }
+  }
+  return next.trim();
+}
+
+function isEnglishLanguage(language?: string | null): boolean {
+  const key = language?.trim().toLowerCase();
+  return !key || key === "en" || key === "english";
+}
+
 /** Drop leaked Gold Standard titles and open with the user's first paragraph. */
-export function preserveAcademicMeaning(output: string, input: string): string {
+export function preserveAcademicMeaning(output: string, input: string, language?: string): string {
   const text = stripGoldStandardTitleLeak(output).trim();
+  if (!isEnglishLanguage(language)) {
+    return stripCopiedSourcePrefix(text, input) || text;
+  }
   const opening = firstInputBodyParagraph(input);
   if (!opening) return text;
   if (!text) return opening;
@@ -118,8 +145,11 @@ export function preserveAcademicMeaning(output: string, input: string): string {
 }
 
 /** Academic output: same title as input, input first paragraph kept, then the rewrite. */
-export function formatAcademicTurnitinOutput(output: string, input: string): string {
-  const titled = applyInputTitle(preserveAcademicMeaning(output, input), input);
+export function formatAcademicTurnitinOutput(output: string, input: string, language?: string): string {
+  if (!isEnglishLanguage(language)) {
+    return stripCopiedSourcePrefix(stripGoldStandardTitleLeak(output), input);
+  }
+  const titled = applyInputTitle(preserveAcademicMeaning(output, input, language), input);
   const title = extractUserTitle(input);
   const { body } = peelLeadingTitle(titled, title);
   const flow = body.replace(/\s+/g, " ").trim();
