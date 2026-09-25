@@ -1231,19 +1231,15 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "Academic Turnitin keeps its gold-standard prompt and only adds GPTZero meaning rules",
+    "Academic Turnitin uses the ZeroGPT gold-standard prompt",
     turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
+      turnitinPrompt === ZEROGPT_SYSTEM_PROMPT &&
       turnitinPrompt.startsWith("You are a human academic writer.") &&
-      turnitinPrompt.includes("GOLD STANDARD (Style and Voice Reference") &&
-      turnitinPrompt.includes("STRUCTURE FROM THE USER, NOT THE SAMPLE") &&
-      turnitinPrompt.includes("one continuous passage") &&
-      turnitinPrompt.includes("Copy the VOICE. Do not copy the STRUCTURE") &&
-      turnitinPrompt.includes("PRESERVE MEANING") &&
-      turnitinPrompt.includes("Style may change. Meaning may not.") &&
-      turnitinPrompt.includes("Preserve who did what, to whom, when, and why.") &&
+      turnitinPrompt.includes("GOLD STANDARD (copy this writing, not the topic)") &&
+      turnitinPrompt.includes("Six-paragraph skeleton") &&
       !turnitinPrompt.includes("You are a professional humanizer.") &&
       !turnitinPrompt.includes("The Importance of Health") &&
-      turnitinPrompt.endsWith("Now, rewrite the following text:") &&
+      turnitinPrompt.endsWith("Now rewrite the following text in this exact style:") &&
       !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );
   assert(
@@ -1258,7 +1254,7 @@ Rainforests also illustrate a much broader set of global development debates. It
     zeroGptPrompt === ZEROGPT_SYSTEM_PROMPT &&
       zeroGptPrompt.startsWith("You are a human academic writer.") &&
       zeroGptPrompt.endsWith("Now rewrite the following text in this exact style:") &&
-      zeroGptPrompt !== turnitinPrompt,
+      zeroGptPrompt === turnitinPrompt,
   );
   assert(
     "GPTZero prompt is not used unless GPTZero is selected",
