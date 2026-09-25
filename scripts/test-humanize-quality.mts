@@ -699,9 +699,8 @@ Rainforests also illustrate a much broader set of global development debates. It
     ].join("\n\n"),
   );
   assert(
-    "Academic output drops the gold-standard title phrase and keeps the input first paragraph",
-    leakedTitle.startsWith("Time is not a single thing that everyone feels in the same way.") &&
-      !/linking theory to real world evidence/i.test(leakedTitle) &&
+    "Academic output drops the gold-standard title phrase",
+    !/linking theory to real world evidence/i.test(leakedTitle) &&
       leakedTitle.includes("Examining time in the field of human existence"),
     leakedTitle,
   );
@@ -1211,14 +1210,14 @@ Rainforests also illustrate a much broader set of global development debates. It
     detector: "zerogpt",
   });
   assert(
-    "Academic Turnitin uses the stored academic gold-standard prompt",
+    "Academic Turnitin uses the GPTZero prompt plus preserve-meaning only",
     turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
-      turnitinPrompt.startsWith("You are a human academic writer.") &&
-      turnitinPrompt.includes("GOLD STANDARD (Style and Structure Reference)") &&
-      turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
-      turnitinPrompt.includes("MANDATORY OUTPUT FORMAT") &&
-      turnitinPrompt.includes('Never write a title or heading that includes "linking theory to real world evidence"') &&
-      turnitinPrompt.endsWith("Now, rewrite the following text:") &&
+      turnitinPrompt.startsWith("You are a professional humanizer.") &&
+      turnitinPrompt.includes("GOLD STANDARD STYLE (copy this voice, not this topic)") &&
+      turnitinPrompt.includes("PRESERVE MEANING. Style may change. Meaning may not.") &&
+      turnitinPrompt.includes("Preserve the original meaning exactly.") &&
+      turnitinPrompt.endsWith("Now rewrite the following text in the exact style of the gold standard:") &&
+      !turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
       !turnitinPrompt.includes("Mohammed Zayd Shaikh"),
   );
   assert(

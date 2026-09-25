@@ -77,28 +77,10 @@ export function stripGoldStandardTitleLeak(output: string): string {
     .join("\n\n");
 }
 
-/** Drop leaked Gold Standard titles and open with the user's first paragraph. */
+/** Drop leaked Gold Standard titles. Meaning is preserved by the Academic prompt. */
 export function preserveAcademicMeaning(output: string, input: string): string {
   const text = stripGoldStandardTitleLeak(output).trim();
-  const opening = firstInputParagraph(input);
-  if (!opening) return text;
-  if (!text) return opening;
-
-  const inputBlocks = input
-    .replace(/^\uFEFF/, "")
-    .replace(/\r\n/g, "\n")
-    .trim()
-    .split(/\n\s*\n/)
-    .filter(Boolean);
-  if (inputBlocks.length <= 1 && opening.length > 400) return text;
-
-  const compactOpening = compactBlock(opening).toLowerCase();
-  if (compactBlock(text).toLowerCase().startsWith(compactOpening)) return text;
-
-  const firstOut = text.split(/\n\s*\n/).map((block) => block.trim()).find(Boolean) ?? "";
-  if (compactBlock(firstOut).toLowerCase() === compactOpening) return text;
-
-  return `${opening}\n\n${text}`.trim();
+  return text || input.trim();
 }
 
 function compactBlock(block: string): string {
