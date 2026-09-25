@@ -60,18 +60,15 @@ export function HumanizerOutputMotion() {
         </div>
 
         <div className="relative min-h-[9.5rem] overflow-hidden rounded-xl border border-[#0F634A]/10 bg-[#f6faf8] p-3.5">
-          <div key={playId} className="humanizer-attract-scan" />
           <div className="relative z-[1] flex flex-col gap-2">
             {LINES.map((line, index) => {
               const isDone = index < scanned;
-              const isHot = index === scanned - 1 && scanned < LINES.length;
               return (
                 <p
                   key={`${playId}-${index}`}
                   className={cn(
                     "text-[13px] leading-6 tracking-tight transition-all duration-700",
                     isDone ? "text-[#1a2b25]" : "text-[#1a2b25]/40",
-                    isHot && "humanizer-attract-hot px-1 py-0.5",
                   )}
                 >
                   {isDone ? line.human : line.ai}

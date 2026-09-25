@@ -597,7 +597,6 @@ img {
   .humanizer-write-line,
   .humanizer-write-caret,
   .humanizer-write-aurora,
-  .humanizer-attract-scan,
   .humanizer-attract-dot,
   .humanizer-output-streaming::after {
     animation: none;
@@ -922,49 +921,6 @@ img {
     opacity: 0;
     top: 108%;
   }
-}
-
-.humanizer-attract-scan {
-  animation: humanizer-attract-scan 2.4s ease-in-out infinite;
-  background: linear-gradient(
-    to right,
-    transparent,
-    #4ade80,
-    #86efac,
-    #4ade80,
-    transparent
-  );
-  box-shadow:
-    0 0 10px #4ade80,
-    0 0 22px rgba(74, 222, 128, 0.4);
-  height: 2px;
-  left: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-}
-
-@keyframes humanizer-attract-scan {
-  0% {
-    opacity: 0.2;
-    top: 8%;
-  }
-  14% {
-    opacity: 1;
-  }
-  86% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.2;
-    top: 88%;
-  }
-}
-
-.humanizer-attract-hot {
-  background: rgba(15, 99, 74, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(15, 99, 74, 0.12);
 }
 
 .humanizer-attract-dot {
