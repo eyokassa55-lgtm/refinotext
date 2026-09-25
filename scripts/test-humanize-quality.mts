@@ -1214,8 +1214,9 @@ Rainforests also illustrate a much broader set of global development debates. It
     "Academic Turnitin keeps its gold-standard prompt and only adds GPTZero meaning rules",
     turnitinPrompt === ACADEMIC_TURNITIN_SYSTEM_PROMPT &&
       turnitinPrompt.startsWith("You are a human academic writer.") &&
-      turnitinPrompt.includes("GOLD STANDARD (Style and Structure Reference)") &&
-      turnitinPrompt.includes("THE SIX-PARAGRAPH SKELETON") &&
+      turnitinPrompt.includes("GOLD STANDARD (Style and Voice Reference") &&
+      turnitinPrompt.includes("STRUCTURE FROM THE USER, NOT THE SAMPLE") &&
+      turnitinPrompt.includes("Copy the VOICE. Do not copy the STRUCTURE") &&
       turnitinPrompt.includes("PRESERVE MEANING") &&
       turnitinPrompt.includes("Style may change. Meaning may not.") &&
       turnitinPrompt.includes("Preserve who did what, to whom, when, and why.") &&
