@@ -3,7 +3,6 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import { forwardRef, useEffect, useImperativeHandle } from "react";
 
-import { HUMANIZER_AI_TEXT_STYLE } from "@/components/humanizer/humanizer-editor-styles";
 import { humanizePlainTextToHtml, plainTextToHtml, streamHumanizeTextToHtml } from "@/lib/editor-html";
 import { createHumanizerExtensions } from "@/lib/humanizer-editor-extensions";
 import { cn } from "@/lib/utils";
@@ -61,9 +60,8 @@ export const HumanizerRichEditor = forwardRef<
         "aria-label": ariaLabel,
         class:
           variant === "output"
-            ? "humanizer-prose humanizer-prose-output min-h-full px-6 py-6 sm:px-8 sm:py-7"
-            : "humanizer-prose humanizer-prose-input humanizer-ai-text font-mono min-h-full px-4 pb-4 pt-4 sm:px-5",
-        ...(variant === "input" ? { style: HUMANIZER_AI_TEXT_STYLE } : {}),
+            ? "humanizer-prose humanizer-prose-output min-h-full px-5 py-5 sm:px-6 sm:py-6"
+            : "humanizer-prose humanizer-prose-input min-h-full px-5 py-5 sm:px-6 sm:py-6",
       },
       transformPastedHTML: (html) =>
         html
@@ -119,19 +117,7 @@ export const HumanizerRichEditor = forwardRef<
   return (
     <EditorContent
       editor={editor}
-      className={cn(
-        "min-h-0 flex-1 overflow-y-auto",
-        variant === "input" && "humanizer-ai-text font-mono",
-        className,
-      )}
-      style={
-        variant === "input"
-          ? {
-              fontFamily:
-                'var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace',
-            }
-          : undefined
-      }
+      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
     />
   );
 });

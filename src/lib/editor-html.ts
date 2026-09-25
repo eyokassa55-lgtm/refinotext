@@ -8,23 +8,22 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function continuousParagraph(text: string): string {
+  return `<p>${escapeHtml(text.replace(/\n{2,}/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim())}</p>`;
+}
+
 export function plainTextToHtml(text: string): string {
   const trimmed = text.replace(/^\uFEFF/, "").trim();
   if (!trimmed) return "<p></p>";
-
-  return trimmed
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
-    .join("");
+  return continuousParagraph(trimmed);
 }
 
 export function humanizePlainTextToHtml(text: string): string {
   const { title, paragraphs } = splitHumanizeOutput(text);
+  const body = paragraphs.join(" ").replace(/\s+/g, " ").trim();
   const parts: string[] = [];
   if (title) parts.push(`<h1>${escapeHtml(title)}</h1>`);
-  for (const paragraph of paragraphs) {
-    parts.push(`<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`);
-  }
+  if (body) parts.push(continuousParagraph(body));
   return parts.join("") || "<p></p>";
 }
 
@@ -43,11 +42,13 @@ export function streamHumanizeTextToHtml(text: string): string {
       !/[.?!]$/.test(firstLine) &&
       !firstLine.includes("\n")
     ) {
-      const rest = normalized.slice(firstBreak + 2);
-      const paragraphs = rest
-        .split(/\n\s*\n/)
-        .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`);
-      return `<h1>${escapeHtml(firstLine)}</h1>${paragraphs.join("") || "<p></p>"}`;
+      const rest = normalized
+        .slice(firstBreak + 2)
+        .replace(/\n{2,}/g, " ")
+        .replace(/\n/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return `<h1>${escapeHtml(firstLine)}</h1>${rest ? continuousParagraph(rest) : "<p></p>"}`;
     }
   }
 

@@ -622,8 +622,8 @@ img {
 .humanizer-prose {
   min-height: 100%;
   outline: none;
-  color: #374151;
-  font-family: var(--font-sans), system-ui, sans-serif;
+  color: #202122;
+  font-family: Georgia, "Times New Roman", ui-serif, serif;
   font-size: 15px;
   line-height: 1.7;
 }
@@ -641,13 +641,13 @@ img {
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #4a5c55;
-  font-family: var(--font-geist-mono), ui-monospace, "Cascadia Mono", Consolas, monospace !important;
+  color: #202122;
+  font-family: Georgia, "Times New Roman", ui-serif, serif !important;
   font-size: 15px !important;
   font-style: normal !important;
   font-weight: 400;
-  letter-spacing: -0.011em !important;
-  line-height: 1.5rem !important;
+  letter-spacing: 0 !important;
+  line-height: 1.7 !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1,
@@ -671,7 +671,7 @@ img {
 }
 
 .humanizer-prose p {
-  margin: 0 0 0.85em;
+  margin: 0;
 }
 
 .humanizer-prose p:last-child {
@@ -685,7 +685,7 @@ img {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
-  margin: 0 0 0.6em;
+  margin: 0 0 0.35em;
 }
 
 .humanizer-prose h1 {
@@ -780,8 +780,8 @@ img {
 }
 
 .humanizer-prose-output h1 {
-  font-size: 20px;
-  margin-bottom: 0.75em;
+  font-size: 18px;
+  margin: 0 0 0.35em;
 }
 
 .humanizer-output-streaming .humanizer-prose-output h1:last-child::after,
