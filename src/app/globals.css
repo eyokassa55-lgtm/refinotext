@@ -621,10 +621,10 @@ img {
 .humanizer-prose {
   min-height: 100%;
   outline: none;
-  color: #1f2328;
-  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif;
-  font-size: 16px;
-  line-height: 1.75;
+  color: #202124;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .humanizer-ai-text,
@@ -640,33 +640,33 @@ img {
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #1f2328;
-  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif !important;
-  font-size: 16px !important;
+  color: #202124;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  font-size: 14px !important;
   font-style: normal !important;
   font-weight: 400;
   letter-spacing: 0 !important;
-  line-height: 1.75 !important;
+  line-height: 1.65 !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1,
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
-  color: #111111;
-  font-weight: 700;
-  line-height: 1.35 !important;
+  color: #202124;
+  font-weight: 600;
+  line-height: 1.4 !important;
 }
 
 .humanizer-prose.humanizer-prose-input h1 {
-  font-size: 20px !important;
+  font-size: 15px !important;
 }
 
 .humanizer-prose.humanizer-prose-input h2 {
-  font-size: 19px !important;
+  font-size: 14.5px !important;
 }
 
 .humanizer-prose.humanizer-prose-input h3 {
-  font-size: 17px !important;
+  font-size: 14px !important;
 }
 
 .humanizer-prose p,
@@ -706,23 +706,23 @@ img {
 .humanizer-prose h1,
 .humanizer-prose h2,
 .humanizer-prose h3 {
-  color: #111111;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  color: #202124;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
   margin: 0 0 0.35em;
 }
 
 .humanizer-prose h1 {
-  font-size: 20px;
+  font-size: 15px;
 }
 
 .humanizer-prose h2 {
-  font-size: 17px;
+  font-size: 14.5px;
 }
 
 .humanizer-prose h3 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .humanizer-prose ul {
@@ -799,9 +799,9 @@ img {
 }
 
 .humanizer-prose-output {
-  color: #1f2328;
-  font-size: 16px;
-  line-height: 1.75;
+  color: #202124;
+  font-size: 14px;
+  line-height: 1.65;
   white-space: normal !important;
 }
 
@@ -809,11 +809,11 @@ img {
 .humanizer-prose-output.ProseMirror h1,
 .ProseMirror.humanizer-prose-output h1 {
   display: block !important;
-  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", ui-serif, serif !important;
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  line-height: 1.35 !important;
-  margin: 0 0 0.45em !important;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  margin: 0 0 0.35em !important;
 }
 
 .humanizer-output-streaming .humanizer-prose-output h1:last-child::after,

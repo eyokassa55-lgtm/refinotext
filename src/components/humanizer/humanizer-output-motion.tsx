@@ -1,6 +1,5 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -20,11 +19,6 @@ const LINES = [
   },
 ] as const;
 
-const RING_SIZE = 56;
-const RING_STROKE = 5;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
 export function HumanizerOutputMotion() {
   const [scanned, setScanned] = useState(0);
   const [playId, setPlayId] = useState(0);
@@ -40,16 +34,13 @@ export function HumanizerOutputMotion() {
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [playId]);
 
-  const ring = [28, 56, 78, 99][scanned] ?? 99;
   const score = [74, 84, 93, 99][scanned] ?? 99;
-  const ringOffset = RING_CIRCUMFERENCE * (1 - ring / 100);
 
   return (
     <div
       className="humanizer-write-motion pointer-events-none absolute inset-0 z-[1] overflow-hidden"
       aria-hidden
     >
-      <div className="humanizer-write-aurora" />
       <div className="relative flex h-full flex-col px-6 py-6 sm:px-8 sm:py-7">
         <div className="mb-4 flex items-center justify-between gap-3">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0F634A]/15 bg-[#0F634A]/6 px-2.5 py-1 text-[11px] font-semibold text-[#0F634A]">
@@ -76,51 +67,11 @@ export function HumanizerOutputMotion() {
               );
             })}
           </div>
-          {scanned >= 2 ? (
-            <div className="absolute right-3 top-4 z-[2] flex flex-col items-center">
-              <span className="animate-fade-tooltip mb-1.5 rounded-full bg-[#111111] px-2 py-0.5 text-[10px] font-bold text-white">
-                100% Human
-              </span>
-              <span className="animate-float-wand flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#0F634A] shadow-[0_8px_20px_rgba(15,99,74,0.18)]">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              </span>
-            </div>
-          ) : null}
         </div>
 
-        <div className="mt-auto flex items-center gap-3 pt-4">
-          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
-            <svg
-              width={RING_SIZE}
-              height={RING_SIZE}
-              viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-              className="-rotate-90"
-            >
-              <circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
-                fill="none"
-                stroke="rgba(15,99,74,0.14)"
-                strokeWidth={RING_STROKE}
-              />
-              <circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
-                fill="none"
-                stroke="#0F634A"
-                strokeWidth={RING_STROKE}
-                strokeLinecap="round"
-                strokeDasharray={RING_CIRCUMFERENCE}
-                strokeDashoffset={ringOffset}
-                className="transition-[stroke-dashoffset] duration-700 ease-out"
-              />
-            </svg>
-            <span className="absolute text-[11px] font-bold text-[#0F634A]">{ring}%</span>
-          </div>
-          <p className="text-sm font-medium text-[#1a2b25]/70">Turning stiff phrasing into a natural draft.</p>
-        </div>
+        <p className="mt-auto pt-4 text-sm font-medium text-[#1a2b25]/70">
+          Turning stiff phrasing into a natural draft.
+        </p>
       </div>
     </div>
   );
