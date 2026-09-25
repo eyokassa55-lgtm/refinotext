@@ -40,7 +40,18 @@ export function firstInputParagraph(input: string): string {
   return firstInputBodyParagraph(input);
 }
 
-/** First essay paragraph only — not the title or heading frame. */
+/** First sentence of a block: words up to the first full stop. */
+export function firstInputSentence(text: string): string {
+  const compact = compactBlock(text);
+  if (!compact) return "";
+  const match = compact.match(/^[\s\S]+?(?:[.?!]["”']?(?=\s+[A-Z])|[.?!]["”']?\s*$)/);
+  if (match && match[0].trim().length >= 12) return match[0].trim();
+  const cut = compact.search(/[.?!]/);
+  if (cut >= 12) return compact.slice(0, cut + 1).trim();
+  return compact;
+}
+
+/** First essay paragraph, or the first sentence when the draft is one block. */
 export function firstInputBodyParagraph(input: string): string {
   const normalized = input.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
   if (!normalized) return "";
@@ -54,25 +65,21 @@ export function firstInputBodyParagraph(input: string): string {
     }
   }
 
-  const { frame, body } = splitDocumentFrame(rest);
-  const bodyFirst =
-    body
-      .split(/\n\s*\n/)
-      .map((block) => block.trim())
-      .find(Boolean) ?? "";
-  if (bodyFirst && !extractUserTitle(bodyFirst)) return bodyFirst;
-  if (frame && !extractUserTitle(frame) && compactBlock(frame) !== compactBlock(title ?? "")) {
-    return frame.trim();
-  }
-  const firstBlock =
-    rest
-      .split(/\n\s*\n/)
-      .map((block) => block.trim())
-      .find(Boolean) ?? rest;
+  const blocks = rest
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const firstBlock = blocks[0] ?? rest;
   if (title && compactBlock(firstBlock).toLowerCase() === compactBlock(title).toLowerCase()) {
-    return "";
+    return firstInputSentence(blocks[1] ?? "");
   }
-  return firstBlock;
+
+  const distinctParagraph = blocks.length >= 2 && firstBlock.length < compactBlock(rest).length * 0.8;
+  if (distinctParagraph && !extractUserTitle(firstBlock) && firstBlock.length <= 400) {
+    return firstBlock;
+  }
+
+  return firstInputSentence(firstBlock || rest);
 }
 
 export function stripGoldStandardTitleLeak(output: string): string {
@@ -102,17 +109,8 @@ export function preserveAcademicMeaning(output: string, input: string): string {
   if (!opening) return text;
   if (!text) return opening;
 
-  const title = extractUserTitle(input);
-  if (
-    !title &&
-    opening.length > 400 &&
-    compactBlock(opening).length > compactBlock(input).length * 0.8
-  ) {
-    return text;
-  }
-
   const compactOpening = compactBlock(opening).toLowerCase();
-  if (compactBlock(text).toLowerCase().includes(compactOpening.slice(0, Math.min(120, compactOpening.length)))) {
+  if (compactBlock(text).toLowerCase().startsWith(compactOpening)) {
     return text;
   }
 

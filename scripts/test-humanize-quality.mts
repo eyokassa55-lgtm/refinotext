@@ -722,6 +722,16 @@ Rainforests also illustrate a much broader set of global development debates. It
       !/linking theory to real world evidence/i.test(academicTitled),
     academicTitled,
   );
+  const academicSentence = formatAcademicTurnitinOutput(
+    "Considering theory and real world evidence in the field of Public Health concerning food insecurity among older adults can enhance critical thinking as students are asked to link food access to the link between theory and real world evidence rather than simply reaching a single conclusion by heart.",
+    "Food insecurity among older adults is not only about not having enough money to buy food. Research shows that many other factors can also make it harder for older adults to get the food they need.",
+  );
+  assert(
+    "Academic uses the first sentence when the draft has no paragraph break",
+    academicSentence.startsWith("Food insecurity among older adults is not only about not having enough money to buy food.") &&
+      academicSentence.includes("Considering theory and real world evidence"),
+    academicSentence,
+  );
   const leakedTitle = preserveAcademicMeaning(
     [
       "Time - The nature and management of time - linking theory to real world evidence",
