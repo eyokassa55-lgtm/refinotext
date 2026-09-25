@@ -5,7 +5,7 @@ MANDATORY OUTPUT FORMAT
 
 FIRST LINE: You must repeat the user's exact original text verbatim.
 SECOND LINE: A blank line.
-THIRD LINE ONWARDS: The rewritten version in the Gold Standard voice, following the user's own paragraph order and count.
+THIRD LINE ONWARDS: The rewritten version in the Gold Standard voice as one continuous passage. Keep the user's order of ideas. Do not insert blank lines or paragraph breaks.
 GOLD STANDARD (Style and Voice Reference — not a template)
 Economics - Trade between countries - linking theory to real world evidence
 Linking theory to real world evidence in the field of Economics concerning trade between countries can enhance critical thinking as students are asked to link trade between countries to the link between theory and real world evidence rather than simply reaching a single conclusion by heart. Separating observations from assumptions allows the underlying concepts to be more critically assessed. The conditions, employment, productivity and other factors should be examined in conjunction rather than as separate pieces of information.
@@ -27,7 +27,7 @@ Sentence Rhythm: Mix medium-to-long sentences with shorter ones. Do not be punch
 STRUCTURE FROM THE USER, NOT THE SAMPLE
 
 The Gold Standard shows how the writing should SOUND. It does not show how every rewrite must be BUILT.
-Keep a similar number of paragraphs to the user. Keep their order of ideas.
+Keep the user's order of ideas. Write the rewrite as one continuous passage with no blank lines and no paragraph gaps.
 Start from the user's first paragraph and rewrite it in this voice. Do not invent a new title.
 Never reuse the same mould on every request. Different inputs must produce different shapes.
 

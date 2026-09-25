@@ -3,7 +3,12 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import { forwardRef, useEffect, useImperativeHandle } from "react";
 
-import { humanizePlainTextToHtml, plainTextToHtml, streamHumanizeTextToHtml } from "@/lib/editor-html";
+import {
+  flattenHtmlToContinuous,
+  humanizePlainTextToHtml,
+  plainTextToHtml,
+  streamHumanizeTextToHtml,
+} from "@/lib/editor-html";
 import { createHumanizerExtensions } from "@/lib/humanizer-editor-extensions";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
@@ -53,7 +58,7 @@ export const HumanizerRichEditor = forwardRef<
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
-    extensions: createHumanizerExtensions(placeholder),
+    extensions: createHumanizerExtensions(placeholder, { output: variant === "output" }),
     content: "",
     editorProps: {
       attributes: {
@@ -63,10 +68,19 @@ export const HumanizerRichEditor = forwardRef<
             ? "humanizer-prose humanizer-prose-output min-h-full px-5 py-5 sm:px-6 sm:py-6"
             : "humanizer-prose humanizer-prose-input min-h-full px-5 py-5 sm:px-6 sm:py-6",
       },
-      transformPastedHTML: (html) =>
-        html
+      handleKeyDown: (_view, event) => {
+        if (variant === "output" && event.key === "Enter") {
+          event.preventDefault();
+          return true;
+        }
+        return false;
+      },
+      transformPastedHTML: (html) => {
+        const cleaned = html
           .replace(/font-family\s*:\s*[^;"]+;?/gi, "")
-          .replace(/font-size\s*:\s*[^;"]+;?/gi, ""),
+          .replace(/font-size\s*:\s*[^;"]+;?/gi, "");
+        return variant === "output" ? flattenHtmlToContinuous(cleaned) : cleaned;
+      },
     },
     onUpdate: ({ editor: current }) => {
       onTextChange(readPlainText(current));
@@ -91,7 +105,9 @@ export const HumanizerRichEditor = forwardRef<
         onTextChange(text);
       },
       setHtml: (html: string) => {
-        editor?.commands.setContent(html || "<p></p>", { emitUpdate: false });
+        const next =
+          variant === "output" ? flattenHtmlToContinuous(html || "") : html || "<p></p>";
+        editor?.commands.setContent(next, { emitUpdate: false });
         onTextChange(readPlainText(editor));
       },
       setHumanizedText: (text: string) => {

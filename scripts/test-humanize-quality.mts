@@ -443,11 +443,25 @@ async function runOfflineTests() {
     "Harborline counted 4,812 commuters.",
   );
   assert("strips echoed Academic source block", echoed.startsWith("Linking commuter counts"));
-  const { normalizeContinuousProse } = await import("../src/lib/editor-html");
+  const { flattenHtmlToContinuous, humanizePlainTextToHtml, normalizeContinuousProse } = await import("../src/lib/editor-html");
   assert(
     "continuous output keeps spaces between smashed sentences",
     normalizeContinuousProse("informationBreaking the process.Initially we need") ===
       "information Breaking the process. Initially we need",
+  );
+  const continuousHtml = humanizePlainTextToHtml(
+    "Examining the United States.\n\nBreaking the process down.\n\nInitially we need to establish the key factors.",
+  );
+  assert(
+    "humanize HTML is one flowing paragraph, not separate blocks",
+    !continuousHtml.includes("</p><p>") &&
+      continuousHtml.includes("<p>") &&
+      continuousHtml.includes("Examining the United States. Breaking the process down. Initially we need"),
+    continuousHtml,
+  );
+  assert(
+    "saved multi-paragraph HTML is flattened to one body",
+    !flattenHtmlToContinuous("<p>First block.</p><p>Second block.</p>").includes("</p><p>"),
   );
 
   const droppedNumber = assessRewriteQuality(source, "Priya met Jordan and talked about an invoice.");
@@ -1222,6 +1236,7 @@ Rainforests also illustrate a much broader set of global development debates. It
       turnitinPrompt.startsWith("You are a human academic writer.") &&
       turnitinPrompt.includes("GOLD STANDARD (Style and Voice Reference") &&
       turnitinPrompt.includes("STRUCTURE FROM THE USER, NOT THE SAMPLE") &&
+      turnitinPrompt.includes("one continuous passage") &&
       turnitinPrompt.includes("Copy the VOICE. Do not copy the STRUCTURE") &&
       turnitinPrompt.includes("PRESERVE MEANING") &&
       turnitinPrompt.includes("Style may change. Meaning may not.") &&

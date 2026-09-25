@@ -7,10 +7,11 @@ import { Color, TextStyle } from "@tiptap/extension-text-style";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 
-export function createHumanizerExtensions(placeholder: string) {
+export function createHumanizerExtensions(placeholder: string, options?: { output?: boolean }) {
   return [
     StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
+      heading: { levels: options?.output ? [1] : [1, 2, 3] },
+      hardBreak: options?.output ? false : undefined,
       codeBlock: false,
       link: {
         openOnClick: false,

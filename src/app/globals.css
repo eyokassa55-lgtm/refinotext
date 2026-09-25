@@ -673,15 +673,31 @@ img {
 .humanizer-prose p,
 .humanizer-prose.ProseMirror p,
 .ProseMirror.humanizer-prose p {
-  display: inline;
+  display: block;
   margin: 0 !important;
   padding: 0 !important;
 }
 
-.humanizer-prose p + p::before,
-.humanizer-prose.ProseMirror p + p::before,
-.ProseMirror.humanizer-prose p + p::before {
+.humanizer-prose-output p,
+.humanizer-prose-output.ProseMirror p,
+.ProseMirror.humanizer-prose-output p,
+.humanizer-prose-output.ProseMirror > p,
+.ProseMirror.humanizer-prose-output > p {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.humanizer-prose-output p + p::before,
+.humanizer-prose-output.ProseMirror p + p::before,
+.ProseMirror.humanizer-prose-output p + p::before {
   content: " ";
+}
+
+.humanizer-prose-output br,
+.humanizer-prose-output.ProseMirror br,
+.ProseMirror.humanizer-prose-output br {
+  display: none !important;
 }
 
 .humanizer-prose p:last-child {
@@ -787,6 +803,7 @@ img {
   color: #202122;
   font-size: 15px;
   line-height: 1.7;
+  white-space: normal !important;
 }
 
 .humanizer-prose-output h1,
