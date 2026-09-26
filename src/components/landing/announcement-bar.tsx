@@ -28,24 +28,24 @@ export function AnnouncementBar() {
 
   return (
     <div className="relative overflow-x-clip bg-gradient-to-r from-[#083528] via-primary to-[#083528]">
-      <Container className="flex min-h-[38px] min-w-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 py-2 text-xs text-white sm:gap-x-4 sm:text-sm">
-        <span className="inline-flex items-center gap-1.5 font-bold tracking-tight">
-          <Tag className="h-3.5 w-3.5 shrink-0 text-accent-light" aria-hidden />
+      <Container className="flex min-h-[26px] min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-0.5 py-1 text-[11px] leading-none text-white sm:gap-x-2.5 sm:text-xs">
+        <span className="inline-flex items-center gap-1 font-bold tracking-tight">
+          <Tag className="h-3 w-3 shrink-0 text-accent-light" aria-hidden />
           50% OFF
         </span>
 
-        <span className="hidden h-3 w-px bg-white/25 sm:block" aria-hidden />
+        <span className="hidden h-2.5 w-px bg-white/25 sm:block" aria-hidden />
 
-        <span className="inline-flex items-center gap-1.5 tabular-nums text-white/90">
-          <Timer className="h-3.5 w-3.5 shrink-0 text-accent-light" aria-hidden />
+        <span className="inline-flex items-center gap-1 tabular-nums text-white/90">
+          <Timer className="h-3 w-3 shrink-0 text-accent-light" aria-hidden />
           {countdown}
         </span>
 
-        <span className="hidden h-3 w-px bg-white/25 sm:block" aria-hidden />
+        <span className="hidden h-2.5 w-px bg-white/25 sm:block" aria-hidden />
 
         <Link
           href={ROUTES.pricing}
-          className="font-medium text-white underline decoration-white/50 underline-offset-[3px] transition-colors hover:text-accent-light hover:decoration-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-light rounded-sm"
+          className="font-medium text-white underline decoration-white/50 underline-offset-[2px] transition-colors hover:text-accent-light hover:decoration-accent-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-light rounded-sm"
         >
           Claim offer
         </Link>

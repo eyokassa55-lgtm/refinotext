@@ -454,10 +454,10 @@ export function AudienceSection() {
           <div className="min-w-0">
             <h2
               id="audience-heading"
-              className="proof-heading text-4xl leading-[1.08] tracking-[-0.035em] break-words sm:text-5xl lg:text-[3.35rem]"
+              className="proof-heading text-2xl leading-[1.15] tracking-[-0.03em] break-words sm:text-3xl lg:text-[2rem]"
             >
               Human scores on{" "}
-              <span className="proof-heading-accent">leading writing tools</span>
+              <span className="proof-heading-accent text-[0.92em] font-semibold">leading writing tools</span>
             </h2>
 
             <p className="mt-4 max-w-xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
