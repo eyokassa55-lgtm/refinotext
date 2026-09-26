@@ -136,7 +136,7 @@ function ResultScreenshot({ slide }: { slide: ProofSlide }) {
           height={900}
           quality={100}
           sizes="(max-width: 1024px) 100vw, 720px"
-          className="h-[min(520px,68vh)] w-full origin-top scale-[1.08] object-cover object-top sm:h-[min(600px,74vh)]"
+          className="h-auto w-full object-contain object-top"
         />
       </div>
     </div>
