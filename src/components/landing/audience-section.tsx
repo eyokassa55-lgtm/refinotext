@@ -87,10 +87,6 @@ const PROOF_SLIDES: ProofSlide[] = [
   },
 ];
 
-function formatCount(value: number) {
-  return value.toLocaleString("en-US");
-}
-
 function formatCompact(value: number) {
   if (value >= 1000) {
     const thousands = value / 1000;
@@ -98,290 +94,24 @@ function formatCompact(value: number) {
       ? `${thousands}k`
       : `${thousands.toFixed(1).replace(/\.0$/, "")}k`;
   }
-  return formatCount(value);
+  return value.toLocaleString("en-US");
 }
 
-function trendSeed(name: string) {
-  return name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-}
-
-function buildWeeklyTrend(passRate: number, seed: number) {
-  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  return labels.map((label, index) => {
-    const swing = (((seed + index * 17) % 11) - 5) * 0.18;
-    return {
-      label,
-      value: Math.min(99.9, Math.max(94.5, passRate + swing)),
-    };
-  });
-}
-
-const ANALYTICS = {
-  passed: "#3d8f6e",
-  flagged: "#c9a88f",
-  track: "#e4ebe7",
-  bar: "#7a9488",
-  gauge: "#6f8799",
-  panel: "#f7f9f8",
-  card: "#ffffff",
+const FRAME = {
   border: "#dfe7e2",
   label: "#66766f",
-  heading: "#3f4d47",
 } as const;
-
-function PassDonut({ passRate }: { passRate: number }) {
-  const radius = 38;
-  const circumference = 2 * Math.PI * radius;
-  const passedLength = (passRate / 100) * circumference;
-  const flaggedLength = circumference - passedLength;
-
-  return (
-    <svg viewBox="0 0 100 100" className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" aria-hidden>
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke={ANALYTICS.track}
-        strokeWidth="12"
-      />
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke={ANALYTICS.passed}
-        strokeWidth="12"
-        strokeLinecap="round"
-        strokeDasharray={`${passedLength} ${flaggedLength}`}
-        transform="rotate(-90 50 50)"
-        className="transition-all duration-500"
-      />
-      <text
-        x="50"
-        y="53"
-        textAnchor="middle"
-        fill={ANALYTICS.heading}
-        fontSize="13"
-        fontWeight="700"
-      >
-        {passRate}%
-      </text>
-    </svg>
-  );
-}
-
-function HumanScoreGauge({ score }: { score: number }) {
-  const radius = 34;
-  const circumference = Math.PI * radius;
-  const filled = (score / 100) * circumference;
-
-  return (
-    <svg viewBox="0 0 100 60" className="h-14 w-full max-w-[6.5rem]" aria-hidden>
-      <path
-        d="M 12 50 A 38 38 0 0 1 88 50"
-        fill="none"
-        stroke={ANALYTICS.track}
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 12 50 A 38 38 0 0 1 88 50"
-        fill="none"
-        stroke={ANALYTICS.gauge}
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeDasharray={`${filled} ${circumference}`}
-        className="transition-all duration-500"
-      />
-      <text
-        x="50"
-        y="45"
-        textAnchor="middle"
-        fill={ANALYTICS.heading}
-        fontSize="14"
-        fontWeight="700"
-      >
-        {score}
-      </text>
-      <text x="50" y="55" textAnchor="middle" fill={ANALYTICS.label} fontSize="8">
-        /100
-      </text>
-    </svg>
-  );
-}
-
-function WeeklyTrendChart({
-  passRate,
-  seed,
-}: {
-  passRate: number;
-  seed: number;
-}) {
-  const bars = buildWeeklyTrend(passRate, seed);
-  const min = Math.min(...bars.map((bar) => bar.value)) - 0.8;
-  const max = Math.max(...bars.map((bar) => bar.value)) + 0.8;
-
-  return (
-    <div>
-      <p className="mb-2 text-[10px] font-medium" style={{ color: ANALYTICS.label }}>
-        7-day trend
-      </p>
-      <div className="flex h-16 items-end justify-between gap-1">
-        {bars.map((bar) => {
-          const height = ((bar.value - min) / (max - min)) * 100;
-          return (
-            <div key={bar.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <div className="flex h-11 w-full items-end">
-                <div
-                  className="w-full rounded-t-sm transition-all duration-500"
-                  style={{
-                    height: `${Math.max(22, height)}%`,
-                    backgroundColor: ANALYTICS.bar,
-                  }}
-                  title={`${bar.label}: ${bar.value.toFixed(1)}%`}
-                />
-              </div>
-              <span className="text-[9px]" style={{ color: ANALYTICS.label }}>
-                {bar.label.slice(0, 1)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function OutcomeSplitChart({
-  usersPassed,
-  draftsTested,
-}: {
-  usersPassed: number;
-  draftsTested: number;
-}) {
-  const flagged = Math.max(0, draftsTested - usersPassed);
-  const passedPct = (usersPassed / draftsTested) * 100;
-  const flaggedPct = 100 - passedPct;
-
-  return (
-    <div className="space-y-2">
-      <div
-        className="flex items-center justify-between text-[10px]"
-        style={{ color: ANALYTICS.label }}
-      >
-        <span>Outcome split</span>
-        <span>{formatCompact(draftsTested)} drafts</span>
-      </div>
-      <div
-        className="flex h-2 overflow-hidden rounded-full"
-        style={{ backgroundColor: ANALYTICS.track }}
-      >
-        <div
-          className="transition-all duration-500"
-          style={{ width: `${passedPct}%`, backgroundColor: ANALYTICS.passed }}
-        />
-        <div
-          className="transition-all duration-500"
-          style={{ width: `${flaggedPct}%`, backgroundColor: ANALYTICS.flagged }}
-        />
-      </div>
-      <div
-        className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]"
-        style={{ color: ANALYTICS.label }}
-      >
-        <span>
-          Passed{" "}
-          <span className="font-semibold" style={{ color: ANALYTICS.heading }}>
-            {formatCount(usersPassed)}
-          </span>
-        </span>
-        <span>
-          Flagged{" "}
-          <span className="font-semibold" style={{ color: ANALYTICS.heading }}>
-            {formatCount(flagged)}
-          </span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ProofAnalytics({ slide }: { slide: ProofSlide }) {
-  const seed = trendSeed(slide.name);
-
-  return (
-    <div
-      className="border-t px-3 py-3 sm:px-4 sm:py-4"
-      style={{
-        borderColor: ANALYTICS.border,
-        backgroundColor: ANALYTICS.panel,
-      }}
-    >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p
-            className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-            style={{ color: ANALYTICS.passed }}
-          >
-            Pass analytics
-          </p>
-          <p className="text-xs" style={{ color: ANALYTICS.label }}>
-            {slide.name}
-          </p>
-        </div>
-        <p className="text-[10px]" style={{ color: ANALYTICS.label }}>
-          {formatCount(slide.usersPassed)} passed
-        </p>
-      </div>
-
-      <OutcomeSplitChart
-        usersPassed={slide.usersPassed}
-        draftsTested={slide.draftsTested}
-      />
-
-      <div
-        className="mt-3 grid grid-cols-3 gap-2 rounded-xl border p-2.5 sm:p-3"
-        style={{
-          borderColor: ANALYTICS.border,
-          backgroundColor: ANALYTICS.card,
-        }}
-      >
-        <div className="flex flex-col items-center justify-center text-center">
-          <PassDonut passRate={slide.passRate} />
-          <p className="mt-1 text-[10px]" style={{ color: ANALYTICS.label }}>
-            Pass rate
-          </p>
-        </div>
-
-        <div
-          className="flex flex-col items-center justify-center border-x px-1 text-center"
-          style={{ borderColor: ANALYTICS.border }}
-        >
-          <HumanScoreGauge score={slide.humanScore} />
-          <p className="mt-0.5 text-[10px]" style={{ color: ANALYTICS.label }}>
-            Human score
-          </p>
-        </div>
-
-        <div className="px-1">
-          <WeeklyTrendChart passRate={slide.passRate} seed={seed} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ResultScreenshot({ slide }: { slide: ProofSlide }) {
   return (
     <div
       className="overflow-hidden rounded-xl border bg-card shadow-[0_10px_30px_rgba(47,58,52,0.08)]"
-      style={{ borderColor: ANALYTICS.border }}
+      style={{ borderColor: FRAME.border }}
     >
       <div
         className="flex items-center gap-3 border-b px-4 py-2.5"
         style={{
-          borderColor: ANALYTICS.border,
+          borderColor: FRAME.border,
           backgroundColor: "#f1f4f2",
         }}
       >
@@ -392,7 +122,7 @@ function ResultScreenshot({ slide }: { slide: ProofSlide }) {
         </div>
         <p
           className="min-w-0 flex-1 truncate text-center text-xs font-medium"
-          style={{ color: ANALYTICS.label }}
+          style={{ color: FRAME.label }}
         >
           {slide.name} — Writing Quality Result
         </p>
@@ -405,12 +135,10 @@ function ResultScreenshot({ slide }: { slide: ProofSlide }) {
           width={1400}
           height={900}
           quality={100}
-          sizes="(max-width: 1024px) 100vw, 640px"
-          className="h-auto max-h-[min(320px,42vh)] w-full object-contain object-top sm:max-h-[min(360px,46vh)]"
+          sizes="(max-width: 1024px) 100vw, 720px"
+          className="h-[min(520px,68vh)] w-full origin-top scale-[1.08] object-cover object-top sm:h-[min(600px,74vh)]"
         />
       </div>
-
-      <ProofAnalytics slide={slide} />
     </div>
   );
 }
@@ -454,10 +182,10 @@ export function AudienceSection() {
           <div className="min-w-0">
             <h2
               id="audience-heading"
-              className="proof-heading text-2xl leading-[1.15] tracking-[-0.03em] break-words sm:text-3xl lg:text-[2rem]"
+              className="proof-heading text-3xl leading-[1.12] tracking-[-0.03em] break-words sm:text-4xl lg:text-[2.55rem]"
             >
               Human scores on{" "}
-              <span className="proof-heading-accent text-[0.92em] font-semibold">leading writing tools</span>
+              <span className="proof-heading-accent">leading writing tools</span>
             </h2>
 
             <p className="mt-4 max-w-xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
