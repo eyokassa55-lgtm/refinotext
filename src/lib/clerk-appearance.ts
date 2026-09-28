@@ -8,7 +8,7 @@ export const clerkAppearance = {
     colorInputBackground: "#f8f9fa",
     colorInputText: "#111111",
     borderRadius: "0.75rem",
-    fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+    fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
   },
   elements: {
     rootBox: "mx-auto w-full",

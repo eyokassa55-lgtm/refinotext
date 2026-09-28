@@ -107,21 +107,13 @@ function PricingSectionInner({
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className="bg-[#faf8f4] pt-6 pb-20 sm:pt-8 sm:pb-28"
+      className="bg-white pt-6 pb-20 sm:pt-8 sm:pb-28"
     >
       <Container className="max-w-7xl">
-        <div className="mb-8 flex items-center justify-center gap-4 sm:mb-10">
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-            aria-hidden
-          />
+        <div className="mb-8 flex items-center justify-center sm:mb-10">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
             Pricing plans
           </p>
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-            aria-hidden
-          />
         </div>
 
         <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-12">

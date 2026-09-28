@@ -25,7 +25,7 @@ import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: "800",
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-inter",
   display: "swap",
 });
@@ -118,7 +118,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="overflow-x-clip">
       <body
-        className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
+        className={`${inter.variable} ${GeistSans.variable} ${GeistMono.variable} ${caveat.variable} font-sans antialiased min-h-screen`}
       >
         {isClerkEnabled ? (
           <ClerkProvider

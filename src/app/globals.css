@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #e8f5ef;
+  --background: #ffffff;
   --foreground: #111111;
   --card: #ffffff;
   --card-dark: #0f1110;
@@ -30,7 +30,7 @@
   --color-accent-light: var(--accent-light);
   --color-mint: var(--mint);
   --color-mint-dark: var(--mint-dark);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter), Inter, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-caveat);
 }
@@ -61,15 +61,9 @@ body,
 
 body {
   max-width: 100%;
-  background:
-    radial-gradient(
-      1200px 640px at 100% -10%,
-      color-mix(in srgb, var(--accent-light) 90%, transparent),
-      transparent 58%
-    ),
-    var(--background);
+  background: #ffffff;
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -472,6 +466,31 @@ img {
   animation-direction: reverse;
 }
 
+.tagline-lines {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.tagline-lines::before,
+.tagline-lines::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  min-width: 1.75rem;
+}
+
+.tagline-lines::before {
+  background: linear-gradient(90deg, transparent, rgb(148 163 184 / 0.65));
+}
+
+.tagline-lines::after {
+  background: linear-gradient(270deg, transparent, rgb(148 163 184 / 0.55));
+}
+
 .proof-heading {
   color: #111111;
   font-family: var(--font-inter), Inter, system-ui, sans-serif !important;
@@ -624,7 +643,7 @@ img {
   min-height: 100%;
   outline: none;
   color: #202124;
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.65;
 }
@@ -643,7 +662,7 @@ img {
 .humanizer-prose.humanizer-prose-input h2,
 .humanizer-prose.humanizer-prose-input h3 {
   color: #202124;
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif !important;
   font-size: 14px !important;
   font-style: normal !important;
   font-weight: 400;
@@ -811,7 +830,7 @@ img {
 .humanizer-prose-output.ProseMirror h1,
 .ProseMirror.humanizer-prose-output h1 {
   display: block !important;
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  font-family: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;

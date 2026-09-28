@@ -72,7 +72,7 @@ export function HowItWorksSection() {
     <section
       id="how-it-works"
       aria-labelledby="how-it-works-heading"
-      className="relative overflow-x-clip border-b border-border/40 bg-gradient-to-b from-background via-card/20 to-card/30 py-12 pb-14 sm:py-16 sm:pb-20"
+      className="relative overflow-x-clip bg-white py-12 pb-14 sm:py-16 sm:pb-20"
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_320px_at_50%_0%,color-mix(in_srgb,var(--accent-light)_22%,transparent),transparent_72%)]"
@@ -81,18 +81,10 @@ export function HowItWorksSection() {
 
       <Container className="relative">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="mb-5 flex items-center justify-center gap-4 sm:mb-6">
-            <span
-              className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-              aria-hidden
-            />
+          <div className="mb-5 flex items-center justify-center sm:mb-6">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent">
               Field notes
             </p>
-            <span
-              className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-              aria-hidden
-            />
           </div>
 
           <h2

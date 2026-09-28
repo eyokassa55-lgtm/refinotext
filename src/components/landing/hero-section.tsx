@@ -21,10 +21,10 @@ export function HeroSection() {
       aria-labelledby="hero-heading"
       className="relative -mt-16 overflow-x-clip"
     >
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--color-accent-light)_0%,_transparent_50%)]"
-        aria-hidden
-      />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <span className="absolute -left-10 -top-8 h-36 w-36 rounded-full bg-[#3cb371]/35 blur-3xl" />
+        <span className="absolute -right-8 top-0 h-32 w-32 rounded-full bg-[#1a8f6a]/28 blur-3xl" />
+      </div>
 
       <Container className="relative pt-32 pb-10 sm:pt-40 sm:pb-12 lg:pt-44 lg:pb-14">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
@@ -67,7 +67,7 @@ export function HeroSection() {
               })}
             </div>
 
-            <p className="mt-6 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">
+            <p className="mt-6 max-w-lg text-base leading-7 text-black">
               Paste an AI-assisted or rough draft. RefinoText revises it for
               clarity, tone, and readability while aiming to keep your meaning.
               Review the result before you use it.

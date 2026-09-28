@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       "./data/wikipedia_style_examples.jsonl",
     ],
   },
+  transpilePackages: ["pdfjs-dist", "mammoth"],
   serverExternalPackages: [
     "@prisma/client",
     "@prisma/adapter-neon",

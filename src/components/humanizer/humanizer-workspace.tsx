@@ -8,6 +8,7 @@ import {
   Coffee,
   Copy,
   Download,
+  FileText,
   GraduationCap,
   Heart,
   Lightbulb,
@@ -35,6 +36,7 @@ import {
 import { DEFAULT_HUMANIZE_DETECTOR, type HumanizeDetectorId } from "@/lib/humanize-detectors";
 import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-access";
 import { HumanizeStreamError, readHumanizeSse } from "@/lib/humanize-stream";
+import { extractDocumentText } from "@/lib/extract-document-text";
 import { countWords, HUMANIZER_ERRORS } from "@/lib/humanizer";
 import { cn } from "@/lib/utils";
 import type { ApiErrorResponse, HumanizeResponse } from "@/types";
@@ -107,6 +109,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputEditor, setInputEditor] = useState<Editor | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [docStatus, setDocStatus] = useState<EditorDocStatus>("ready");
   const [versions, setVersions] = useState<EditorVersion[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -473,26 +476,26 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     notifyStatus(`Downloaded ${filename}`);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isSignedIn) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      if (typeof result === "string") {
-        skipStatusRef.current = true;
-        inputEditorRef.current?.setText(result);
-        skipStatusRef.current = false;
-        setDocStatus("unsaved");
-        notifyStatus(`Uploaded "${file.name}" (${countWords(result)} words)`);
-      }
-    };
-
-    reader.readAsText(file);
-
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setIsUploading(true);
+    try {
+      const text = await extractDocumentText(file);
+      skipStatusRef.current = true;
+      inputEditorRef.current?.setText(text);
+      skipStatusRef.current = false;
+      setDocStatus("unsaved");
+      notifyStatus(`Uploaded "${file.name}" (${countWords(text)} words)`);
+    } catch (err) {
+      notifyStatus(
+        err instanceof Error ? err.message : "Could not read that file.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleClear = () => {
@@ -511,11 +514,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   return (
     <div className="mx-auto flex w-full min-w-0 flex-col">
       <input
+        id="humanizer-file-upload"
         type="file"
         ref={fileInputRef}
         onChange={handleFileUpload}
         accept=".txt,.text,.md,.markdown,.doc,.docx,.pdf"
-        className="hidden"
+        className="sr-only"
       />
 
       <div className="relative overflow-visible rounded-2xl border-2 border-border/75 bg-transparent lg:overflow-hidden">
@@ -557,51 +561,65 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         </div>
 
         <div className="grid grid-cols-1 gap-3 p-3 lg:h-[min(72vh,680px)] lg:grid-cols-2 lg:overflow-hidden">
-          <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f9fafb] lg:min-h-0">
+          <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f7faf8] lg:min-h-0">
             <div className="relative flex min-h-[14rem] flex-1 flex-col lg:min-h-0">
               <HumanizerRichEditor
                 ref={inputEditorRef}
                 ariaLabel="Input text"
-                placeholder="For optimal results, we recommend using at least 250 words."
+                placeholder=""
                 onTextChange={handleInputTextChange}
                 onEditor={setInputEditor}
               />
+              {!input.trim() ? (
+                <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center bg-[#f7faf8] px-6 text-center">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#e8f5ef]">
+                    <FileText className="h-6 w-6 text-[#0d5c45]" strokeWidth={1.75} aria-hidden />
+                  </div>
+                  <p className="text-[22px] font-extrabold tracking-[-0.035em] text-[#111111] sm:text-2xl">
+                    Start Humanizing Your Text
+                  </p>
+                  <p className="mt-2 max-w-[20rem] text-[13px] leading-5 text-[#6b7280]">
+                    Paste your AI-generated content or upload a document
+                  </p>
+                  <p className="mt-1 text-[12px] text-[#9ca3af]">
+                    Supports PDF, DOCX, and TXT files
+                  </p>
+                  <label
+                    htmlFor="humanizer-file-upload"
+                    onMouseDown={(event) => event.preventDefault()}
+                    className={cn(
+                      "pointer-events-auto mt-5 inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#0b3d2e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#072e22]",
+                      isUploading && "pointer-events-none opacity-70",
+                    )}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <UploadCloud className="h-4 w-4" aria-hidden />
+                    )}
+                    {isUploading ? "Uploading..." : "Upload document"}
+                  </label>
+                </div>
+              ) : null}
             </div>
 
             <div className="border-t-2 border-border/60 shrink-0 bg-white/80">
               <div className="flex items-center gap-2 px-3 py-2">
-                {isClerkEnabled ? (
-                  <>
-                    <Show when="signed-out">
-                      <Link
-                        href={ROUTES.signIn}
-                        title="Sign in to upload"
-                        className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
-                      >
-                        <UploadCloud className="h-4 w-4" />
-                      </Link>
-                    </Show>
-                    <Show when="signed-in">
-                      <button
-                        type="button"
-                        title="Upload document"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
-                      >
-                        <UploadCloud className="h-4 w-4" />
-                      </button>
-                    </Show>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    title="Upload document"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground"
-                  >
+                <label
+                  htmlFor="humanizer-file-upload"
+                  title="Upload document"
+                  onMouseDown={(event) => event.preventDefault()}
+                  className={cn(
+                    "cursor-pointer rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground",
+                    isUploading && "pointer-events-none opacity-50",
+                  )}
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
                     <UploadCloud className="h-4 w-4" />
-                  </button>
-                )}
+                  )}
+                </label>
                 <button
                   type="button"
                   onClick={handleClear}
@@ -610,7 +628,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 >
                   Clear
                 </button>
-                <span className="rounded-full border border-border/70 bg-white px-2.5 py-1 font-mono text-xs text-[#374151]">
+                <span className="rounded-full bg-[#0b3d2e] px-2.5 py-1 text-xs font-medium text-white">
                   {inputWordCount} words
                 </span>
                 <button

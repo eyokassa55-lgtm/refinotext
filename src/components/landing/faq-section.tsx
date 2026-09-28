@@ -15,7 +15,7 @@ export function FaqSection() {
     <section
       id="faq"
       aria-labelledby="faq-heading"
-      className="relative overflow-x-clip bg-gradient-to-b from-card/60 via-background to-background py-20 sm:py-28"
+      className="relative overflow-x-clip bg-white py-20 sm:py-28"
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_320px_at_50%_0%,color-mix(in_srgb,var(--accent-light)_55%,transparent),transparent_72%)]"
@@ -24,18 +24,10 @@ export function FaqSection() {
 
       <Container className="relative">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-10 flex items-center justify-center gap-4 sm:mb-12">
-            <span
-              className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-              aria-hidden
-            />
+          <div className="mb-10 flex items-center justify-center sm:mb-12">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
               FAQ
             </p>
-            <span
-              className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-              aria-hidden
-            />
           </div>
 
           <h2

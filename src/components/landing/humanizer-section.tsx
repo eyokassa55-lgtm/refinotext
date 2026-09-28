@@ -7,24 +7,16 @@ export function HumanizerSection() {
     <section
       id="humanizer"
       aria-labelledby="humanizer-heading"
-      className="relative min-w-0 overflow-x-clip bg-gradient-to-b from-background from-0% via-card/25 via-45% to-background to-100% py-16 sm:py-20"
+      className="relative min-w-0 overflow-x-clip bg-white py-16 sm:py-20"
     >
       <Container>
-        <div className="mb-8 flex items-center justify-center gap-4 sm:mb-10">
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-            aria-hidden
-          />
+        <div className="mb-8 flex items-center justify-center sm:mb-10">
           <p
             id="humanizer-heading"
             className="text-xs font-semibold uppercase tracking-[0.22em] text-accent"
           >
             Try the editor
           </p>
-          <span
-            className="h-px w-16 bg-gradient-to-r from-transparent via-accent/25 to-transparent sm:w-24"
-            aria-hidden
-          />
         </div>
 
         <HumanizerDetectorMarks />
