@@ -123,7 +123,7 @@ export const HumanizerRichEditor = forwardRef<
         onTextChange("");
       },
       focus: () => {
-        editor?.commands.focus();
+        editor?.commands.focus("start");
       },
       getEditor: () => editor,
     }),

@@ -109,6 +109,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputEditor, setInputEditor] = useState<Editor | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [docStatus, setDocStatus] = useState<EditorDocStatus>("ready");
   const [versions, setVersions] = useState<EditorVersion[]>([]);
@@ -386,6 +387,18 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [handleRefine]);
 
+  useEffect(() => {
+    if (!inputEditor) return;
+    const onFocus = () => setInputFocused(true);
+    const onBlur = () => setInputFocused(false);
+    inputEditor.on("focus", onFocus);
+    inputEditor.on("blur", onBlur);
+    return () => {
+      inputEditor.off("focus", onFocus);
+      inputEditor.off("blur", onBlur);
+    };
+  }, [inputEditor]);
+
   const handleInputTextChange = (text: string) => {
     setInput(text);
     if (!skipStatusRef.current && !isProcessingRef.current) {
@@ -570,8 +583,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                 onTextChange={handleInputTextChange}
                 onEditor={setInputEditor}
               />
-              {!input.trim() ? (
-                <div className="pointer-events-none absolute inset-0 z-[1] flex flex-col items-center justify-center bg-[#f7faf8] px-6 text-center">
+              {!input.trim() && !inputFocused ? (
+                <div
+                  className="absolute inset-0 z-[1] flex cursor-text flex-col items-center justify-center bg-[#f7faf8] px-6 text-center"
+                  onClick={() => inputEditorRef.current?.focus()}
+                >
                   <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#e8f5ef]">
                     <FileText className="h-6 w-6 text-[#0d5c45]" strokeWidth={1.75} aria-hidden />
                   </div>
@@ -586,9 +602,10 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                   </p>
                   <label
                     htmlFor="humanizer-file-upload"
+                    onClick={(event) => event.stopPropagation()}
                     onMouseDown={(event) => event.preventDefault()}
                     className={cn(
-                      "pointer-events-auto mt-5 inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#0b3d2e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#072e22]",
+                      "mt-5 inline-flex cursor-pointer items-center gap-2 rounded-full bg-[#0b3d2e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#072e22]",
                       isUploading && "pointer-events-none opacity-70",
                     )}
                   >
