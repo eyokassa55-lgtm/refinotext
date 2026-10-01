@@ -40,15 +40,27 @@ export function firstInputParagraph(input: string): string {
   return firstInputBodyParagraph(input);
 }
 
+function takeLeadingSentence(text: string): string {
+  const match = text.match(/^[\s\S]+?(?:[.?!]["”']?(?=\s+[A-Z])|[.?!]["”']?\s*$)/);
+  if (match && match[0].trim().length >= 12) return match[0].trim();
+  const cut = text.search(/[.?!]/);
+  if (cut >= 12) return text.slice(0, cut + 1).trim();
+  return "";
+}
+
 /** First sentence of a block: words up to the first full stop. */
 export function firstInputSentence(text: string): string {
   const compact = compactBlock(text);
   if (!compact) return "";
-  const match = compact.match(/^[\s\S]+?(?:[.?!]["”']?(?=\s+[A-Z])|[.?!]["”']?\s*$)/);
-  if (match && match[0].trim().length >= 12) return match[0].trim();
-  const cut = compact.search(/[.?!]/);
-  if (cut >= 12) return compact.slice(0, cut + 1).trim();
-  return compact;
+  const first = takeLeadingSentence(compact);
+  if (!first) return compact;
+  const words = first.split(/\s+/).filter(Boolean).length;
+  if (words <= 5 && /[?]$/.test(first)) {
+    const rest = compact.slice(first.length).trim();
+    const next = takeLeadingSentence(rest);
+    if (next) return `${first} ${next}`;
+  }
+  return first;
 }
 
 /** First essay paragraph, or the first sentence when the draft is one block. */

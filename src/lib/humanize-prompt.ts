@@ -4,6 +4,11 @@ import { HUMANIZER_SYSTEM_PROMPT } from "@/lib/humanizer-system-prompt";
 import { resolveHumanizeLanguage } from "@/lib/humanize-languages";
 import { firstInputBodyParagraph } from "@/lib/humanize-output";
 import { looksLikeGenericEssay } from "@/lib/humanize-voice";
+import {
+  extractDates,
+  extractNumbers,
+  extractStatedNames,
+} from "@/lib/humanize-quality";
 import { ZEROGPT_SYSTEM_PROMPT } from "@/lib/zerogpt-system-prompt";
 
 export type HumanizePromptRequest = {
@@ -518,6 +523,28 @@ export function buildRewriteUserContent(request: HumanizePromptRequest): string 
  */
 export const STYLE_REWRITE_SYSTEM_PROMPT = HUMANIZER_SYSTEM_PROMPT;
 
+function academicFactLock(text?: string): string {
+  const draft = text?.trim() ?? "";
+  const locks = [
+    ...extractDates(draft),
+    ...extractNumbers(draft),
+    ...extractStatedNames(draft),
+  ].filter(Boolean);
+  const lockLine =
+    locks.length > 0
+      ? `Locked items from this draft (keep each one exactly, same digits and spelling): ${[...new Set(locks)].slice(0, 40).join("; ")}.`
+      : "Keep every name, date, number, and idea from the user's draft.";
+
+  return `
+
+### FACT LOCK (same rule as GPTZero — style from the sample, facts from the user)
+The gold-standard sample is cadence, grammar, and paragraph shape only. Do not copy its economics topic.
+Do not replace the user's events, dates, numbers, or claims with generic "critical thinking / theory and evidence" discussion.
+${lockLine}
+Keep who did what, to whom, when, where, and why. Keep laws, orders, places, and quotes.
+If any locked item is missing after drafting, insert it, then output only the rewrite.`;
+}
+
 /** Live Gemini system prompt. Detector chips use the stored prompt as-is. */
 export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): string {
   if (isGptZeroDetector(request?.detector)) {
@@ -526,7 +553,7 @@ export function buildStyleRewriteInstruction(request?: HumanizePromptRequest): s
   if (isZeroGptDetector(request?.detector)) {
     return ZEROGPT_SYSTEM_PROMPT;
   }
-  return ACADEMIC_TURNITIN_SYSTEM_PROMPT;
+  return `${ACADEMIC_TURNITIN_SYSTEM_PROMPT}${academicFactLock(request?.text)}`;
 }
 
 function clipStyleReference(text: string, max = 520): string {

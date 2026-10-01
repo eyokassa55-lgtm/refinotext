@@ -155,8 +155,12 @@ export function extractNumbers(text: string): string[] {
 }
 
 export function extractDates(text: string): string[] {
-  const matches = text.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g) ?? [];
-  return [...new Set(matches)];
+  const numeric = text.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g) ?? [];
+  const named =
+    text.match(
+      /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?\b/gi,
+    ) ?? [];
+  return [...new Set([...numeric, ...named])];
 }
 
 export function extractStatedNames(text: string): string[] {
