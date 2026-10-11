@@ -5,20 +5,25 @@ export type PromoTimeLeft = {
   secs: number;
 };
 
-export function getPromoOfferEndDate() {
-  const end = new Date();
-  end.setDate(end.getDate() + 15);
-  end.setHours(23, 59, 59, 999);
-  return end;
-}
+/** Days stay at 00. The offer counts down in hours, then starts again. */
+const PROMO_CYCLE_MS = 17 * 60 * 60 * 1000;
 
-export function getPromoTimeLeft(target: Date): PromoTimeLeft {
-  const diff = Math.max(0, target.getTime() - Date.now());
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const mins = Math.floor((diff / (1000 * 60)) % 60);
-  const secs = Math.floor((diff / 1000) % 60);
-  return { days, hours, mins, secs };
+export function getPromoTimeLeft(now = Date.now()): PromoTimeLeft {
+  const remainingMs = PROMO_CYCLE_MS - (now % PROMO_CYCLE_MS);
+  const totalSeconds = Math.min(
+    17 * 60 * 60,
+    Math.max(1, Math.ceil(remainingMs / 1000)),
+  );
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  return {
+    days: 0,
+    hours,
+    mins,
+    secs,
+  };
 }
 
 function pad(value: number) {

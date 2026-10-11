@@ -93,6 +93,17 @@ img {
   background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+@keyframes live-viewer-tick {
+  0% {
+    opacity: 0.35;
+    transform: translateY(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes scan-pulse {
   0%,
   100% {

@@ -1,13 +1,9 @@
 "use client";
 
 import { Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import {
-  getPromoOfferEndDate,
-  getPromoTimeLeft,
-  padCountdownUnit,
-} from "@/lib/promo-offer";
+import { getPromoTimeLeft, padCountdownUnit } from "@/lib/promo-offer";
 
 function CountdownUnit({
   value,
@@ -35,17 +31,15 @@ function CountdownUnit({
 }
 
 export function PromoOfferBanner() {
-  const offerEnds = useMemo(() => getPromoOfferEndDate(), []);
-
-  const [timeLeft, setTimeLeft] = useState(() => getPromoTimeLeft(offerEnds));
+  const [timeLeft, setTimeLeft] = useState(() => getPromoTimeLeft());
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setTimeLeft(getPromoTimeLeft(offerEnds));
+      setTimeLeft(getPromoTimeLeft());
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [offerEnds]);
+  }, []);
 
   return (
     <div className="relative overflow-hidden rounded-[1.75rem] border border-primary/25 bg-[#0a1713] px-5 py-6 shadow-[0_20px_60px_rgba(13,92,69,0.22)] sm:px-8 sm:py-8">

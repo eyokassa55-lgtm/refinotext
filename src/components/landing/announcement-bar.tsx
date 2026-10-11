@@ -2,29 +2,24 @@
 
 import { Tag, Timer } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Container } from "@/components/ui/container";
-import {
-  formatPromoCountdown,
-  getPromoOfferEndDate,
-  getPromoTimeLeft,
-} from "@/lib/promo-offer";
+import { formatPromoCountdown, getPromoTimeLeft } from "@/lib/promo-offer";
 import { ROUTES } from "@/lib/constants";
 
 export function AnnouncementBar() {
-  const offerEnds = useMemo(() => getPromoOfferEndDate(), []);
   const [countdown, setCountdown] = useState(() =>
-    formatPromoCountdown(getPromoTimeLeft(offerEnds)),
+    formatPromoCountdown(getPromoTimeLeft()),
   );
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setCountdown(formatPromoCountdown(getPromoTimeLeft(offerEnds)));
+      setCountdown(formatPromoCountdown(getPromoTimeLeft()));
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [offerEnds]);
+  }, []);
 
   return (
     <div className="relative overflow-x-clip bg-gradient-to-r from-[#083528] via-primary to-[#083528]">

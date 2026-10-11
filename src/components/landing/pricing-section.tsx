@@ -19,6 +19,58 @@ function formatUsPrice(amount: number) {
   return `US$${amount.toFixed(2)}`;
 }
 
+const BUYER_START = 141;
+const MIN_LIVE_VIEWERS = 120;
+const MAX_LIVE_VIEWERS = 220;
+
+function nextLiveViewers(current: number) {
+  const delta = Math.random() < 0.62 ? 1 : -1;
+  let next = current + delta;
+  if (next > MAX_LIVE_VIEWERS) next = current - 1;
+  if (next < MIN_LIVE_VIEWERS) next = current + 1;
+  return next;
+}
+
+function LiveBuyersBubble() {
+  const [buyers, setBuyers] = useState(BUYER_START);
+
+  useEffect(() => {
+    let current = BUYER_START;
+    const timer = window.setInterval(() => {
+      if (!navigator.onLine) return;
+      current = nextLiveViewers(current);
+      setBuyers(current);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <span
+      className="inline-flex w-max shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-neutral-950 py-0.5 pl-0.5 pr-2 text-[11px] leading-none text-white shadow-[0_6px_16px_rgba(0,0,0,0.16)]"
+      aria-live="polite"
+    >
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#fe2c55] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.12em] text-white">
+        <span className="relative flex h-1 w-1" aria-hidden>
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/80" />
+          <span className="relative inline-flex h-1 w-1 rounded-full bg-white" />
+        </span>
+        LIVE
+      </span>
+      <span className="font-semibold">
+        <span
+          key={buyers}
+          className="inline-block tabular-nums"
+          style={{ animation: "live-viewer-tick 0.45s ease" }}
+        >
+          {buyers}
+        </span>{" "}
+        live buyers
+      </span>
+    </span>
+  );
+}
+
 function monthlyEquivalent(yearlyPrice: number) {
   return (yearlyPrice / 12).toFixed(2);
 }
@@ -135,7 +187,7 @@ function PricingSectionInner({
           </p>
         </div>
 
-        <div className="mb-12 flex flex-col items-center gap-3">
+        <div className="mb-12 flex flex-col items-center gap-3 pt-11">
           <div
             className="inline-flex max-w-full flex-wrap items-center justify-center rounded-full border border-border/80 bg-card p-1 shadow-[0_1px_2px_rgba(15,23,20,0.04),0_8px_20px_rgba(13,92,69,0.08)]"
             role="group"
@@ -153,28 +205,33 @@ function PricingSectionInner({
             >
               Monthly billing
             </button>
-            <button
-              type="button"
-              onClick={() => setYearly(true)}
-              className={cn(
-                "flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-all",
-                yearly
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted hover:text-foreground",
-              )}
-            >
-              Annual billing
-              <span
+            <div className="relative">
+              <span className="absolute bottom-[calc(100%+0.45rem)] left-1/2 z-10 w-max -translate-x-1/2 whitespace-nowrap">
+                <LiveBuyersBubble />
+              </span>
+              <button
+                type="button"
+                onClick={() => setYearly(true)}
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  "flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-all",
                   yearly
-                    ? "bg-accent-light text-primary"
-                    : "bg-accent/15 text-primary",
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted hover:text-foreground",
                 )}
               >
-                50% off
-              </span>
-            </button>
+                Annual billing
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    yearly
+                      ? "bg-accent-light text-primary"
+                      : "bg-accent/15 text-primary",
+                  )}
+                >
+                  50% off
+                </span>
+              </button>
+            </div>
           </div>
           <p className="max-w-xl text-center text-sm text-muted">
             {yearly
