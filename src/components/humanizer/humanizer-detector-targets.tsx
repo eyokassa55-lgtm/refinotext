@@ -40,11 +40,13 @@ const DETECTOR_TARGETS = [
 type HumanizerDetectorTargetsProps = {
   value?: HumanizeDetectorId;
   onChange: (id: HumanizeDetectorId) => void;
+  variant?: "chips" | "tabs";
 };
 
 export function HumanizerDetectorTargets({
   value = DEFAULT_HUMANIZE_DETECTOR,
   onChange,
+  variant = "chips",
 }: HumanizerDetectorTargetsProps) {
   const chipRefs = useRef<Partial<Record<HumanizeDetectorId, HTMLButtonElement | null>>>({});
   const [tourDetector, setTourDetector] = useState<HumanizeDetectorId | null>(null);
@@ -52,16 +54,21 @@ export function HumanizerDetectorTargets({
   return (
     <>
       <div
-        className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-1"
+        className={cn(
+          "flex min-w-0 items-center overflow-x-auto",
+          variant === "tabs" ? "gap-1" : "flex-1 gap-2 pr-1",
+        )}
         role="radiogroup"
         aria-label="Best for detector"
       >
-        <p className="shrink-0 text-[10px] font-semibold leading-tight text-muted">
-          Best
-          <br className="hidden sm:block" />
-          <span className="sm:hidden"> </span>
-          for:
-        </p>
+        {variant === "chips" ? (
+          <p className="shrink-0 text-[10px] font-semibold leading-tight text-muted">
+            Best
+            <br className="hidden sm:block" />
+            <span className="sm:hidden"> </span>
+            for:
+          </p>
+        ) : null}
 
         {DETECTOR_TARGETS.map((target) => {
           const isSelected = value === target.id;
@@ -79,18 +86,25 @@ export function HumanizerDetectorTargets({
               title={target.hint}
               onClick={() => onChange(target.id)}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-semibold tracking-tight transition-colors sm:px-3 sm:text-xs",
-                isSelected
-                  ? "border border-accent/35 bg-accent-light text-primary"
-                  : "border border-border/80 bg-white text-muted hover:bg-mint-dark/70 hover:text-foreground",
+                "inline-flex shrink-0 items-center rounded-full text-xs font-semibold tracking-tight transition-colors",
+                variant === "tabs"
+                  ? isSelected
+                    ? "bg-primary px-3.5 py-1.5 text-white"
+                    : "px-3 py-1.5 text-foreground/75 hover:text-foreground"
+                  : cn(
+                      "gap-1.5 px-2.5 py-1.5 text-[11px] sm:px-3 sm:text-xs",
+                      isSelected
+                        ? "border border-accent/35 bg-accent-light text-primary"
+                        : "border border-border/80 bg-white text-muted hover:bg-mint-dark/70 hover:text-foreground",
+                    ),
                 isTouring && "ring-2 ring-[#7c5cfc] ring-offset-2 ring-offset-white",
               )}
             >
-              <span className="max-w-[7.25rem] truncate sm:max-w-none">{target.shortLabel}</span>
-              {isSelected ? (
+              <span className="max-w-[9rem] truncate sm:max-w-none">{target.shortLabel}</span>
+              {variant === "chips" && isSelected ? (
                 <Star className="h-3 w-3 fill-accent text-accent" aria-hidden />
               ) : null}
-              <Info className="h-3 w-3 opacity-70" aria-hidden />
+              {variant === "chips" ? <Info className="h-3 w-3 opacity-70" aria-hidden /> : null}
             </button>
           );
         })}

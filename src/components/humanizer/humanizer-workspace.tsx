@@ -2,23 +2,16 @@
 
 import { Show, useAuth } from "@clerk/nextjs";
 import {
-  BookOpen,
-  Briefcase,
   Check,
-  Coffee,
+  ChevronDown,
   Copy,
   Download,
   FileText,
-  GraduationCap,
-  Heart,
-  Lightbulb,
   Loader2,
-  Lock,
   Sparkles,
   UploadCloud,
   Wand2,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -26,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useCreditBalance } from "@/hooks/use-credit-balance";
 import { useHumanizeLanguage } from "@/hooks/use-humanize-language";
 import { isClerkEnabled } from "@/lib/auth-config";
-import { APP_LOGO_SRC, ROUTES } from "@/lib/constants";
+import { ROUTES } from "@/lib/constants";
 import {
   createEditorVersion,
   readEditorVersions,
@@ -49,13 +42,13 @@ import { HumanizerVersionHistory } from "./humanizer-version-history";
 import { LanguagePicker } from "./language-picker";
 
 const EDITOR_STYLES = [
-  { id: "auto", label: "Auto", Icon: Wand2 },
-  { id: "academic", label: "Academic", Icon: BookOpen },
-  { id: "professional", label: "Professional", Icon: Briefcase },
-  { id: "friendly", label: "Friendly", Icon: Heart },
-  { id: "formal", label: "Formal", Icon: GraduationCap },
-  { id: "casual", label: "Casual", Icon: Coffee },
-  { id: "creative", label: "Creative", Icon: Lightbulb },
+  { id: "auto", label: "Default" },
+  { id: "academic", label: "Academic" },
+  { id: "professional", label: "Professional" },
+  { id: "friendly", label: "Friendly" },
+  { id: "formal", label: "Formal" },
+  { id: "casual", label: "Casual" },
+  { id: "creative", label: "Creative" },
 ] as const;
 
 type EditorStyleId = (typeof EDITOR_STYLES)[number]["id"];
@@ -535,47 +528,54 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
         className="sr-only"
       />
 
-      <div className="relative overflow-visible rounded-2xl border-2 border-border/75 bg-transparent lg:overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b-2 border-border/70 px-4 py-3">
-          <div
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-            role="tablist"
-            aria-label="Writing style"
-          >
-            {EDITOR_STYLES.map(({ id, label, Icon }) => {
-              const selected = style === id;
-              const locked = id !== "auto" && !paidUnlocked;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-label={locked ? `${label} (locked — upgrade to unlock)` : label}
-                  title={locked ? "Upgrade to unlock this style" : label}
-                  onClick={() => handleStyleClick(id)}
-                  className={
-                    selected
-                      ? "inline-flex shrink-0 items-center gap-1.5 rounded-full bg-mint-dark px-3.5 py-1.5 text-xs font-medium tracking-tight text-foreground"
-                      : "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium tracking-tight text-foreground transition-colors duration-150 hover:bg-mint-dark/60"
-                  }
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                  {label}
-                  {locked ? <Lock className="h-3 w-3 opacity-70" aria-hidden /> : null}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-border/70 bg-white shadow-[0_16px_50px_rgba(15,23,20,0.06)]">
+        <div className="flex flex-nowrap items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <label className="relative inline-flex">
+              <select
+                value={style}
+                aria-label="Writing style"
+                onChange={(event) => handleStyleClick(event.target.value as EditorStyleId)}
+                className="appearance-none rounded-full border border-border bg-white py-1.5 pl-3.5 pr-8 text-xs font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {EDITOR_STYLES.map(({ id, label }) => (
+                  <option key={id} value={id} disabled={id !== "auto" && !paidUnlocked}>
+                    {label}
+                    {id !== "auto" && !paidUnlocked ? " (locked)" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+                aria-hidden
+              />
+            </label>
+            <label
+              htmlFor="humanizer-file-upload"
+              className={cn(
+                "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-medium text-foreground hover:bg-mint",
+                isUploading && "pointer-events-none opacity-60",
+              )}
+            >
+              {isUploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <UploadCloud className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Upload
+            </label>
             <LanguagePicker value={language} onChange={setLanguage} />
           </div>
+
+          <HumanizerDetectorTargets variant="tabs" value={detector} onChange={setDetector} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 p-3 lg:h-[min(72vh,680px)] lg:grid-cols-2 lg:overflow-hidden">
-          <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-[#f7faf8] lg:min-h-0">
-            <div className="relative flex min-h-[14rem] flex-1 flex-col lg:min-h-0">
+        <div className="grid grid-cols-1 gap-3 px-3 pb-3 sm:h-[30rem] sm:grid-cols-2 sm:overflow-hidden">
+          <section className="relative flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border/60 bg-[#f6fbf8] sm:min-h-0">
+            <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              Your text
+            </p>
+            <div className="relative flex min-h-0 flex-1 flex-col">
               <HumanizerRichEditor
                 ref={inputEditorRef}
                 ariaLabel="Input text"
@@ -614,137 +614,36 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
                     ) : (
                       <UploadCloud className="h-4 w-4" aria-hidden />
                     )}
-                    {isUploading ? "Uploading..." : "Upload document"}
+                    {isUploading ? "Uploading..." : "Upload Document"}
                   </label>
                 </div>
-              ) : null}
-            </div>
-
-            <div className="border-t-2 border-border/60 shrink-0 bg-white/80">
-              <div className="flex items-center gap-2 px-3 py-2">
-                <label
-                  htmlFor="humanizer-file-upload"
-                  title="Upload document"
-                  onMouseDown={(event) => event.preventDefault()}
-                  className={cn(
-                    "cursor-pointer rounded-lg bg-mint-dark/70 p-2 text-foreground transition-colors hover:bg-mint-dark hover:text-foreground",
-                    isUploading && "pointer-events-none opacity-50",
-                  )}
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <UploadCloud className="h-4 w-4" />
-                  )}
-                </label>
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  disabled={!input.trim() && !output.trim()}
-                  className="px-1 text-sm font-medium text-foreground transition-colors hover:text-foreground/80 disabled:opacity-40"
-                >
-                  Clear
-                </button>
-                <span className="rounded-full bg-[#0b3d2e] px-2.5 py-1 text-xs font-medium text-white">
+                ) : null}
+              <div className="absolute bottom-3 left-3 z-[2] flex items-center gap-2">
+                <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-white">
                   {inputWordCount} words
                 </span>
-                <button
-                  type="button"
-                  title="Copy input"
-                  onClick={() => handleCopy("input")}
-                  disabled={!input.trim()}
-                  className={`${iconButtonClass} disabled:opacity-40`}
-                >
-                  {copied === "input" ? (
-                    <Check className="h-4 w-4 text-accent" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-                {isClerkEnabled ? (
-                  <>
-                    <Show when="signed-out">
-                      <Link
-                        href={ROUTES.signIn}
-                        title="Sign in to download"
-                        className={iconButtonClass}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Link>
-                    </Show>
-                    <Show when="signed-in">
-                      <button
-                        type="button"
-                        title="Download draft"
-                        onClick={() => handleDownload("input")}
-                        disabled={!input.trim()}
-                        className={`${iconButtonClass} disabled:opacity-40`}
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                    </Show>
-                  </>
-                ) : (
+                {input.trim() ? (
                   <button
                     type="button"
-                    title="Download draft"
-                    onClick={() => handleDownload("input")}
-                    disabled={!input.trim()}
-                    className={`${iconButtonClass} disabled:opacity-40`}
+                    onClick={handleClear}
+                    className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm"
                   >
-                    <Download className="h-4 w-4" />
+                    Clear
                   </button>
-                )}
+                ) : null}
               </div>
-
-              <div className="flex items-center gap-2 border-t border-border/50 bg-white/70 px-3 py-2.5 sm:gap-3 sm:px-4">
-                <HumanizerDetectorTargets value={detector} onChange={setDetector} />
-                {isClerkEnabled ? (
-                  <>
-                    <Show when="signed-out">
-                      <Link href={ROUTES.signIn} className={HUMANIZE_BUTTON_CLASS}>
-                        <HumanizeButtonContents />
-                      </Link>
-                    </Show>
-                    <Show when="signed-in">
-                      <button
-                        type="button"
-                        onClick={handleRefine}
-                        disabled={!input.trim() || isProcessing}
-                        className={HUMANIZE_BUTTON_CLASS}
-                      >
-                        <HumanizeButtonContents isProcessing={isProcessing} />
-                      </button>
-                    </Show>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleRefine}
-                    disabled={!input.trim() || isProcessing}
-                    className={HUMANIZE_BUTTON_CLASS}
-                  >
-                    <HumanizeButtonContents isProcessing={isProcessing} />
-                  </button>
-                )}
-              </div>
-
-              <HumanizerEditorToolbar
-                editor={inputEditor}
-                status={isProcessing ? "humanizing" : docStatus}
-                onSaveVersion={handleSaveVersion}
-                onOpenHistory={() => setHistoryOpen(true)}
-                canSave={Boolean(input.trim() || output.trim())}
-              />
             </div>
           </section>
 
           <section
             className={cn(
-              "relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border-2 border-border/65 bg-white lg:min-h-0",
+              "relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border border-border/60 bg-white sm:min-h-0",
               isProcessing && "humanizer-output-streaming",
             )}
           >
+            <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              Humanized
+            </p>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {output.trim() ? (
                 <div className="flex shrink-0 items-center justify-end gap-1 border-b-2 border-border/60 px-3 py-2">
@@ -806,31 +705,71 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             {isProcessing && !output ? <HumanizerOutputMotion /> : null}
 
             {!output && !isProcessing && (
-              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-white px-6 text-center">
-                <Image
-                  src={APP_LOGO_SRC}
-                  alt=""
-                  width={128}
-                  height={128}
-                  sizes="112px"
-                  quality={100}
-                  className="mb-4 h-28 w-28 scale-[1.45] object-contain bg-transparent opacity-[0.14]"
-                />
+              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center bg-white px-6 pt-6 text-center">
                 {error ? (
                   <p className="max-w-sm text-pretty px-2 text-sm leading-6 text-red-600">{error}</p>
                 ) : (
                   <>
-                    <p className="text-[15px] font-semibold text-foreground/85">
-                      Your humanized text will appear here
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-muted/70">
-                      Paste text on the left and click Humanize
-                    </p>
+                    <Wand2 className="mb-3 h-5 w-5 text-muted/70" strokeWidth={1.75} aria-hidden />
+                    <p className="text-sm text-muted">Your humanized text will appear here</p>
                   </>
                 )}
               </div>
             )}
           </section>
+        </div>
+
+        <div className="flex flex-nowrap items-center gap-3 border-t border-border/60 px-3 py-2">
+          <div className="min-w-0 flex-1 overflow-x-auto">
+            <HumanizerEditorToolbar
+              embedded
+              editor={inputEditor}
+              status={isProcessing ? "humanizing" : docStatus}
+              onSaveVersion={handleSaveVersion}
+              onOpenHistory={() => setHistoryOpen(true)}
+              canSave={Boolean(input.trim() || output.trim())}
+            />
+          </div>
+          {isClerkEnabled ? (
+            <>
+              <Show when="signed-out">
+                <Link href={ROUTES.signIn} className={HUMANIZE_BUTTON_CLASS}>
+                  <HumanizeButtonContents />
+                </Link>
+              </Show>
+              <Show when="signed-in">
+                <button
+                  type="button"
+                  onClick={handleRefine}
+                  disabled={!input.trim() || isProcessing}
+                  className={HUMANIZE_BUTTON_CLASS}
+                >
+                  <HumanizeButtonContents isProcessing={isProcessing} />
+                </button>
+              </Show>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handleRefine}
+              disabled={!input.trim() || isProcessing}
+              className={HUMANIZE_BUTTON_CLASS}
+            >
+              <HumanizeButtonContents isProcessing={isProcessing} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-nowrap items-center justify-between gap-2 px-4 py-2 text-xs text-muted">
+          <p className="inline-flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+            Status: {isProcessing ? "Humanizing" : docStatus === "ready" ? "Ready" : docStatus}
+          </p>
+          {isClerkEnabled ? (
+            <Show when="signed-out">
+              <p>Sign in to unlock the full humanizer</p>
+            </Show>
+          ) : null}
         </div>
 
         {error && output ? (

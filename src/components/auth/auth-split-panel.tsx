@@ -43,8 +43,8 @@ export function AuthSplitPanel({
   children,
 }: AuthSplitPanelProps) {
   return (
-    <div className="grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-[0_24px_80px_rgba(13,92,69,0.12)] lg:grid-cols-[1.05fr_0.95fr]">
-      <aside className="flex flex-col bg-primary px-8 py-10 text-white sm:px-10 sm:py-12">
+    <div className="grid w-full max-w-[920px] overflow-hidden rounded-[28px] bg-white shadow-[0_24px_80px_rgba(13,92,69,0.12)] lg:h-[520px] lg:grid-cols-2">
+      <aside className="flex min-h-0 flex-col bg-primary px-8 py-8 text-white sm:px-9">
         <Link
           href={ROUTES.home}
           className="inline-flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -61,17 +61,17 @@ export function AuthSplitPanel({
           <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>
         </Link>
 
-        <div className="mt-16 max-w-sm">
-          <h2 className="text-3xl font-bold leading-[1.15] tracking-[-0.03em] sm:text-4xl">
+        <div className="mt-10 max-w-sm">
+          <h2 className="text-[1.7rem] font-bold leading-[1.15] tracking-[-0.03em]">
             Transform AI text into natural, human writing
           </h2>
-          <p className="mt-4 text-sm leading-6 text-white/75">
+          <p className="mt-3 text-sm leading-6 text-white/75">
             Join writers who use RefinoText to revise AI-assisted drafts for
             clarity, tone, and readability.
           </p>
         </div>
 
-        <div className="mt-auto pt-16">
+        <div className="mt-auto pt-8">
           <p className="text-xs text-white/70">Trusted by writers worldwide</p>
           <ul className="mt-4 flex flex-wrap gap-2">
             {TRUST_MARKS.map((mark) => (
@@ -91,13 +91,13 @@ export function AuthSplitPanel({
         </div>
       </aside>
 
-      <div className="flex flex-col px-6 py-8 sm:px-10 sm:py-10">
-        <h1 className="text-3xl font-bold tracking-[-0.03em] text-foreground">
+      <div className="flex min-h-0 flex-col overflow-y-auto px-6 py-7 sm:px-8">
+        <h1 className="text-2xl font-bold tracking-[-0.03em] text-foreground">
           {title}
         </h1>
-        <p className="mt-2 text-sm text-muted">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted">{subtitle}</p>
 
-        <div className="mt-6">{children}</div>
+        <div className="mt-4">{children}</div>
 
         <p className="mt-4 text-xs leading-5 text-muted">
           By continuing, you agree to our{" "}
@@ -118,7 +118,7 @@ export function AuthSplitPanel({
           .
         </p>
 
-        <ul className="mt-6 space-y-4">
+        <ul className="mt-4 space-y-3">
           {PERKS.map((perk) => (
             <li key={perk.title} className="flex gap-3">
               <perk.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
@@ -134,7 +134,7 @@ export function AuthSplitPanel({
           ))}
         </ul>
 
-        <p className="mt-8 text-sm text-muted">
+        <p className="mt-4 text-sm text-muted">
           {alternatePrompt}{" "}
           <Link href={alternateHref} className="font-semibold text-primary hover:underline">
             {alternateLabel}

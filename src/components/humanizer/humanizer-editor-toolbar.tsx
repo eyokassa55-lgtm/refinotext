@@ -41,6 +41,7 @@ type HumanizerEditorToolbarProps = {
   onSaveVersion: () => void;
   onOpenHistory: () => void;
   canSave: boolean;
+  embedded?: boolean;
 };
 
 const TEXT_COLORS = [
@@ -78,6 +79,7 @@ export function HumanizerEditorToolbar({
   onSaveVersion,
   onOpenHistory,
   canSave,
+  embedded = false,
 }: HumanizerEditorToolbarProps) {
   const snapshot = useEditorState({
     editor,
@@ -126,9 +128,14 @@ export function HumanizerEditorToolbar({
           : "Paragraph";
 
   return (
-    <div className="border-t border-border/50 bg-white/90 px-2 py-1">
+    <div className={cn(!embedded && "border-t border-border/50 bg-white/90 px-2 py-1")}>
       <div className="flex items-center gap-1">
-        <div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto rounded-full border border-border/70 bg-white px-1 py-0.5">
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-px overflow-x-auto",
+            !embedded && "rounded-full border border-border/70 bg-white px-1 py-0.5",
+          )}
+        >
           <MarkButton
             label="Bold"
             active={snapshot?.bold}
@@ -388,9 +395,32 @@ export function HumanizerEditorToolbar({
               <AlignJustify className="h-3.5 w-3.5" />
             </MenuRow>
           </EditorMenu>
+          {embedded ? (
+            <>
+              <button
+                type="button"
+                onClick={onSaveVersion}
+                disabled={!canSave}
+                title="Save version"
+                aria-label="Save version"
+                className="inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40"
+              >
+                <Save className="h-3 w-3" aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                title="Version history"
+                aria-label="Version history"
+                className="inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100"
+              >
+                <Clock className="h-3 w-3" aria-hidden />
+              </button>
+            </>
+          ) : null}
         </div>
 
-        <div className="inline-flex shrink-0 overflow-hidden rounded-full border border-[#e7a3ad] bg-white">
+        {!embedded ? <div className="inline-flex shrink-0 overflow-hidden rounded-full border border-[#e7a3ad] bg-white">
           <button
             type="button"
             onClick={onSaveVersion}
@@ -409,9 +439,9 @@ export function HumanizerEditorToolbar({
           >
             <Clock className="h-3 w-3" aria-hidden />
           </button>
-        </div>
+        </div> : null}
 
-        <p className="hidden shrink-0 items-center gap-1 pr-1 text-[10px] text-muted sm:inline-flex" role="status">
+        {!embedded ? <p className="hidden shrink-0 items-center gap-1 pr-1 text-[10px] text-muted sm:inline-flex" role="status">
           <span
             className={cn(
               "h-1.5 w-1.5 rounded-full",
@@ -424,7 +454,7 @@ export function HumanizerEditorToolbar({
             aria-hidden
           />
           {STATUS_LABEL[status]}
-        </p>
+        </p> : null}
       </div>
     </div>
   );
@@ -450,6 +480,7 @@ function MarkButton({
       aria-label={label}
       aria-pressed={Boolean(active)}
       disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className={cn(
         "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
@@ -531,6 +562,7 @@ function EditorMenu({
         aria-controls={menuId}
         aria-label={label}
         title={label}
+        onMouseDown={(event) => event.preventDefault()}
         onClick={() => setOpen((current) => !current)}
         className="inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40"
       >
@@ -542,6 +574,7 @@ function EditorMenu({
           role="menu"
           style={menuStyle}
           className="z-[80] rounded-xl border border-border/70 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,23,20,0.14)]"
+          onMouseDown={(event) => event.preventDefault()}
         >
           <div onClick={() => setOpen(false)}>{children}</div>
         </div>
@@ -568,6 +601,7 @@ function MenuRow({
       type="button"
       role="menuitem"
       disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-mint-dark/60 disabled:opacity-40",
@@ -639,10 +673,17 @@ function LinkMenu({
       return;
     }
     setError(null);
-    if (editor.state.selection.empty && !active) {
-      editor.chain().focus().insertContent(`<a href="${url}">${url}</a>`).run();
+    const from = Number(buttonRef.current?.getAttribute("data-from"));
+    const to = Number(buttonRef.current?.getAttribute("data-to"));
+    const hasRange = Number.isFinite(from) && Number.isFinite(to) && to > from;
+    const chain = editor.chain().focus();
+    if (Number.isFinite(from) && Number.isFinite(to)) {
+      chain.setTextSelection({ from, to });
+    }
+    if (hasRange || active) {
+      chain.extendMarkRange("link").setLink({ href: url }).run();
     } else {
-      editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+      chain.insertContent(`<a href="${url}">${url}</a>`).run();
     }
     setOpen(false);
   };
@@ -656,6 +697,13 @@ function LinkMenu({
         aria-label="Link"
         aria-pressed={active}
         disabled={!editor}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          if (!editor) return;
+          const { from, to } = editor.state.selection;
+          buttonRef.current?.setAttribute("data-from", String(from));
+          buttonRef.current?.setAttribute("data-to", String(to));
+        }}
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[#334155] transition-colors hover:bg-slate-100 disabled:opacity-40",
@@ -694,8 +742,15 @@ function LinkMenu({
             {active ? (
               <button
                 type="button"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  editor?.chain().focus().unsetLink().run();
+                  const from = Number(buttonRef.current?.getAttribute("data-from"));
+                  const to = Number(buttonRef.current?.getAttribute("data-to"));
+                  const chain = editor?.chain().focus();
+                  if (chain && Number.isFinite(from) && Number.isFinite(to)) {
+                    chain.setTextSelection({ from, to });
+                  }
+                  chain?.unsetLink().run();
                   setOpen(false);
                 }}
                 className="rounded-lg px-2.5 py-1 text-xs font-semibold text-muted hover:bg-mint-dark/60"
