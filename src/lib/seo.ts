@@ -4,7 +4,7 @@ import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
 import { APP_DESCRIPTION, APP_LOGO_SRC, APP_NAME, SUPPORT_EMAIL } from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
-export const SEO_TITLE = `${APP_NAME} — AI-assisted writing revision`;
+export const SEO_TITLE = `${APP_NAME}: Free AI Humanizer for Clear, Natural Writing`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
 export const SITE_LAST_MODIFIED = new Date("2026-10-11T08:00:00.000Z");
@@ -30,24 +30,26 @@ export const PAGE_SEO = {
   home: {
     path: "/",
     title: SEO_TITLE,
-    description: APP_DESCRIPTION,
+    description:
+      "RefinoText turns your drafts into clear, natural, and polished writing. Revise AI-assisted text for tone and readability while keeping your meaning.",
   },
   pricing: {
     path: "/pricing",
-    title: "Pricing — Plans and credits",
+    title: "Pricing",
     description:
-      "RefinoText pricing: Free at 300 credits per month, then Basic, Pro, or Ultra subscriptions. Polar is the merchant of record for paid checkout. Cancel anytime through Polar.",
+      "Choose your free RefinoText plan. Simple pricing for monthly and annual writing credits.",
   },
   contact: {
     path: "/contact",
     title: "Contact Us",
-    description: `Contact the RefinoText team at ${SUPPORT_EMAIL} for support, billing questions, or partnership inquiries.`,
+    description:
+      "How can we help? The RefinoText support team is ready to help with your account, billing, or writing questions.",
   },
   faq: {
     path: "/faq",
-    title: "FAQ — Frequently Asked Questions",
+    title: "FAQ",
     description:
-      "Answers about RefinoText: how the AI humanizer works, credits and pricing, quality and results, privacy, and support.",
+      "What is RefinoText? RefinoText is an AI writing tool that revises drafts into clearer, more natural writing.",
   },
   privacy: {
     path: "/privacy",
@@ -69,14 +71,14 @@ export const PAGE_SEO = {
   },
   acceptableUse: {
     path: "/acceptable-use",
-    title: "Acceptable Use Policy",
+    title: "Responsible Use",
     description:
-      "Rules for using RefinoText. The product is a writing revision tool and must not be used to cheat or to circumvent other services.",
+      "RefinoText helps you refine and improve how your writing reads. Use it to revise your own drafts.",
   },
   signIn: {
     path: "/sign-in",
     title: "Sign In",
-    description: `Sign in to your ${APP_NAME} account to humanize writing and manage credits.`,
+    description: "Welcome back. Secure sign-in to your RefinoText account.",
   },
   signUp: {
     path: "/sign-up",

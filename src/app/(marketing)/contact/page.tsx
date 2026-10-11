@@ -10,6 +10,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.contact.path,
   PAGE_SEO.contact.title,
   PAGE_SEO.contact.description,
+  { absoluteTitle: true },
 );
 
 export default function ContactPage() {

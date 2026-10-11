@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { SignIn } from "@clerk/nextjs";
 
+import { AuthSplitPanel } from "@/components/auth/auth-split-panel";
 import { isClerkEnabled } from "@/lib/auth-config";
-import { clerkAppearance } from "@/lib/clerk-appearance";
+import { authPanelAppearance } from "@/lib/clerk-appearance";
 import { ROUTES } from "@/lib/constants";
 import { PAGE_SEO, pageMetadata } from "@/lib/seo";
 
@@ -10,7 +11,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.signIn.path,
   PAGE_SEO.signIn.title,
   PAGE_SEO.signIn.description,
-  { index: false },
+  { absoluteTitle: true },
 );
 
 export default function SignInPage() {
@@ -36,12 +37,20 @@ export default function SignInPage() {
   }
 
   return (
-    <SignIn
-      appearance={clerkAppearance}
-      routing="path"
-      path="/sign-in"
-      signUpUrl={ROUTES.signUp}
-      fallbackRedirectUrl={ROUTES.home}
-    />
+    <AuthSplitPanel
+      title="Welcome back"
+      subtitle="Sign in to your account to continue"
+      alternatePrompt="New to RefinoText?"
+      alternateLabel="Create an account"
+      alternateHref={ROUTES.signUp}
+    >
+      <SignIn
+        appearance={authPanelAppearance}
+        routing="path"
+        path="/sign-in"
+        signUpUrl={ROUTES.signUp}
+        fallbackRedirectUrl={ROUTES.home}
+      />
+    </AuthSplitPanel>
   );
 }

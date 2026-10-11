@@ -28,3 +28,25 @@ export const clerkAppearance = {
     dividerText: "text-muted",
   },
 };
+
+export const authPanelAppearance = {
+  ...clerkAppearance,
+  elements: {
+    ...clerkAppearance.elements,
+    rootBox: "w-full",
+    cardBox: "w-full shadow-none",
+    card: "w-full gap-4 border-0 bg-transparent p-0 shadow-none",
+    header: "hidden",
+    footer: "hidden",
+    footerAction: "hidden",
+    socialButtonsBlockButton:
+      "h-11 rounded-full border-0 bg-primary text-sm font-semibold text-white shadow-none hover:bg-primary-hover",
+    socialButtonsBlockButtonText: "font-semibold text-white",
+    socialButtonsProviderIcon: "brightness-0 invert",
+    formButtonPrimary:
+      "h-11 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-none hover:bg-primary-hover",
+    formFieldInput:
+      "h-11 rounded-full border-border bg-white px-4 focus:ring-primary",
+    dividerRow: "my-1",
+  },
+};

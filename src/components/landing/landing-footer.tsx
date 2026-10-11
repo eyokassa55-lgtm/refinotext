@@ -138,7 +138,7 @@ export function LandingFooter() {
                   href={ROUTES.acceptableUse}
                   className="text-sm text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
                 >
-                  Acceptable Use
+                  Responsible Use
                 </Link>
               </li>
             </ul>

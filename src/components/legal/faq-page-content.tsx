@@ -41,11 +41,11 @@ export function FaqPageContent() {
             Frequently Asked Questions
           </p>
           <h1 className="mt-4 text-3xl font-bold tracking-[-0.03em] text-foreground sm:text-4xl lg:text-[2.65rem] lg:leading-[1.12]">
-            Everything You Need to Know
+            FAQ
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Get answers about our AI humanizer, credits, billing, and how to get
-            the best results from RefinoText.
+            What is RefinoText? RefinoText is an AI writing tool that revises
+            drafts into clearer, more natural writing.
           </p>
         </header>
 

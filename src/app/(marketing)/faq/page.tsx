@@ -15,6 +15,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.faq.path,
   PAGE_SEO.faq.title,
   PAGE_SEO.faq.description,
+  { absoluteTitle: true },
 );
 
 export default function FaqPage() {

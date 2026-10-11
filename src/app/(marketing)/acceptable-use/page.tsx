@@ -11,6 +11,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.acceptableUse.path,
   PAGE_SEO.acceptableUse.title,
   PAGE_SEO.acceptableUse.description,
+  { absoluteTitle: true },
 );
 
 export default function AcceptableUsePage() {

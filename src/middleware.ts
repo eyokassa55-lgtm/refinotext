@@ -19,6 +19,7 @@ const isIndexableRoute = createRouteMatcher([
   "/pricing(.*)",
   "/faq(.*)",
   "/contact(.*)",
+  "/sign-in(.*)",
   "/privacy(.*)",
   "/terms(.*)",
   "/acceptable-use(.*)",
@@ -26,7 +27,7 @@ const isIndexableRoute = createRouteMatcher([
 ]);
 
 function isPrivateRoute(req: NextRequest) {
-  return /^\/(dashboard|sign-in|sign-up|api)(\/|$)/.test(req.nextUrl.pathname);
+  return /^\/(dashboard|sign-up|api)(\/|$)/.test(req.nextUrl.pathname);
 }
 
 function withRobotsTag(req: NextRequest, response: NextResponse) {

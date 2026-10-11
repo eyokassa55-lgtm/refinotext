@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { SignUp } from "@clerk/nextjs";
 
+import { AuthSplitPanel } from "@/components/auth/auth-split-panel";
 import { isClerkEnabled } from "@/lib/auth-config";
-import { clerkAppearance } from "@/lib/clerk-appearance";
+import { authPanelAppearance } from "@/lib/clerk-appearance";
 import { ROUTES } from "@/lib/constants";
 import { PAGE_SEO, pageMetadata } from "@/lib/seo";
 
@@ -36,13 +37,21 @@ export default function SignUpPage() {
   }
 
   return (
-    <SignUp
-      appearance={clerkAppearance}
-      routing="path"
-      path="/sign-up"
-      signInUrl={ROUTES.signIn}
-      fallbackRedirectUrl={ROUTES.signUpWelcome}
-      forceRedirectUrl={ROUTES.signUpWelcome}
-    />
+    <AuthSplitPanel
+      title="Create your account"
+      subtitle="Start revising drafts with a free RefinoText account"
+      alternatePrompt="Already have an account?"
+      alternateLabel="Sign in"
+      alternateHref={ROUTES.signIn}
+    >
+      <SignUp
+        appearance={authPanelAppearance}
+        routing="path"
+        path="/sign-up"
+        signInUrl={ROUTES.signIn}
+        fallbackRedirectUrl={ROUTES.signUpWelcome}
+        forceRedirectUrl={ROUTES.signUpWelcome}
+      />
+    </AuthSplitPanel>
   );
 }

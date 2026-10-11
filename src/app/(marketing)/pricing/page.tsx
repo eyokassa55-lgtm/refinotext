@@ -11,6 +11,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.pricing.path,
   PAGE_SEO.pricing.title,
   PAGE_SEO.pricing.description,
+  { absoluteTitle: true },
 );
 
 export default function PricingPage() {

@@ -293,7 +293,7 @@ export const LEGAL_PAGES: Record<string, LegalPage> = {
   },
   "acceptable-use": {
     slug: "acceptable-use",
-    title: "Acceptable Use Policy",
+    title: "Responsible Use",
     lastUpdated: LAST_UPDATED,
     intro:
       "This Acceptable Use Policy explains what is and is not allowed when using RefinoText. It keeps the service aligned with honest writing work and with Polar’s rules for products they resell.",

@@ -30,5 +30,5 @@ export const PUBLIC_PAGES = [
   { label: "Privacy Policy", href: ROUTES.privacy },
   { label: "Terms of Service", href: ROUTES.terms },
   { label: "Refunds", href: ROUTES.refunds },
-  { label: "Acceptable Use", href: ROUTES.acceptableUse },
+  { label: "Responsible Use", href: ROUTES.acceptableUse },
 ] as const;
