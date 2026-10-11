@@ -25,6 +25,7 @@ export type HumanizeRequest = {
   intensity?: number;
   language?: string;
   detector?: string;
+  variation?: number;
 };
 
 export type HumanizeSource =
@@ -96,7 +97,11 @@ function rewriteOptions(request: HumanizeRequest) {
       language: request.language,
       detector: request.detector,
     }),
-    temperature: academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE,
+    temperature: Math.min(
+      0.95,
+      (academicTurnitin ? ACADEMIC_TURNITIN_TEMPERATURE : REWRITE_TEMPERATURE) +
+        (request.variation ? Math.min(request.variation, 3) * 0.08 : 0),
+    ),
     topP: REWRITE_TOP_P,
     backend: "base" as const,
     geminiApiOnly: true,

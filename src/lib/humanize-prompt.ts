@@ -18,6 +18,7 @@ export type HumanizePromptRequest = {
   intensity?: number;
   language?: string;
   detector?: string;
+  variation?: number;
 };
 
 function rewriteStrength(intensity?: number): string {
@@ -509,13 +510,17 @@ export function resolveEditorStyle(tone?: string): EditorStyle {
  */
 export function buildRewriteUserContent(request: HumanizePromptRequest): string {
   const language = resolveHumanizeLanguage(request.language);
+  const fresh =
+    request.variation && request.variation > 0
+      ? `Write a fresh version. Keep the same meaning and facts, but change the wording and sentence rhythm from any earlier rewrite. Variation ${request.variation}.\n\n`
+      : "";
 
-  if (language.id === "en") return request.text;
+  if (language.id === "en") return `${fresh}${request.text}`;
   const opening = firstInputBodyParagraph(request.text);
   const translateOpening = opening
     ? ` Translate the title and this first sentence too, and start with that translated opening: "${opening}"`
     : " Translate the title and first sentence too.";
-  return `Write the rewritten text in ${language.englishName} (${language.nativeName}).${translateOpening} Do not leave any wording from the source language in the output. Keep the same meaning.\n\n${request.text}`;
+  return `${fresh}Write the rewritten text in ${language.englishName} (${language.nativeName}).${translateOpening} Do not leave any wording from the source language in the output. Keep the same meaning.\n\n${request.text}`;
 }
 
 /**

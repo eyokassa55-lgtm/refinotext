@@ -64,6 +64,7 @@ export async function readHumanizeSse(
           creditsCharged: event.creditsCharged,
           creditsRemaining: event.creditsRemaining,
           duplicate: event.duplicate,
+          rehumanizationsLeft: event.rehumanizationsLeft,
         };
       } else if (event.type === "error") {
         streamError = new HumanizeStreamError(event.error, event.code);

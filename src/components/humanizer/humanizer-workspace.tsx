@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   Loader2,
+  RefreshCw,
   Sparkles,
   UploadCloud,
   Wand2,
@@ -27,6 +28,7 @@ import {
   type EditorVersion,
 } from "@/lib/editor-versions";
 import { DEFAULT_HUMANIZE_DETECTOR, type HumanizeDetectorId } from "@/lib/humanize-detectors";
+import { getPlanConfig } from "@/lib/plans";
 import { hasPaidHumanizerAccess, isPaidHumanizeLanguage } from "@/lib/humanize-access";
 import { HumanizeStreamError, readHumanizeSse } from "@/lib/humanize-stream";
 import { extractDocumentText } from "@/lib/extract-document-text";
@@ -107,6 +109,8 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const [docStatus, setDocStatus] = useState<EditorDocStatus>("ready");
   const [versions, setVersions] = useState<EditorVersion[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [rehumanizeLeft, setRehumanizeLeft] = useState(0);
 
   const inputEditorRef = useRef<HumanizerRichEditorHandle>(null);
   const outputEditorRef = useRef<HumanizerRichEditorHandle>(null);
@@ -114,6 +118,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
   const isProcessingRef = useRef(false);
   const requestIdRef = useRef<string | null>(null);
   const requestKeyRef = useRef<string | null>(null);
+  const taskSourceRef = useRef("");
   const revealTargetRef = useRef("");
   const revealShownRef = useRef("");
   const revealRafRef = useRef(0);
@@ -211,7 +216,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     };
   }, []);
 
-  const handleRefine = useCallback(async () => {
+  const handleRefine = useCallback(async (rehumanize = false) => {
     if (isProcessingRef.current) return;
 
     if (!isSignedIn) {
@@ -222,6 +227,12 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     const text = (inputEditorRef.current?.getText() ?? input).trim();
     if (!text) {
       setError(HUMANIZER_ERRORS.empty);
+      return;
+    }
+
+    if (rehumanize && rehumanizeLeft <= 0) {
+      notifyStatus("Choose a plan to keep rehumanizing this text.");
+      router.push(ROUTES.pricing);
       return;
     }
 
@@ -243,15 +254,17 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     isProcessingRef.current = true;
     setIsProcessing(true);
 
-    requestIdRef.current = crypto.randomUUID();
+    requestIdRef.current = rehumanize && taskId ? taskId : crypto.randomUUID();
+    const clientTaskId = requestIdRef.current;
     requestKeyRef.current = text;
 
     const body = JSON.stringify({
       text,
-      requestId: requestIdRef.current,
+      requestId: clientTaskId,
       language,
       tone: style === "auto" ? undefined : style,
       detector,
+      ...(rehumanize && taskId ? { rehumanize: true, taskId } : {}),
     });
 
     const requestHumanize = (stream: boolean) =>
@@ -284,8 +297,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               setError(null);
               return;
             }
-            if (error.code === "PAID_FEATURE") {
-              setError(error.message || "Upgrade to unlock this feature.");
+            if (error.code === "PAID_FEATURE" || error.code === "REHUMANIZE_LIMIT") {
+              setError(error.message || "Choose a plan to keep rehumanizing this text.");
+              if (error.code === "REHUMANIZE_LIMIT") setRehumanizeLeft(0);
               router.push(ROUTES.pricing);
               return;
             }
@@ -320,8 +334,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
             setError(null);
             return;
           }
-          if (apiError.code === "PAID_FEATURE") {
-            setError(apiError.error || "Upgrade to unlock this feature.");
+          if (apiError.code === "PAID_FEATURE" || apiError.code === "REHUMANIZE_LIMIT") {
+            setError(apiError.error || "Choose a plan to keep rehumanizing this text.");
+            if (apiError.code === "REHUMANIZE_LIMIT") setRehumanizeLeft(0);
             router.push(ROUTES.pricing);
             return;
           }
@@ -346,6 +361,14 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       requestKeyRef.current = null;
       finishReveal(result.output);
       setDocStatus("ready");
+      if (rehumanize) {
+        setRehumanizeLeft(result.rehumanizationsLeft ?? Math.max(0, rehumanizeLeft - 1));
+      } else {
+        const allowance = getPlanConfig(credits?.plan ?? "FREE").rehumanizationsPerText;
+        taskSourceRef.current = text;
+        setTaskId(clientTaskId);
+        setRehumanizeLeft(allowance);
+      }
       notifyStatus(
         result.creditsCharged > 0
           ? `Humanized ${result.wordCount} words. ${result.creditsCharged} credits used.`
@@ -365,7 +388,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
       setIsProcessing(false);
       setDocStatus((current) => (current === "humanizing" ? "ready" : current));
     }
-  }, [detector, input, isSignedIn, language, paidUnlocked, router, style, upgradeHref]);
+  }, [credits?.plan, detector, input, isSignedIn, language, paidUnlocked, rehumanizeLeft, router, style, taskId, upgradeHref]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -394,6 +417,11 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
 
   const handleInputTextChange = (text: string) => {
     setInput(text);
+    if (taskSourceRef.current && text.trim() !== taskSourceRef.current) {
+      taskSourceRef.current = "";
+      setTaskId(null);
+      setRehumanizeLeft(0);
+    }
     if (!skipStatusRef.current && !isProcessingRef.current) {
       setDocStatus("unsaved");
     }
@@ -511,6 +539,9 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
     skipStatusRef.current = false;
     setError(null);
     setDocStatus("ready");
+    taskSourceRef.current = "";
+    setTaskId(null);
+    setRehumanizeLeft(0);
     notifyStatus("Cleared editor");
   };
 
@@ -719,6 +750,26 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           </section>
         </div>
 
+        {taskId && output.trim() ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-2.5">
+            <p className="text-sm text-muted">
+              Not quite right? Generate a fresh version of the same text.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleRefine(true)}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-2 rounded-full border border-primary bg-white px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-mint disabled:opacity-50"
+            >
+              <RefreshCw className={cn("h-4 w-4", isProcessing && "animate-spin")} aria-hidden />
+              Rehumanize
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-white">
+                {rehumanizeLeft} left
+              </span>
+            </button>
+          </div>
+        ) : null}
+
         <div className="flex flex-nowrap items-center gap-3 border-t border-border/60 px-3 py-2">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <HumanizerEditorToolbar
@@ -740,7 +791,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
               <Show when="signed-in">
                 <button
                   type="button"
-                  onClick={handleRefine}
+                  onClick={() => void handleRefine()}
                   disabled={!input.trim() || isProcessing}
                   className={HUMANIZE_BUTTON_CLASS}
                 >
@@ -751,7 +802,7 @@ function HumanizerWorkspaceInner({ isSignedIn }: { isSignedIn: boolean }) {
           ) : (
             <button
               type="button"
-              onClick={handleRefine}
+              onClick={() => void handleRefine()}
               disabled={!input.trim() || isProcessing}
               className={HUMANIZE_BUTTON_CLASS}
             >

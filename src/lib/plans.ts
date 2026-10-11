@@ -7,6 +7,8 @@ export type PlanConfig = {
   /** 1 word = 1 credit. */
   monthlyCredits: number;
   maxWordsPerRequest: number;
+  /** Fresh rewrites of the same text that do not spend credits. */
+  rehumanizationsPerText: number;
 };
 
 export const PLANS: Record<PlanTier, PlanConfig> = {
@@ -16,6 +18,7 @@ export const PLANS: Record<PlanTier, PlanConfig> = {
     monthlyPrice: 0,
     monthlyCredits: 300,
     maxWordsPerRequest: 300,
+    rehumanizationsPerText: 0,
   },
   BASIC: {
     tier: "BASIC",
@@ -23,6 +26,7 @@ export const PLANS: Record<PlanTier, PlanConfig> = {
     monthlyPrice: 5.99,
     monthlyCredits: 8_000,
     maxWordsPerRequest: 600,
+    rehumanizationsPerText: 1,
   },
   PRO: {
     tier: "PRO",
@@ -30,6 +34,7 @@ export const PLANS: Record<PlanTier, PlanConfig> = {
     monthlyPrice: 19.99,
     monthlyCredits: 40_000,
     maxWordsPerRequest: 2_000,
+    rehumanizationsPerText: 2,
   },
   ULTRA: {
     tier: "ULTRA",
@@ -37,6 +42,7 @@ export const PLANS: Record<PlanTier, PlanConfig> = {
     monthlyPrice: 39.99,
     monthlyCredits: 90_000,
     maxWordsPerRequest: 3_000,
+    rehumanizationsPerText: 3,
   },
 };
 

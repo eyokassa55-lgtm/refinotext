@@ -18,6 +18,7 @@ import {
 import { HumanizationFailedError, runHumanization, toApiSource } from "@/lib/humanize-engine";
 import { HUMANIZE_DETECTOR_IDS } from "@/lib/humanize-detectors";
 import { HUMANIZE_LANGUAGE_IDS } from "@/lib/humanize-languages";
+import { getPlanConfig } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureCurrentUser } from "@/lib/users";
@@ -40,6 +41,8 @@ const bodySchema = z.object({
   language: z.enum(HUMANIZE_LANGUAGE_IDS).optional(),
   detector: z.enum(HUMANIZE_DETECTOR_IDS).optional(),
   requestId: z.string().min(8).max(128).optional(),
+  rehumanize: z.boolean().optional(),
+  taskId: z.string().min(8).max(80).optional(),
 });
 
 function errorResponse(error: string, code: string, status: number, extra?: Record<string, unknown>) {
@@ -55,6 +58,7 @@ function humanizeSuccess(body: {
   creditsCharged: number;
   creditsRemaining: number;
   duplicate: boolean;
+  rehumanizationsLeft?: number;
 }) {
   return NextResponse.json({
     ...body,
@@ -173,7 +177,7 @@ export async function POST(req: NextRequest) {
     throw error;
   }
 
-  if (!check.allowed && check.error) {
+  if (!check.allowed && check.error && !(parsed.rehumanize && check.error.code === "INSUFFICIENT_CREDITS")) {
     const status = check.error.code === "EMPTY_TEXT" ? 400 : 402;
     return errorResponse(check.error.message, check.error.code, status, {
       wordCount: check.wordCount,
@@ -201,10 +205,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const requestId = buildRequestId(
-    user.id,
-    parsed.requestId ?? crypto.randomUUID(),
-  );
+  let skipCharge = false;
+  let variation: number | undefined;
+  let rehumanizationsLeft: number | undefined;
+  let requestId = buildRequestId(user.id, parsed.requestId ?? crypto.randomUUID());
+
+  if (parsed.rehumanize) {
+    const taskId = parsed.taskId?.trim() ?? "";
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(taskId)) {
+      return errorResponse("Start a humanization before rehumanizing.", "INVALID_BODY", 400);
+    }
+    const allowance = getPlanConfig(check.plan).rehumanizationsPerText;
+    const prefix = `${user.id}:${taskId}:rehumanize:`;
+    const used = await prisma.humanization.count({
+      where: { userId: user.id, requestId: { startsWith: prefix } },
+    });
+    if (used >= allowance) {
+      return errorResponse(
+        "You've used the free rehumanizations for this text. Choose a plan to continue.",
+        "REHUMANIZE_LIMIT",
+        402,
+        { plan: check.plan, rehumanizationsLeft: 0 },
+      );
+    }
+    variation = used + 1;
+    rehumanizationsLeft = allowance - variation;
+    requestId = `${prefix}${variation}`;
+    skipCharge = true;
+  }
 
   const previous = await prisma.humanization.findUnique({
     where: { requestId },
@@ -229,6 +257,7 @@ export async function POST(req: NextRequest) {
     intensity: parsed.intensity,
     language: parsed.language,
     detector: parsed.detector,
+    variation,
   };
 
   const wantsStream = req.headers.get("accept")?.includes("text/event-stream");
@@ -301,6 +330,7 @@ export async function POST(req: NextRequest) {
           tone: parsed.tone ?? null,
           readability: parsed.readability ?? null,
           intensity: parsed.intensity ?? null,
+          skipCharge,
         });
 
         send({
@@ -313,6 +343,7 @@ export async function POST(req: NextRequest) {
           creditsCharged: saved.charged,
           creditsRemaining: saved.balanceAfter,
           duplicate: saved.duplicate,
+          rehumanizationsLeft,
         });
       } catch (error) {
         if (error instanceof CreditError) {
@@ -400,6 +431,7 @@ export async function POST(req: NextRequest) {
       tone: parsed.tone ?? null,
       readability: parsed.readability ?? null,
       intensity: parsed.intensity ?? null,
+      skipCharge,
     });
 
     return humanizeSuccess({
@@ -410,6 +442,7 @@ export async function POST(req: NextRequest) {
       creditsCharged: saved.charged,
       creditsRemaining: saved.balanceAfter,
       duplicate: saved.duplicate,
+      rehumanizationsLeft,
     });
   } catch (error) {
     if (error instanceof CreditError) {

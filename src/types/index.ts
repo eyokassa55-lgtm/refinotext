@@ -26,6 +26,7 @@ export type HumanizeResponse = {
   creditsCharged: number;
   creditsRemaining: number;
   duplicate: boolean;
+  rehumanizationsLeft?: number;
 };
 
 export type HumanizeStreamEvent =

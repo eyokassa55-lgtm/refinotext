@@ -736,6 +736,7 @@ export async function saveHumanizationAndCharge(params: {
   tone?: string | null;
   readability?: string | null;
   intensity?: number | null;
+  skipCharge?: boolean;
 }): Promise<SavedHumanization> {
   const {
     userId,
@@ -746,6 +747,7 @@ export async function saveHumanizationAndCharge(params: {
     tone,
     readability,
     intensity,
+    skipCharge = false,
   } = params;
 
   if (wordCount <= 0) {
@@ -776,8 +778,10 @@ export async function saveHumanizationAndCharge(params: {
     let charged = 0;
     let balanceAfter: number;
 
-    if (existingDeduction) {
-      balanceAfter = existingDeduction.balanceAfter;
+    if (existingDeduction || skipCharge) {
+      const balance = await tx.creditBalance.findUnique({ where: { userId } });
+      balanceAfter = existingDeduction?.balanceAfter ?? balance?.balance ?? 0;
+      charged = 0;
     } else {
       const updated = await tx.creditBalance.updateMany({
         where: { userId, balance: { gte: wordCount } },
@@ -817,7 +821,7 @@ export async function saveHumanizationAndCharge(params: {
         userId,
         requestId,
         inputWordCount: wordCount,
-        creditsCharged: existingDeduction?.amount ?? wordCount,
+        creditsCharged: skipCharge ? 0 : (existingDeduction?.amount ?? wordCount),
         tone: tone ?? null,
         readability: readability ?? null,
         intensity: intensity ?? null,
