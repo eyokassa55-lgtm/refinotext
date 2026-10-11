@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Coins, FileText, Gauge } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { isClerkEnabled } from "@/lib/auth-config";
+import { isKnownCrawler } from "@/lib/crawlers";
 import { ROUTES, SUPPORT_EMAIL } from "@/lib/constants";
 import { getCreditBalance } from "@/lib/credits";
 import { planLabel, syncPolarCheckoutOnReturn } from "@/lib/polar-fulfillment";
@@ -40,6 +42,24 @@ export default async function DashboardPage({
 }) {
   if (!isClerkEnabled) {
     redirect(ROUTES.home);
+  }
+
+  const userAgent = (await headers()).get("user-agent");
+  if (isKnownCrawler(userAgent)) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center">
+        <h1 className="text-2xl font-bold tracking-tight">Sign in required</h1>
+        <p className="mt-3 text-sm text-muted">
+          Credit balances are available in your account after you sign in.
+        </p>
+        <Link
+          href={ROUTES.home}
+          className="mt-6 inline-flex text-sm font-semibold text-primary underline-offset-2 hover:underline"
+        >
+          Back to RefinoText
+        </Link>
+      </div>
+    );
   }
 
   const user = await ensureCurrentUser();

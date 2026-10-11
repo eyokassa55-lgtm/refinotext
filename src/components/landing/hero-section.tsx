@@ -1,7 +1,6 @@
 import { ArrowRight, Check, Globe, Shield, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
 import { HumanizerPreview } from "@/components/landing/humanizer-preview";
 import { ROUTES } from "@/lib/constants";
@@ -33,10 +32,13 @@ export function HeroSection() {
               <span className="text-xs font-bold uppercase tracking-widest text-primary">
                 — AI-assisted writing revision
               </span>
-              <Badge variant="accent">
-                <Globe className="h-3 w-3" aria-hidden />
-                Free plan available
-              </Badge>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-2.5 py-1 text-xs shadow-[0_1px_2px_rgba(15,23,20,0.06)]">
+                <Globe className="h-3.5 w-3.5 text-muted" strokeWidth={1.75} aria-hidden />
+                <span className="font-semibold tracking-tight text-foreground">
+                  1.25M+
+                </span>
+                <span className="font-medium text-muted">users</span>
+              </span>
             </div>
 
             <h1

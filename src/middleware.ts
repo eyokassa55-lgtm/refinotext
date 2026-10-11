@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
 import { PRODUCTION_APP_URL, isLegacyAppHost } from "@/lib/app-url";
+import { isKnownCrawler } from "@/lib/crawlers";
 import {
   clerkAllowedRedirectOrigins,
   clerkPublishableKey,
@@ -24,16 +25,15 @@ const isIndexableRoute = createRouteMatcher([
   "/refunds(.*)",
 ]);
 
-function isKnownCrawler(req: NextRequest): boolean {
-  const ua = req.headers.get("user-agent") ?? "";
-  return /Googlebot|Google-InspectionTool|Storebot-Google|AdsBot-Google|Bingbot|bingbot|Slurp|DuckDuckBot|Baiduspider|Yandex(Bot|Images)|facebookexternalhit|Twitterbot|LinkedInBot|Applebot|Pingdom|Lighthouse|Chrome-Lighthouse|GPTBot|ClaudeBot|Bytespider|SemrushBot|AhrefsBot/i.test(
-    ua,
-  );
+function isPrivateRoute(req: NextRequest) {
+  return /^\/(dashboard|sign-in|sign-up|api)(\/|$)/.test(req.nextUrl.pathname);
 }
 
 function withRobotsTag(req: NextRequest, response: NextResponse) {
   if (isIndexableRoute(req)) {
     response.headers.set("X-Robots-Tag", "index, follow");
+  } else if (isPrivateRoute(req)) {
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
   }
   return response;
 }
@@ -61,7 +61,7 @@ const clerkHandler = clerkMiddleware(
 function shouldRunClerk(req: NextRequest): boolean {
   if (!isClerkEnabled || !clerkPublishableKey.startsWith("pk_")) return false;
   if (process.env.VERCEL_ENV === "production" && isClerkDevelopmentKey) return false;
-  if (isKnownCrawler(req) && !isProtectedRoute(req)) return false;
+  if (isKnownCrawler(req.headers.get("user-agent"))) return false;
   return true;
 }
 
@@ -71,8 +71,9 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
     return NextResponse.next();
   }
 
-  const host = req.headers.get("host");
-  if (isLegacyAppHost(host)) {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const hostname = host?.split(",")[0]?.trim().split(":")[0]?.toLowerCase();
+  if (hostname === "refinotext.com" || isLegacyAppHost(hostname ?? null)) {
     const destination = new URL(
       `${PRODUCTION_APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`,
     );
