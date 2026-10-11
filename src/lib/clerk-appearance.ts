@@ -43,13 +43,12 @@ export const authPanelAppearance = {
     footerAction: "!hidden",
     footerPages: "!hidden",
     socialButtonsBlockButton:
-      "h-11 rounded-full border-0 bg-primary text-sm font-semibold text-white shadow-none hover:bg-primary-hover",
-    socialButtonsBlockButtonText: "font-semibold text-white",
-    socialButtonsProviderIcon: "brightness-0 invert",
+      "!h-11 !rounded-full !border !border-border !bg-white !text-sm !font-semibold !text-foreground !shadow-none hover:!bg-mint",
+    socialButtonsBlockButtonText: "!font-semibold !text-foreground",
     formButtonPrimary:
-      "h-11 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-none hover:bg-primary-hover",
+      "!h-11 !rounded-full !bg-primary !text-sm !font-semibold !text-white !shadow-none hover:!bg-primary-hover",
     formFieldInput:
-      "h-11 rounded-full border-border bg-white px-4 focus:ring-primary",
+      "!h-11 !rounded-full !border-border !bg-white !px-4 focus:!ring-primary",
     dividerRow: "my-1",
   },
 };
