@@ -35,20 +35,22 @@ export const authPanelAppearance = {
     ...clerkAppearance.elements,
     rootBox: "w-full",
     cardBox: "!w-full !shadow-none !rounded-none",
-    card: "!w-full !gap-3 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none",
+    card: "!w-full !gap-2 !rounded-none !border-0 !bg-transparent !p-0 !shadow-none",
     header: "!hidden",
     headerTitle: "!hidden",
     headerSubtitle: "!hidden",
     footer: "!hidden",
     footerAction: "!hidden",
     footerPages: "!hidden",
+    main: "!gap-3",
     socialButtonsBlockButton:
-      "!h-11 !rounded-full !border !border-border !bg-white !text-sm !font-semibold !text-foreground !shadow-none hover:!bg-mint",
+      "!h-10 !rounded-full !border !border-border !bg-white !text-sm !font-semibold !text-foreground !shadow-none hover:!bg-mint",
     socialButtonsBlockButtonText: "!font-semibold !text-foreground",
     formButtonPrimary:
-      "!h-11 !rounded-full !bg-primary !text-sm !font-semibold !text-white !shadow-none hover:!bg-primary-hover",
+      "!h-10 !rounded-full !bg-primary !text-sm !font-semibold !text-white !shadow-none hover:!bg-primary-hover",
     formFieldInput:
-      "!h-11 !rounded-full !border-border !bg-white !px-4 focus:!ring-primary",
-    dividerRow: "my-1",
+      "!h-10 !rounded-full !border-border !bg-white !px-4 focus:!ring-primary",
+    formFieldRow: "!gap-1",
+    dividerRow: "!my-0",
   },
 };

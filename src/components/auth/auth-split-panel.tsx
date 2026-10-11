@@ -43,8 +43,8 @@ export function AuthSplitPanel({
   children,
 }: AuthSplitPanelProps) {
   return (
-    <div className="grid w-full max-w-[960px] overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_rgba(13,92,69,0.14)] lg:grid-cols-2">
-      <aside className="flex flex-col bg-primary px-8 py-9 text-white sm:px-10 sm:py-10">
+    <div className="grid w-full max-w-[880px] overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_rgba(13,92,69,0.14)] lg:grid-cols-2">
+      <aside className="flex flex-col bg-primary px-7 py-7 text-white sm:px-8">
         <Link
           href={ROUTES.home}
           className="inline-flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -61,11 +61,11 @@ export function AuthSplitPanel({
           <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>
         </Link>
 
-        <div className="my-auto max-w-sm py-10">
-          <h2 className="text-[1.85rem] font-bold leading-[1.15] tracking-[-0.03em]">
+        <div className="my-auto max-w-[16rem] py-6">
+          <h2 className="text-[1.65rem] font-bold leading-[1.15] tracking-[-0.03em]">
             Transform AI text into natural, human writing
           </h2>
-          <p className="mt-4 text-sm leading-6 text-white/75">
+          <p className="mt-3 text-sm leading-6 text-white/75">
             Join writers who use RefinoText to revise AI-assisted drafts for
             clarity, tone, and readability.
           </p>
@@ -73,10 +73,10 @@ export function AuthSplitPanel({
 
         <div>
           <p className="text-xs text-white/70">Trusted by writers worldwide</p>
-          <ul className="mt-4 flex flex-wrap gap-2">
+          <ul className="mt-3 flex flex-wrap gap-2">
             {TRUST_MARKS.map((mark) => (
               <li key={mark.name}>
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white">
                   <Image
                     src={mark.src}
                     alt={mark.name}
@@ -91,15 +91,15 @@ export function AuthSplitPanel({
         </div>
       </aside>
 
-      <div className="flex flex-col px-6 py-9 sm:px-10 sm:py-10">
-        <h1 className="text-[1.7rem] font-bold tracking-[-0.03em] text-foreground">
+      <div className="flex flex-col px-6 py-7 sm:px-8">
+        <h1 className="text-2xl font-bold tracking-[-0.03em] text-foreground">
           {title}
         </h1>
-        <p className="mt-1.5 text-sm text-muted">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted">{subtitle}</p>
 
-        <div className="mt-6">{children}</div>
+        <div className="mt-4">{children}</div>
 
-        <p className="mt-5 text-xs leading-5 text-muted">
+        <p className="mt-3 text-xs leading-5 text-muted">
           By continuing, you agree to our{" "}
           <Link href={ROUTES.terms} className="font-medium text-primary hover:underline">
             Terms of Service
@@ -118,7 +118,7 @@ export function AuthSplitPanel({
           .
         </p>
 
-        <ul className="mt-5 space-y-3.5">
+        <ul className="mt-3 space-y-2">
           {PERKS.map((perk) => (
             <li key={perk.title} className="flex gap-3">
               <perk.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
@@ -134,7 +134,7 @@ export function AuthSplitPanel({
           ))}
         </ul>
 
-        <p className="mt-6 text-sm text-muted">
+        <p className="mt-4 text-sm text-muted">
           {alternatePrompt}{" "}
           <Link href={alternateHref} className="font-semibold text-primary hover:underline">
             {alternateLabel}
