@@ -97,7 +97,7 @@ export function AuthSplitPanel({
         </h1>
         <p className="mt-1 text-sm text-muted">{subtitle}</p>
 
-        <div className="mt-4">{children}</div>
+        <div className="mt-5 overflow-visible pt-1">{children}</div>
 
         <p className="mt-3 text-xs leading-5 text-muted">
           By continuing, you agree to our{" "}
