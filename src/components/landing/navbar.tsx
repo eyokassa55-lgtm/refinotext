@@ -44,7 +44,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b border-white/30 bg-white/40 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/30">
       <Container as="nav" ariaLabel="Main navigation" className="overflow-x-clip">
         <div className="flex h-16 min-w-0 items-center justify-between gap-3">
-          <BrandLogo priority className="-ml-3 sm:-ml-4" />
+          <BrandLogo priority />
 
           <div className="hidden min-w-0 items-center gap-7 md:flex lg:gap-8">
             {NAV_ITEMS.map((link) => {

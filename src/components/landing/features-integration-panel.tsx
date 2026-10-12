@@ -52,7 +52,7 @@ export function FeaturesIntegrationPanel() {
               height={64}
               sizes="56px"
               quality={100}
-              className="h-12 w-12 scale-[1.45] object-contain"
+              className="h-12 w-12 object-contain"
             />
             <span className="text-base font-semibold tracking-tight text-foreground">
               {APP_NAME}

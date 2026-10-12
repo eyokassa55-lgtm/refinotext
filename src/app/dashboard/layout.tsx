@@ -27,7 +27,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <BrandLogo href={ROUTES.home} className="-ml-3 sm:-ml-4" />
+          <BrandLogo href={ROUTES.home} />
           <nav className="flex min-w-0 items-center gap-3 sm:gap-5" aria-label="Dashboard">
             <Link href={ROUTES.home} className={navLinkClass}>
               Home

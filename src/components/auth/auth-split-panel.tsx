@@ -49,16 +49,16 @@ export function AuthSplitPanel({
           href={ROUTES.home}
           className="inline-flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white">
             <Image
               src={APP_LOGO_SRC}
               alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 object-contain"
+              width={22}
+              height={22}
+              className="h-[18px] w-[18px] object-contain"
             />
           </span>
-          <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>
+          <span className="text-lg font-bold leading-none tracking-tight">{APP_NAME}</span>
         </Link>
 
         <div className="my-auto max-w-[16rem] py-6">

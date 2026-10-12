@@ -15,36 +15,38 @@ type BrandLogoProps = {
 export function BrandLogo({
   href = ROUTES.home,
   className,
-  size = 52,
+  size,
   showWordmark = true,
   priority = false,
 }: BrandLogoProps) {
+  const markSize = size ?? (showWordmark ? 34 : 52);
+
   return (
     <Link
       href={href}
       aria-label={APP_NAME}
       className={cn(
-        "inline-flex min-w-0 items-center gap-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        "inline-flex min-w-0 items-center gap-2 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         className,
       )}
     >
       <span
-        className="relative inline-flex shrink-0 items-center justify-center overflow-visible"
-        style={{ width: size, height: size }}
+        className="relative inline-flex shrink-0 items-center justify-center"
+        style={{ width: markSize, height: markSize }}
       >
         <Image
           src={APP_LOGO_SRC}
           alt=""
           width={128}
           height={128}
-          sizes={`${Math.round(size * 1.5)}px`}
+          sizes={`${markSize}px`}
           quality={100}
-          className="h-full w-full scale-[1.45] object-contain bg-transparent"
+          className="h-full w-full object-contain"
           priority={priority}
         />
       </span>
       {showWordmark ? (
-        <span className="-ml-1.5 truncate text-2xl font-bold leading-none tracking-[-0.03em] text-foreground sm:-ml-2">
+        <span className="truncate text-2xl font-bold leading-none tracking-[-0.03em] text-foreground">
           {APP_NAME}
         </span>
       ) : null}
