@@ -59,5 +59,7 @@ export function resolveMaxWordsPerRequest(
 ): number {
   const config = getPlanConfig(plan);
   if (plan === "FREE") return config.maxWordsPerRequest;
-  return storedMaxWordsPerRequest || config.maxWordsPerRequest;
+  // Paid plans must never keep a Free-tier (or otherwise lower) cap after upgrade.
+  const stored = storedMaxWordsPerRequest ?? 0;
+  return Math.max(stored, config.maxWordsPerRequest);
 }

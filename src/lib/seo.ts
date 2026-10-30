@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
 
 import { getAbsoluteUrl, getAppUrl } from "@/lib/app-url";
-import { APP_DESCRIPTION, APP_LOGO_SRC, APP_NAME, SUPPORT_EMAIL } from "@/lib/constants";
+import {
+  APP_BRAND_ALIASES,
+  APP_DESCRIPTION,
+  APP_DOMAIN,
+  APP_LOGO_SRC,
+  APP_NAME,
+  SUPPORT_EMAIL,
+} from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
-export const SEO_TITLE = `${APP_NAME}: Free AI Humanizer for Clear, Natural Writing`;
+/** Domain in the title helps Google pick refinotext.com over lookalike brands. */
+export const SEO_TITLE = `${APP_NAME} (${APP_DOMAIN}): Free AI Humanizer for Clear, Natural Writing`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
-export const SITE_LAST_MODIFIED = new Date("2026-10-11T08:00:00.000Z");
+export const SITE_LAST_MODIFIED = new Date("2026-10-30T16:00:00.000Z");
 
 const indexableRobots = {
   index: true,
@@ -30,26 +38,25 @@ export const PAGE_SEO = {
   home: {
     path: "/",
     title: SEO_TITLE,
-    description:
-      "RefinoText turns your drafts into clear, natural, and polished writing. Revise AI-assisted text for tone and readability while keeping your meaning.",
+    description: APP_DESCRIPTION,
   },
   pricing: {
     path: "/pricing",
     title: "Pricing",
     description:
-      "Choose your free RefinoText plan. Simple pricing for monthly and annual writing credits.",
+      "RefinoText (refinotext.com) pricing: free plan plus Basic, Pro, and Ultra writing credits billed monthly or annually.",
   },
   contact: {
     path: "/contact",
     title: "Contact Us",
     description:
-      "How can we help? The RefinoText support team is ready to help with your account, billing, or writing questions.",
+      "Contact the official RefinoText team at refinotext.com for account, billing, or writing help.",
   },
   faq: {
     path: "/faq",
     title: "FAQ",
     description:
-      "What is RefinoText? RefinoText is an AI writing tool that revises drafts into clearer, more natural writing.",
+      "What is RefinoText (refinotext)? Official FAQ for the refinotext.com AI humanizer — spelling, plans, and how the editor works.",
   },
   privacy: {
     path: "/privacy",
@@ -117,6 +124,7 @@ export function pageMetadata(
   return {
     title: options?.absoluteTitle ? { absolute: title } : title,
     description,
+    keywords: [...APP_BRAND_ALIASES, APP_DOMAIN, "AI humanizer", "AI writing tool"],
     alternates: {
       canonical: url,
     },
@@ -160,6 +168,8 @@ export function buildOrganizationAndWebsiteJsonLd() {
         "@type": "Organization",
         "@id": `${url}/#organization`,
         name: APP_NAME,
+        legalName: APP_NAME,
+        alternateName: [...APP_BRAND_ALIASES],
         url,
         logo: {
           "@type": "ImageObject",
@@ -167,6 +177,13 @@ export function buildOrganizationAndWebsiteJsonLd() {
         },
         email: SUPPORT_EMAIL,
         description: APP_DESCRIPTION,
+        brand: {
+          "@type": "Brand",
+          name: APP_NAME,
+          alternateName: [...APP_BRAND_ALIASES],
+          url,
+          slogan: `${APP_NAME} — official site ${APP_DOMAIN}`,
+        },
         contactPoint: {
           "@type": "ContactPoint",
           email: SUPPORT_EMAIL,
@@ -177,6 +194,7 @@ export function buildOrganizationAndWebsiteJsonLd() {
         "@type": "WebSite",
         "@id": `${url}/#website`,
         name: APP_NAME,
+        alternateName: [...APP_BRAND_ALIASES],
         url,
         description: APP_DESCRIPTION,
         publisher: { "@id": `${url}/#organization` },
@@ -197,6 +215,7 @@ export function buildHomeJsonLd() {
         "@type": ["SoftwareApplication", "WebApplication"],
         "@id": `${url}/#app`,
         name: APP_NAME,
+        alternateName: [...APP_BRAND_ALIASES],
         applicationCategory: "BusinessApplication",
         applicationSubCategory: "Writing",
         operatingSystem: "Web",
@@ -210,6 +229,7 @@ export function buildHomeJsonLd() {
           offerCount: "4",
         },
         publisher: { "@id": `${url}/#organization` },
+        brand: { "@id": `${url}/#organization` },
         dateModified: SITE_LAST_MODIFIED.toISOString(),
       },
       {
@@ -224,6 +244,10 @@ export function buildHomeJsonLd() {
         primaryImageOfPage: getAbsoluteUrl("/opengraph-image"),
         dateModified: SITE_LAST_MODIFIED.toISOString(),
         breadcrumb: { "@id": `${url}/#breadcrumb` },
+        speakable: {
+          "@type": "SpeakableSpecification",
+          cssSelector: ["#hero-heading", "#brand-identity"],
+        },
       },
       {
         "@type": "BreadcrumbList",

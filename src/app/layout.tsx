@@ -18,7 +18,12 @@ import {
   isClerkEnabled,
 } from "@/lib/auth-config";
 import { clerkAppearance } from "@/lib/clerk-appearance";
-import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
+import {
+  APP_BRAND_ALIASES,
+  APP_DESCRIPTION,
+  APP_DOMAIN,
+  APP_NAME,
+} from "@/lib/constants";
 import { SEO_TITLE } from "@/lib/seo";
 
 import "./globals.css";
@@ -70,6 +75,10 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   applicationName: APP_NAME,
+  keywords: [...APP_BRAND_ALIASES, APP_DOMAIN, "AI humanizer", "AI writing tool"],
+  category: "technology",
+  creators: [APP_NAME],
+  publisher: APP_NAME,
   openGraph: {
     type: "website",
     url: appUrl,

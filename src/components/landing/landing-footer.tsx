@@ -16,8 +16,10 @@ export function LandingFooter() {
           <div className="sm:col-span-2 lg:col-span-1">
             <BrandLogo href={ROUTES.home} />
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
-              RefinoText is an AI-assisted writing tool that revises drafts for
-              clarity, tone, and readability while aiming to preserve meaning.
+              RefinoText (refinotext) is the official AI writing humanizer at{" "}
+              <span className="font-medium text-foreground">refinotext.com</span>
+              . We revise drafts for clarity, tone, and readability while aiming
+              to preserve meaning.
             </p>
             <a
               href={`mailto:${SUPPORT_EMAIL}`}
@@ -147,8 +149,8 @@ export function LandingFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 sm:flex-row">
           <p className="text-sm text-muted">
-            &copy; {currentYear} {APP_NAME}. All rights reserved. Paid checkout is
-            processed by Polar as merchant of record.
+            &copy; {currentYear} {APP_NAME} (refinotext.com). All rights reserved.
+            Paid checkout is processed by Polar as merchant of record.
           </p>
           <nav aria-label="Sitemap" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             {PUBLIC_PAGES.map((page) => (

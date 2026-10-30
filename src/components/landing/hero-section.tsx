@@ -74,6 +74,17 @@ export function HeroSection() {
               clarity, tone, and readability while aiming to keep your meaning.
               Review the result before you use it.
             </p>
+            <p
+              id="brand-identity"
+              className="mt-3 max-w-lg text-sm leading-6 text-muted"
+            >
+              Official site:{" "}
+              <span className="font-semibold text-foreground">refinotext.com</span>
+              {" · "}
+              Brand: RefinoText (one word:{" "}
+              <span className="font-semibold text-foreground">refinotext</span>
+              ).
+            </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button href="#humanizer" size="lg">

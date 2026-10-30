@@ -299,6 +299,11 @@ export const CREDIT_TOPUPS = [
 
 export const FAQ_LANDING_ITEMS = [
   {
+    question: "What is the official RefinoText website?",
+    answer:
+      "The official site is refinotext.com. The brand is RefinoText—one word (refinotext), spelled Refino + Text. Search refinotext or refino text and open refinotext.com.",
+  },
+  {
     question: "Why is RefinoText different from other writing tools?",
     answer:
       "RefinoText focuses on revising drafts for clearer, more natural language while aiming to preserve your meaning. You paste text, run Humanize, review the result, and keep editing in your own voice. It is a revision aid—not a detector bypass or cheating service.",
@@ -332,7 +337,17 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
       {
         question: "What is RefinoText?",
         answer:
-          "RefinoText is an AI-powered text humanizer that rewrites drafts into clearer, more natural writing. Our humanizer helps you polish AI-assisted content while preserving the original meaning and intent—you review every result before you publish or submit.",
+          "RefinoText (also searched as refinotext or refino text) is the official AI-powered text humanizer at refinotext.com. It rewrites drafts into clearer, more natural writing while preserving your meaning—you review every result before you publish or submit.",
+      },
+      {
+        question: "What is the official RefinoText website?",
+        answer:
+          "The official website is https://www.refinotext.com. The brand is RefinoText—one word, spelled R-e-f-i-n-o-T-e-x-t (Refino + Text). If you search Google for refinotext or refino text, look for refinotext.com.",
+      },
+      {
+        question: "How do you spell RefinoText?",
+        answer:
+          "RefinoText is spelled with an o: Refino + Text, written as one word (refinotext). The domain is refinotext.com. It is not “RefineText” or any similar lookalike spelling.",
       },
       {
         question: "How does the humanizer work?",

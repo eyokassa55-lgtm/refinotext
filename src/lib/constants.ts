@@ -1,7 +1,20 @@
 export const APP_NAME = "RefinoText";
+/** One-word brand token people type in Google (not “refino text”). */
+export const APP_NAME_SLUG = "refinotext";
+export const APP_DOMAIN = "refinotext.com";
 export const APP_LOGO_SRC = "/logo.png";
 export const APP_DESCRIPTION =
-  "RefinoText is an AI-assisted writing tool that rewrites drafts for clarity, tone, and readability while preserving your meaning. Start with a free plan. Paid checkout is handled by Polar.";
+  "RefinoText (refinotext.com) is the official AI writing humanizer that rewrites drafts for clarity, tone, and readability while preserving your meaning. Search refinotext or refino text to find us. Start free; paid checkout is handled by Polar.";
+
+/** Brand aliases for schema / SEO — exact tokens Google should map to this site. */
+export const APP_BRAND_ALIASES = [
+  APP_NAME,
+  APP_NAME_SLUG,
+  "Refino Text",
+  "refino text",
+  "RefinoText AI",
+  "RefinoText humanizer",
+] as const;
 
 export const SUPPORT_EMAIL = "support@refinotext.com";
 

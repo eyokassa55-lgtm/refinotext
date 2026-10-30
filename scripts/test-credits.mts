@@ -143,15 +143,21 @@ async function main() {
       clippedFree.maxWordsPerRequest === 300,
   );
 
-  // Move to Basic so the 600-word rule can be exercised.
+  // Move to Basic with a stale Free-era word cap — paid plans must repair to 600.
   await prisma.subscription.update({
     where: { userId: user.id },
-    data: { plan: "BASIC", monthlyCredits: 8000, maxWordsPerRequest: 600 },
+    data: { plan: "BASIC", monthlyCredits: 8000, maxWordsPerRequest: 300 },
   });
   await prisma.creditBalance.update({
     where: { userId: user.id },
     data: { balance: 8000 },
   });
+  const basicRepaired = await getCreditBalance(user.id);
+  assert(
+    "BASIC upgrades drop the Free 300-word cap and use 600 words per request",
+    basicRepaired?.plan === "BASIC" && basicRepaired.maxWordsPerRequest === 600,
+    `plan=${basicRepaired?.plan} maxWords=${basicRepaired?.maxWordsPerRequest}`,
+  );
 
   console.log("\n2. 100 words = 100 credits");
   const text100 = words(100);

@@ -60,7 +60,12 @@ async function syncPaidAllotment(account: Subscription): Promise<Subscription> {
   const product = getBillingProductByProductId(account.polarProductId);
   const allotment = subscriptionPeriodAllotment(account);
   const interval = product?.interval ?? account.interval;
-  const maxWords = product?.maxWordsPerRequest ?? account.maxWordsPerRequest;
+  const planLimit = getPlanConfig(account.plan).maxWordsPerRequest;
+  const maxWords = Math.max(
+    product?.maxWordsPerRequest ?? 0,
+    planLimit,
+    account.maxWordsPerRequest ?? 0,
+  );
   if (
     account.monthlyCredits === allotment &&
     account.interval === interval &&
