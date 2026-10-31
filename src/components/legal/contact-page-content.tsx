@@ -49,6 +49,27 @@ export function ContactPageContent() {
           </p>
         </header>
 
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04)]">
+            <h3 className="text-sm font-semibold text-foreground">Account & Access</h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Sign-in trouble, authentication settings, or managing your account and credit allocations.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04)]">
+            <h3 className="text-sm font-semibold text-foreground">Billing & Subscriptions</h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Invoices, receipts, plan changes, or subscription cancellation through Polar Customer Portal.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,20,0.04)]">
+            <h3 className="text-sm font-semibold text-foreground">Writing & Feedback</h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Feedback on rewrite quality, language presets, suggestions, or reporting technical issues.
+            </p>
+          </div>
+        </div>
+
         <div className="mb-6 rounded-xl border border-accent/20 bg-accent-light/50 px-4 py-4 sm:px-5">
           <p className="text-sm text-foreground">
             <span className="font-semibold">Support email:</span>{" "}
@@ -60,9 +81,7 @@ export function ContactPageContent() {
             </a>
           </p>
           <p className="mt-2 text-sm text-muted">
-            For billing issues, include your account email and Polar receipt or
-            order details. Cancel subscriptions from Polar’s Customer Portal using
-            the link in Polar’s billing emails.
+            For billing inquiries, include your account email address and Polar receipt or order reference. Cancel subscriptions anytime directly from Polar’s Customer Portal using the link in your billing confirmation emails.
           </p>
         </div>
 

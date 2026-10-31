@@ -3,6 +3,8 @@ import type { MetadataRoute } from "next";
 import { getAbsoluteUrl } from "@/lib/app-url";
 import { SITE_LAST_MODIFIED } from "@/lib/seo";
 
+export const revalidate = 3600;
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = SITE_LAST_MODIFIED;
 
@@ -26,40 +28,34 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: getAbsoluteUrl("/sign-in"),
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
       url: getAbsoluteUrl("/contact"),
       lastModified,
       changeFrequency: "monthly",
-      priority: 0.5,
+      priority: 0.7,
     },
     {
       url: getAbsoluteUrl("/privacy"),
       lastModified,
       changeFrequency: "yearly",
-      priority: 0.3,
+      priority: 0.4,
     },
     {
       url: getAbsoluteUrl("/terms"),
       lastModified,
       changeFrequency: "yearly",
-      priority: 0.3,
+      priority: 0.4,
     },
     {
       url: getAbsoluteUrl("/acceptable-use"),
       lastModified,
       changeFrequency: "yearly",
-      priority: 0.3,
+      priority: 0.4,
     },
     {
       url: getAbsoluteUrl("/refunds"),
       lastModified,
       changeFrequency: "yearly",
-      priority: 0.4,
+      priority: 0.5,
     },
   ];
 }

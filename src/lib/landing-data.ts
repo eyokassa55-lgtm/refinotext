@@ -425,6 +425,39 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
 
 export const FAQ_ITEMS = FAQ_PAGE_SECTIONS.flatMap((section) => section.items);
 
+export const PRICING_FAQS: readonly FaqItem[] = [
+  {
+    question: "How do RefinoText word credits work?",
+    answer:
+      "One credit equals one word you paste into the humanizer. The length of the rewritten output does not consume extra credits. Your remaining balance is clearly displayed in your dashboard and updates in real-time with each rewrite.",
+  },
+  {
+    question: "Can I try RefinoText for free before paying?",
+    answer:
+      "Yes! Every new RefinoText user receives 300 free monthly credits to test the humanizer and experience the writing quality firsthand. No credit card is required to sign up.",
+  },
+  {
+    question: "Can I cancel or change my subscription at any time?",
+    answer:
+      "Absolutely. You can cancel, upgrade, or downgrade your plan anytime with a single click through the Polar Customer Portal. When you cancel, you will continue to enjoy your paid plan benefits until the end of your current billing period.",
+  },
+  {
+    question: "How are payments handled and is checkout secure?",
+    answer:
+      "All transactions are securely handled by Polar, our merchant of record. Polar uses industry-standard 256-bit SSL encryption and complies with strict international payment security standards. RefinoText never stores or handles your credit card numbers directly.",
+  },
+  {
+    question: "What is your refund policy?",
+    answer:
+      `We stand behind our writing tools. If you are unsatisfied with your subscription, email us at ${SUPPORT_EMAIL} within 7 days of your purchase, and our team will review your request in good faith. You can also review our full Refunds and Cancellation Policy.`,
+  },
+  {
+    question: "Do unused credits roll over to the next month?",
+    answer:
+      "Subscription credits renew at the beginning of each billing cycle. If you need flexible words that never expire, one-time credit top-ups are available and remain in your account until you use them.",
+  },
+] as const;
+
 export type FieldNotesTestimonial = {
   quoteBefore: string;
   quoteHighlight: string;

@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
-import { PRODUCTION_APP_URL, isLegacyAppHost } from "@/lib/app-url";
+import { PRODUCTION_APP_URL, getAppUrl, isLegacyAppHost } from "@/lib/app-url";
 import { isKnownCrawler } from "@/lib/crawlers";
 import {
   clerkAllowedRedirectOrigins,
@@ -19,7 +19,6 @@ const isIndexableRoute = createRouteMatcher([
   "/pricing(.*)",
   "/faq(.*)",
   "/contact(.*)",
-  "/sign-in(.*)",
   "/privacy(.*)",
   "/terms(.*)",
   "/acceptable-use(.*)",
@@ -27,7 +26,7 @@ const isIndexableRoute = createRouteMatcher([
 ]);
 
 function isPrivateRoute(req: NextRequest) {
-  return /^\/(dashboard|sign-up|api)(\/|$)/.test(req.nextUrl.pathname);
+  return /^\/(dashboard|sign-in|sign-up|api)(\/|$)/.test(req.nextUrl.pathname);
 }
 
 function withRobotsTag(req: NextRequest, response: NextResponse) {
@@ -46,7 +45,8 @@ const clerkHandler = clerkMiddleware(
     if (isProtectedRoute(req)) {
       const { userId } = await auth();
       if (!userId) {
-        const signIn = new URL(clerkSignInUrl, req.url);
+        const origin = getAppUrl();
+        const signIn = new URL(clerkSignInUrl, origin);
         signIn.searchParams.set("redirect_url", req.nextUrl.pathname);
         return NextResponse.redirect(signIn);
       }
@@ -75,8 +75,12 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const hostname = host?.split(",")[0]?.trim().split(":")[0]?.toLowerCase();
   if (hostname === "refinotext.com" || isLegacyAppHost(hostname ?? null)) {
+    let cleanPath = req.nextUrl.pathname;
+    if (cleanPath.length > 1 && cleanPath.endsWith("/")) {
+      cleanPath = cleanPath.slice(0, -1);
+    }
     const destination = new URL(
-      `${PRODUCTION_APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`,
+      `${PRODUCTION_APP_URL}${cleanPath}${req.nextUrl.search}`,
     );
     return NextResponse.redirect(destination, 308);
   }

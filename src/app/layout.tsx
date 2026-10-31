@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   applicationName: APP_NAME,
   keywords: [...APP_BRAND_ALIASES, APP_DOMAIN, "AI humanizer", "AI writing tool"],
   category: "technology",
-  creators: [APP_NAME],
+  creator: APP_NAME,
   publisher: APP_NAME,
   openGraph: {
     type: "website",

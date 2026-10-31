@@ -15,7 +15,7 @@ import { FAQ_ITEMS } from "@/lib/landing-data";
 export const SEO_TITLE = `${APP_NAME} (${APP_DOMAIN}): Free AI Humanizer for Clear, Natural Writing`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
-export const SITE_LAST_MODIFIED = new Date("2026-10-30T16:00:00.000Z");
+export const SITE_LAST_MODIFIED = new Date("2026-10-31T03:00:00.000Z");
 
 const indexableRobots = {
   index: true,
@@ -42,21 +42,21 @@ export const PAGE_SEO = {
   },
   pricing: {
     path: "/pricing",
-    title: "Pricing",
+    title: "Pricing Plans & Writing Credits",
     description:
-      "RefinoText (refinotext.com) pricing: free plan plus Basic, Pro, and Ultra writing credits billed monthly or annually.",
+      "RefinoText pricing: start free with 300 words/month, or choose Basic, Pro, or Ultra for higher word limits. Paid checkout handled securely by Polar.",
   },
   contact: {
     path: "/contact",
-    title: "Contact Us",
+    title: "Contact Us & Customer Support",
     description:
-      "Contact the official RefinoText team at refinotext.com for account, billing, or writing help.",
+      "Contact the official RefinoText support team at refinotext.com for account, billing, cancellation, or writing help.",
   },
   faq: {
     path: "/faq",
-    title: "FAQ",
+    title: "FAQ — AI Writing Humanizer Questions",
     description:
-      "What is RefinoText (refinotext)? Official FAQ for the refinotext.com AI humanizer — spelling, plans, and how the editor works.",
+      "Frequently asked questions about RefinoText: how the AI humanizer works, writing credits, pricing plans, privacy, and account settings.",
   },
   privacy: {
     path: "/privacy",
@@ -72,15 +72,15 @@ export const PAGE_SEO = {
   },
   refunds: {
     path: "/refunds",
-    title: "Refunds and Cancellation",
+    title: "Refunds and Cancellation Policy",
     description:
-      "How RefinoText subscriptions renew, how to cancel through Polar, and when refunds may be available.",
+      "How RefinoText subscriptions renew, how to cancel through Polar Customer Portal, and refund eligibility guidelines.",
   },
   acceptableUse: {
     path: "/acceptable-use",
-    title: "Responsible Use",
+    title: "Responsible Use Policy",
     description:
-      "RefinoText helps you refine and improve how your writing reads. Use it to revise your own drafts.",
+      "RefinoText responsible writing and ethical use policy. Guidelines on writing integrity, original drafting, and acceptable service usage.",
   },
   signIn: {
     path: "/sign-in",
@@ -265,9 +265,12 @@ export function buildHomeJsonLd() {
   };
 }
 
-export function buildFaqPageJsonLd() {
+export function buildFaqPageJsonLd(
+  items: readonly { question: string; answer: string }[] = FAQ_ITEMS,
+  path: string = PAGE_SEO.faq.path,
+) {
   const url = getAppUrl();
-  const pageUrl = getAbsoluteUrl(PAGE_SEO.faq.path);
+  const pageUrl = getAbsoluteUrl(path);
 
   return {
     "@context": "https://schema.org",
@@ -276,7 +279,7 @@ export function buildFaqPageJsonLd() {
     url: pageUrl,
     inLanguage: "en-US",
     isPartOf: { "@id": `${url}/#website` },
-    mainEntity: FAQ_ITEMS.map((item) => ({
+    mainEntity: items.map((item) => ({
       "@type": "Question",
       name: item.question,
       acceptedAnswer: {

@@ -11,7 +11,7 @@ export const metadata = pageMetadata(
   PAGE_SEO.signIn.path,
   PAGE_SEO.signIn.title,
   PAGE_SEO.signIn.description,
-  { absoluteTitle: true },
+  { index: false },
 );
 
 export default function SignInPage() {

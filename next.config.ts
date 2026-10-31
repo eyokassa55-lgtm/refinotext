@@ -37,6 +37,30 @@ const nextConfig: NextConfig = {
   ],
   // Hide the Vercel/Next.js floating dev badge in the browser.
   devIndicators: false,
+  async redirects() {
+    return [
+      {
+        source: "/login",
+        destination: "/sign-in",
+        permanent: true,
+      },
+      {
+        source: "/signin",
+        destination: "/sign-in",
+        permanent: true,
+      },
+      {
+        source: "/register",
+        destination: "/sign-up",
+        permanent: true,
+      },
+      {
+        source: "/signup",
+        destination: "/sign-up",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       { source: "/", headers: indexRobots },
@@ -54,8 +78,8 @@ const nextConfig: NextConfig = {
       { source: "/acceptable-use/:path*", headers: indexRobots },
       { source: "/refunds", headers: indexRobots },
       { source: "/refunds/:path*", headers: indexRobots },
-      { source: "/sign-in", headers: indexRobots },
-      { source: "/sign-in/:path*", headers: indexRobots },
+      { source: "/sign-in", headers: noindexRobots },
+      { source: "/sign-in/:path*", headers: noindexRobots },
       { source: "/dashboard", headers: noindexRobots },
       { source: "/dashboard/:path*", headers: noindexRobots },
       { source: "/sign-up", headers: noindexRobots },
