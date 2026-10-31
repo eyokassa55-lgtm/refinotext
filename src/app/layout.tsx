@@ -3,7 +3,6 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 
 import { SyncDbUser } from "@/components/auth/sync-db-user";
@@ -28,11 +27,11 @@ import { SEO_TITLE } from "@/lib/seo";
 
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const inter = localFont({
+  src: "../fonts/inter-latin-variable.woff2",
   variable: "--font-inter",
   display: "swap",
+  weight: "100 900",
 });
 
 const caveat = localFont({
