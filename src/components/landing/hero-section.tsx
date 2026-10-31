@@ -30,7 +30,7 @@ export function HeroSection() {
           <div className="min-w-0">
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                — AI-assisted writing revision
+                — Official RefinoText Platform (refinotext.com)
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-2.5 py-1 text-xs shadow-[0_1px_2px_rgba(15,23,20,0.06)]">
                 <Globe className="h-3.5 w-3.5 text-muted" strokeWidth={1.75} aria-hidden />

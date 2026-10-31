@@ -6,10 +6,11 @@ export const APP_LOGO_SRC = "/logo.png";
 export const APP_DESCRIPTION =
   "RefinoText (refinotext.com) is the official AI writing humanizer that rewrites drafts for clarity, tone, and readability while preserving your meaning. Search refinotext or refino text to find us. Start free; paid checkout is handled by Polar.";
 
-/** Brand aliases for schema / SEO — exact tokens Google should map to this site. */
 export const APP_BRAND_ALIASES = [
   APP_NAME,
   APP_NAME_SLUG,
+  APP_DOMAIN,
+  "refinotext.com",
   "Refino Text",
   "refino text",
   "RefinoText AI",
