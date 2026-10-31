@@ -247,7 +247,7 @@ export function buildHomeJsonLd() {
         breadcrumb: { "@id": `${url}/#breadcrumb` },
         speakable: {
           "@type": "SpeakableSpecification",
-          cssSelector: ["#hero-heading", "#brand-identity"],
+          cssSelector: ["#hero-heading"],
         },
       },
       {

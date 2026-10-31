@@ -30,7 +30,7 @@ export function HeroSection() {
           <div className="min-w-0">
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                — Official RefinoText Platform (refinotext.com)
+                — AI-assisted writing revision
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-white px-2.5 py-1 text-xs shadow-[0_1px_2px_rgba(15,23,20,0.06)]">
                 <Globe className="h-3.5 w-3.5 text-muted" strokeWidth={1.75} aria-hidden />
@@ -73,17 +73,6 @@ export function HeroSection() {
               Paste an AI-assisted or rough draft. RefinoText revises it for
               clarity, tone, and readability while aiming to keep your meaning.
               Review the result before you use it.
-            </p>
-            <p
-              id="brand-identity"
-              className="mt-3 max-w-lg text-sm leading-6 text-muted"
-            >
-              Official site:{" "}
-              <span className="font-semibold text-foreground">refinotext.com</span>
-              {" · "}
-              Brand: RefinoText (one word:{" "}
-              <span className="font-semibold text-foreground">refinotext</span>
-              ).
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
