@@ -4,7 +4,7 @@ export const APP_NAME_SLUG = "refinotext";
 export const APP_DOMAIN = "refinotext.com";
 export const APP_LOGO_SRC = "/logo.png";
 export const APP_DESCRIPTION =
-  "RefinoText (refinotext.com) is the official AI writing humanizer that rewrites drafts for clarity, tone, and readability while preserving your meaning. Search refinotext or refino text to find us. Start free; paid checkout is handled by Polar.";
+  "RefinoText is an AI writing humanizer that rewrites drafts for clarity, tone, and readability while preserving your meaning. Start free; paid checkout is handled by Polar.";
 
 export const APP_BRAND_ALIASES = [
   APP_NAME,

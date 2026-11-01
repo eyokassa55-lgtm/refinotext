@@ -299,9 +299,9 @@ export const CREDIT_TOPUPS = [
 
 export const FAQ_LANDING_ITEMS = [
   {
-    question: "What is the official RefinoText website?",
+    question: "What is RefinoText?",
     answer:
-      "The official site is refinotext.com. The brand is RefinoText—one word (refinotext), spelled Refino + Text. Search refinotext or refino text and open refinotext.com.",
+      "RefinoText is an AI writing humanizer designed to revise robotic or AI-generated drafts into clear, natural prose while preserving your intended meaning and key information.",
   },
   {
     question: "Why is RefinoText different from other writing tools?",
@@ -337,17 +337,7 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
       {
         question: "What is RefinoText?",
         answer:
-          "RefinoText (also searched as refinotext or refino text) is the official AI-powered text humanizer at refinotext.com. It rewrites drafts into clearer, more natural writing while preserving your meaning—you review every result before you publish or submit.",
-      },
-      {
-        question: "What is the official RefinoText website?",
-        answer:
-          "The official website is https://www.refinotext.com. The brand is RefinoText—one word, spelled R-e-f-i-n-o-T-e-x-t (Refino + Text). If you search Google for refinotext or refino text, look for refinotext.com.",
-      },
-      {
-        question: "How do you spell RefinoText?",
-        answer:
-          "RefinoText is spelled with an o: Refino + Text, written as one word (refinotext). The domain is refinotext.com. It is not “RefineText” or any similar lookalike spelling.",
+          "RefinoText is an AI writing humanizer designed to revise robotic or machine-generated drafts into natural, engaging prose while preserving your intended meaning and key information.",
       },
       {
         question: "How does the humanizer work?",

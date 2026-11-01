@@ -149,7 +149,7 @@ export function LandingFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 sm:flex-row">
           <p className="text-sm text-muted">
-            &copy; {currentYear} {APP_NAME} (refinotext.com). All rights reserved.
+            &copy; {currentYear} {APP_NAME}. All rights reserved.
             Paid checkout is processed by Polar as merchant of record.
           </p>
           <nav aria-label="Sitemap" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">

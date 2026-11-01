@@ -11,8 +11,7 @@ import {
 } from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
-/** Domain in the title helps Google pick refinotext.com over lookalike brands. */
-export const SEO_TITLE = `${APP_NAME} (${APP_DOMAIN}): Free AI Humanizer for Clear, Natural Writing`;
+export const SEO_TITLE = `${APP_NAME}: Free AI Humanizer for Clear, Natural Writing`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
 export const SITE_LAST_MODIFIED = new Date("2026-10-31T03:00:00.000Z");
@@ -182,7 +181,7 @@ export function buildOrganizationAndWebsiteJsonLd() {
           name: APP_NAME,
           alternateName: [...APP_BRAND_ALIASES],
           url,
-          slogan: `${APP_NAME} — official site ${APP_DOMAIN}`,
+          slogan: `${APP_NAME} — Free AI Humanizer for Clear, Natural Writing`,
         },
         contactPoint: {
           "@type": "ContactPoint",
