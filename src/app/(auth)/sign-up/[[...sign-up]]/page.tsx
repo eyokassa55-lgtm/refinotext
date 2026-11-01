@@ -11,7 +11,6 @@ export const metadata = pageMetadata(
   PAGE_SEO.signUp.path,
   PAGE_SEO.signUp.title,
   PAGE_SEO.signUp.description,
-  { index: false },
 );
 
 export default function SignUpPage() {

@@ -11,7 +11,7 @@ import {
 } from "@/lib/constants";
 import { FAQ_ITEMS } from "@/lib/landing-data";
 
-export const SEO_TITLE = `${APP_NAME}: Free AI Humanizer for Clear, Natural Writing`;
+export const SEO_TITLE = `${APP_NAME}: Free AI Humanizer for Natural Writing`;
 
 /** Fresh lastmod for sitemap and JSON-LD. Update when public pages change. */
 export const SITE_LAST_MODIFIED = new Date("2026-10-31T03:00:00.000Z");
@@ -41,55 +41,57 @@ export const PAGE_SEO = {
   },
   pricing: {
     path: "/pricing",
-    title: "Pricing Plans & Writing Credits",
+    title: "Pricing",
     description:
-      "RefinoText pricing: start free with 300 words/month, or choose Basic, Pro, or Ultra for higher word limits. Paid checkout handled securely by Polar.",
+      "Explore RefinoText pricing plans. Get 300 free words to try, then choose Basic, Pro, or Ultra for higher writing limits.",
   },
   contact: {
     path: "/contact",
-    title: "Contact Us & Customer Support",
+    title: "Contact Us",
     description:
-      "Contact the official RefinoText support team at refinotext.com for account, billing, cancellation, or writing help.",
+      "Get in touch with the RefinoText support team. Reach out for technical support, billing assistance, or writing inquiries.",
   },
   faq: {
     path: "/faq",
-    title: "FAQ — AI Writing Humanizer Questions",
+    title: "Frequently Asked Questions",
     description:
-      "Frequently asked questions about RefinoText: how the AI humanizer works, writing credits, pricing plans, privacy, and account settings.",
+      "RefinoText is an advanced AI writing humanizer that transforms AI-generated drafts into clear, natural, and authentic human writing.",
   },
   privacy: {
     path: "/privacy",
     title: "Privacy Policy",
     description:
-      "How RefinoText collects, uses, and stores account and writing data, and the role of processors including Clerk, Neon, Polar, and AI providers.",
+      "RefinoText privacy policy. How we collect, use, and protect your account and text revision data.",
   },
   terms: {
     path: "/terms",
     title: "Terms of Service",
     description:
-      "Terms for using RefinoText, including accounts, credits, Polar checkout, automatic renewal, and acceptable use.",
+      "RefinoText provides an AI-powered text humanization and revision service. Terms of use, accounts, and subscription details.",
   },
   refunds: {
     path: "/refunds",
     title: "Refunds and Cancellation Policy",
     description:
-      "How RefinoText subscriptions renew, how to cancel through Polar Customer Portal, and refund eligibility guidelines.",
+      "RefinoText refunds and subscription cancellation policy. How subscriptions renew and how to cancel through Polar.",
   },
   acceptableUse: {
     path: "/acceptable-use",
     title: "Responsible Use Policy",
     description:
-      "RefinoText responsible writing and ethical use policy. Guidelines on writing integrity, original drafting, and acceptable service usage.",
+      "RefinoText is designed to help users improve the quality, tone, and natural flow of their writing responsibly.",
   },
   signIn: {
     path: "/sign-in",
     title: "Sign In",
-    description: "Welcome back. Secure sign-in to your RefinoText account.",
+    description:
+      "Sign in to your RefinoText account to access our AI humanizer and transform drafts into natural writing.",
   },
   signUp: {
     path: "/sign-up",
     title: "Sign Up",
-    description: `Create a free ${APP_NAME} account to humanize AI-generated text. No credit card required.`,
+    description:
+      "Create a free RefinoText account to humanize AI-generated text into polished, natural-sounding writing.",
   },
   dashboard: {
     path: "/dashboard",
@@ -258,6 +260,62 @@ export function buildHomeJsonLd() {
             position: 1,
             name: APP_NAME,
             item: url,
+          },
+        ],
+      },
+      {
+        "@type": "ItemList",
+        "@id": `${url}/#navigation`,
+        name: "Site Navigation",
+        itemListElement: [
+          {
+            "@type": "SiteNavigationElement",
+            position: 1,
+            name: PAGE_SEO.faq.title,
+            description: PAGE_SEO.faq.description,
+            url: `${url}/faq`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 2,
+            name: PAGE_SEO.pricing.title,
+            description: PAGE_SEO.pricing.description,
+            url: `${url}/pricing`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 3,
+            name: PAGE_SEO.signIn.title,
+            description: PAGE_SEO.signIn.description,
+            url: `${url}/sign-in`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 4,
+            name: PAGE_SEO.signUp.title,
+            description: PAGE_SEO.signUp.description,
+            url: `${url}/sign-up`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 5,
+            name: PAGE_SEO.terms.title,
+            description: PAGE_SEO.terms.description,
+            url: `${url}/terms`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 6,
+            name: PAGE_SEO.acceptableUse.title,
+            description: PAGE_SEO.acceptableUse.description,
+            url: `${url}/acceptable-use`,
+          },
+          {
+            "@type": "SiteNavigationElement",
+            position: 7,
+            name: PAGE_SEO.contact.title,
+            description: PAGE_SEO.contact.description,
+            url: `${url}/contact`,
           },
         ],
       },

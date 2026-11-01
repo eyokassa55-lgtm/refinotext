@@ -34,6 +34,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
+      url: getAbsoluteUrl("/sign-in"),
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: getAbsoluteUrl("/sign-up"),
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
       url: getAbsoluteUrl("/privacy"),
       lastModified,
       changeFrequency: "yearly",
