@@ -16,10 +16,11 @@ export function LandingFooter() {
           <div className="sm:col-span-2 lg:col-span-1">
             <BrandLogo href={ROUTES.home} />
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted">
-              RefinoText (refinotext) is the official AI writing humanizer at{" "}
+              RefinoText (also known as Refino Text or refinotext) is the
+              official AI writing humanizer at{" "}
               <span className="font-medium text-foreground">refinotext.com</span>
-              . We revise drafts for clarity, tone, and readability while aiming
-              to preserve meaning.
+              . Revise AI drafts for natural flow and clarity while preserving
+              original meaning.
             </p>
             <a
               href={`mailto:${SUPPORT_EMAIL}`}

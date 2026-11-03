@@ -299,9 +299,9 @@ export const CREDIT_TOPUPS = [
 
 export const FAQ_LANDING_ITEMS = [
   {
-    question: "What is RefinoText?",
+    question: "What is RefinoText (Refino Text)?",
     answer:
-      "RefinoText is an AI writing humanizer designed to revise robotic or AI-generated drafts into clear, natural prose while preserving your intended meaning and key information.",
+      "RefinoText (also known as Refino Text or refinotext) is an AI writing humanizer and text polisher designed to revise robotic or AI-generated drafts into clear, natural prose while preserving your intended meaning and facts.",
   },
   {
     question: "Why is RefinoText different from other writing tools?",
@@ -335,9 +335,9 @@ export const FAQ_PAGE_SECTIONS: readonly FaqSection[] = [
     title: "Getting Started",
     items: [
       {
-        question: "What is RefinoText?",
+        question: "What is RefinoText (Refino Text)?",
         answer:
-          "RefinoText is an AI writing humanizer designed to revise robotic or machine-generated drafts into natural, engaging prose while preserving your intended meaning and key information.",
+          "RefinoText (also written as Refino Text or refinotext) is an AI writing humanizer designed to revise robotic or machine-generated drafts into natural, engaging prose while preserving your original message and facts.",
       },
       {
         question: "How does the humanizer work?",
