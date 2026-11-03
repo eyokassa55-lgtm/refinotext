@@ -183,7 +183,9 @@ export function buildOrganizationAndWebsiteJsonLd() {
           name: APP_NAME,
           alternateName: [...APP_BRAND_ALIASES],
           url,
-          slogan: `${APP_NAME} — Free AI Humanizer for Clear, Natural Writing`,
+          slogan: `${APP_NAME} — Free AI Humanizer for Natural Writing`,
+          disambiguatingDescription:
+            "RefinoText is an online AI text humanizer and writing revision platform available at refinotext.com.",
         },
         contactPoint: {
           "@type": "ContactPoint",
@@ -191,6 +193,12 @@ export function buildOrganizationAndWebsiteJsonLd() {
           contactType: "customer support",
         },
         sameAs: ["https://www.instagram.com/aasifcodes/"],
+        knowsAbout: [
+          "AI Text Humanization",
+          "AI Detection Bypass",
+          "Writing Assistant",
+          "Content Refinement",
+        ],
       },
       {
         "@type": "WebSite",
@@ -202,6 +210,14 @@ export function buildOrganizationAndWebsiteJsonLd() {
         publisher: { "@id": `${url}/#organization` },
         inLanguage: "en-US",
         dateModified: SITE_LAST_MODIFIED.toISOString(),
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${url}/?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
       },
     ],
   };
